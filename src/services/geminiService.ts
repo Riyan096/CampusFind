@@ -3,11 +3,19 @@ import { ItemCategory, CampusLocation } from "../types";
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-if (!API_KEY) {
-  throw new Error('VITE_GEMINI_API_KEY environment variable is not set');
-}
+// Lazy initialization - only create client when needed
+let ai: GoogleGenAI | null = null;
 
-const ai = new GoogleGenAI({apiKey: API_KEY});
+const getAI = (): GoogleGenAI | null => {
+  if (!API_KEY) {
+    return null;
+  }
+  if (!ai) {
+    ai = new GoogleGenAI({apiKey: API_KEY});
+  }
+  return ai;
+};
+
 
 export interface AIAnalysisResult {
     title: string;
@@ -20,16 +28,23 @@ export interface AIAnalysisResult {
 
 //Analyzes an image of a found item to automatically extract details.
 export const analyzeItemImage = async (base64Image: string): Promise<AIAnalysisResult> => {
-  if (!API_KEY) {
-    console.warn("No API Key provided for Gemini.");
-    throw new Error("API Key missing");
+  const aiClient = getAI();
+  if (!aiClient) {
+    console.warn("No API Key provided for Gemini. AI features disabled.");
+    return {
+        title: "Unknown Item",
+        description: "AI analysis disabled - no API key configured",
+        category: ItemCategory.OTHER,
+        color: "Unknown",
+        tags: []
+    };
   }
-
 
   const cleanBase64 = base64Image.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await aiClient.models.generateContent({
+
         model: 'gemini-3-flash-preview',
         contents: {
         parts: [
@@ -84,11 +99,15 @@ export const analyzeItemImage = async (base64Image: string): Promise<AIAnalysisR
 //Smart search/matching
 
 export const findSmartMatches = async (query: string, itemsJson: string) => {
-  if (!API_KEY) return [];
-
+  const aiClient = getAI();
+  if (!aiClient) {
+    console.warn("No API Key provided for Gemini. Smart search disabled.");
+    return [];
+  }
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await aiClient.models.generateContent({
+
       model: 'gemini-3-flash-preview',
       contents: `
         I have a search query from a user looking for a lost item: "${query}".

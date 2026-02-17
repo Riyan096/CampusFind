@@ -79,6 +79,24 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
   // Debounce search input for better performance
   const debouncedSearch = useDebounce(search, 300);
 
+  // Helper to get date string in YYYY-MM-DD format
+  // This ensures consistent comparison without timezone issues
+  const getDateString = (dateInput: string | Date): string => {
+    if (typeof dateInput === 'string') {
+      // If it's already a string, extract just the date part
+      return dateInput.includes('T') ? dateInput.split('T')[0] : dateInput;
+    } else {
+      // Date object - format as YYYY-MM-DD using UTC to avoid timezone shifts
+      const year = dateInput.getUTCFullYear();
+      const month = String(dateInput.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(dateInput.getUTCDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  };
+
+
+
+
   // Memoize filtered items to avoid recalculation on every render
   const filteredItems = useMemo(() => {
     let result = items.filter(item => {
@@ -91,15 +109,20 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
     // Apply advanced filters
     if (advancedFilters.dateRange !== 'all' || advancedFilters.startDate || advancedFilters.endDate) {
       result = result.filter(item => {
-        const itemDate = new Date(item.date);
-        const start = advancedFilters.startDate ? new Date(advancedFilters.startDate) : null;
-        const end = advancedFilters.endDate ? new Date(advancedFilters.endDate) : null;
+        const itemDateStr = getDateString(item.date);
+        const startStr = advancedFilters.startDate || null;
+        const endStr = advancedFilters.endDate || null;
         
-        if (start && itemDate < start) return false;
-        if (end && itemDate > end) return false;
+        if (startStr && itemDateStr < startStr) return false;
+        if (endStr && itemDateStr > endStr) return false;
         return true;
       });
     }
+
+
+
+
+
 
     if (advancedFilters.locations.length > 0) {
       result = result.filter(item => advancedFilters.locations.includes(item.location));
@@ -158,7 +181,9 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
     setFilterType('ALL');
     setFilterCat('ALL');
     setSearch('');
+    setAdvancedFilters(defaultFilters);
   }, []);
+
 
   const handleClearSearch = useCallback(() => {
     setSearch('');
