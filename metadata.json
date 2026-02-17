@@ -1,0 +1,8 @@
+{
+  "name": "CampusFind",
+  "description": "A smart, AI-powered Lost & Found platform for university campuses designed to streamline item recovery.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
