@@ -117,12 +117,17 @@ export const MapView: React.FC<MapViewProps> = ({ items }) => {
           icon: item.type === ItemType.LOST ? lostIcon : foundIcon
         }).addTo(map);
 
-        marker.on('click', () => {
+        marker.on('click', (e: any) => {
+          L.DomEvent.stopPropagation(e.originalEvent);
           setSelectedItem(item);
           map.setView([jitterLat, jitterLng], 17, { animate: true });
         });
+
       }
     });
+
+
+
 
     // Cleanup on unmount
     return () => {
@@ -256,10 +261,10 @@ export const MapView: React.FC<MapViewProps> = ({ items }) => {
       {/* Map Container */}
       <div 
         ref={mapContainerRef} 
-        onClick={() => setSelectedItem(null)}
         className="flex-1 w-full h-full min-h-[400px] z-0 rounded-xl overflow-hidden shadow-inner border border-slate-200"
 
       />
+
 
 
 
