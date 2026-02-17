@@ -129,6 +129,11 @@ export const MapView: React.FC<MapViewProps> = ({ items }) => {
 
 
 
+    // Close popup when clicking on map background (not on markers)
+    map.on('click', () => {
+      setSelectedItem(null);
+    });
+
     // Cleanup on unmount
     return () => {
       if (mapInstanceRef.current) {
@@ -136,6 +141,7 @@ export const MapView: React.FC<MapViewProps> = ({ items }) => {
         mapInstanceRef.current = null;
       }
     };
+
   }, [items]);
 
   return (
