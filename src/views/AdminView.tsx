@@ -4,6 +4,8 @@ import { collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where }
 import { db } from '../services/firebase';
 import { Button } from '../components/UI';
 import { useToast } from '../hooks/useToast';
+import { ItemType } from '../types';
+
 
 
 interface UserData {
@@ -20,14 +22,15 @@ interface UserData {
 
 interface ItemData {
   id: string;
-  name: string;
-  type: 'lost' | 'found';
+  title: string;
+  type: ItemType;
   status: string;
-  userId: string;
+  reportedBy: string;
   createdAt: string;
   category: string;
   location?: string;
 }
+
 
 export const AdminView: React.FC = () => {
   const { isAdmin, user } = useAuth();
@@ -77,17 +80,15 @@ export const AdminView: React.FC = () => {
       setItems(itemsData);
 
       // Calculate stats
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
       setStats({
         totalUsers: usersData.length,
         totalItems: itemsData.length,
-        lostItems: itemsData.filter((i: ItemData) => i.type === 'lost').length,
-        foundItems: itemsData.filter((i: ItemData) => i.type === 'found').length,
-        resolvedItems: itemsData.filter((i: ItemData) => i.status === 'resolved').length,
+        lostItems: itemsData.filter((i: ItemData) => i.type === ItemType.LOST).length,
+        foundItems: itemsData.filter((i: ItemData) => i.type === ItemType.FOUND).length,
+        resolvedItems: itemsData.filter((i: ItemData) => i.status === 'CLAIMED' || i.status === 'RESOLVED').length,
         totalPoints: usersData.reduce((sum, u) => sum + (u.points || 0), 0)
       });
+
 
     } catch (err) {
       error('Failed to load admin data');
@@ -123,6 +124,48 @@ export const AdminView: React.FC = () => {
       console.error(err);
     }
   };
+
+  const handleResetAllPoints = async () => {
+    if (!confirm('WARNING: This will reset ALL user points to 0. This cannot be undone. Continue?')) return;
+    
+    try {
+      // Update all users' points to 0
+      const updatePromises = users.map(user => 
+        updateDoc(doc(db, 'users', user.uid), {
+          points: 0,
+          itemsReported: 0,
+          itemsReturned: 0,
+          itemsClaimed: 0
+        })
+      );
+      
+      await Promise.all(updatePromises);
+      success('All user points have been reset');
+      fetchData();
+    } catch (err) {
+      error('Failed to reset points');
+      console.error(err);
+    }
+  };
+
+  const handleResetUserPoints = async (userId: string) => {
+    if (!confirm('Reset this user\'s points to 0?')) return;
+    
+    try {
+      await updateDoc(doc(db, 'users', userId), {
+        points: 0,
+        itemsReported: 0,
+        itemsReturned: 0,
+        itemsClaimed: 0
+      });
+      success('User points reset successfully');
+      fetchData();
+    } catch (err) {
+      error('Failed to reset user points');
+      console.error(err);
+    }
+  };
+
 
 
   const handleSendGlobalNotification = async (e: React.FormEvent) => {
@@ -246,8 +289,27 @@ export const AdminView: React.FC = () => {
               </div>
               <p className="text-4xl font-bold text-yellow-600">{stats.totalPoints}</p>
             </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-soft md:col-span-2 lg:col-span-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="material-icons text-red-600 text-3xl">restart_alt</span>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-600">Reset Points</h3>
+                    <p className="text-sm text-gray-500">Reset all user points to 0</p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleResetAllPoints}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                >
+                  Reset All Points
+                </button>
+              </div>
+            </div>
           </div>
         )}
+
 
         {/* Users Tab */}
         {activeTab === 'users' && (
@@ -275,7 +337,18 @@ export const AdminView: React.FC = () => {
                           <p className="text-sm text-gray-500">{user.email}</p>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{user.points || 0}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-600">{user.points || 0}</span>
+                          <button
+                            onClick={() => handleResetUserPoints(user.uid)}
+                            className="text-xs text-red-500 hover:text-red-700 underline"
+                            title="Reset user points"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-sm text-gray-600">
                         {user.itemsReported || 0} reported
                       </td>
@@ -291,6 +364,7 @@ export const AdminView: React.FC = () => {
                           {user.isAdmin ? 'Admin' : 'User'}
                         </button>
                       </td>
+
                       <td className="px-4 py-3 text-sm text-gray-500">
                         {new Date(user.createdAt).toLocaleDateString()}
                       </td>
@@ -313,17 +387,18 @@ export const AdminView: React.FC = () => {
                 <div key={item.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
                   <div className="flex items-center gap-3">
                     <span className={`material-icons ${
-                      item.type === 'lost' ? 'text-red-500' : 'text-green-500'
+                      item.type === ItemType.LOST ? 'text-red-500' : 'text-green-500'
                     }`}>
-                      {item.type === 'lost' ? 'search_off' : 'check_circle'}
+                      {item.type === ItemType.LOST ? 'search_off' : 'check_circle'}
                     </span>
                     <div>
-                      <p className="font-medium text-gray-900">{item.name}</p>
+                      <p className="font-medium text-gray-900">{item.title}</p>
                       <p className="text-sm text-gray-500">
                         {item.category} • {item.location || 'No location'} • {item.status}
                       </p>
                     </div>
                   </div>
+
                   <button
                     onClick={() => handleDeleteItem(item.id)}
                     className="text-red-500 hover:text-red-700 p-2"
