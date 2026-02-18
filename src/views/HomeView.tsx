@@ -18,25 +18,16 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ items, onChangeTa
 
   // Calculate real statistics
   const stats = useMemo(() => {
-    // Normalize date to avoid timezone issues - extract YYYY-MM-DD directly
-    const normalizeDate = (dateStr: string) => {
-      // Parse ISO date string directly without timezone conversion
-      const [year, month, day] = dateStr.split('T')[0].split('-').map(Number);
-      return new Date(year, month - 1, day); // month is 0-indexed in JS Date
-    };
-    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
     const todayItems = items.filter(item => {
-      const itemDate = normalizeDate(item.date);
-      itemDate.setHours(0, 0, 0, 0);
-      return itemDate.getTime() === today.getTime();
+      const itemDate = new Date(item.date);
+      return itemDate >= today;
     });
     
     const itemsFoundToday = todayItems.filter(item => item.type === ItemType.FOUND).length;
     const itemsLostToday = todayItems.filter(item => item.type === ItemType.LOST).length;
-
     
     const resolvedItems = items.filter(item => item.status === ItemStatus.CLAIMED);
 
