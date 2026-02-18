@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where, writeBatch, serverTimestamp } from 'firebase/firestore';
+
 import { db } from '../services/firebase';
 import { Button } from '../components/UI';
 import { useToast } from '../hooks/useToast';
@@ -172,30 +173,48 @@ export const AdminView: React.FC = () => {
     e.preventDefault();
     
     try {
-      // Create notification for all users
-      const notification = {
-        id: Date.now().toString(),
-        userId: 'all', // Special ID for global notifications
+      // Create a batch to send notifications to all users
+      const batch = writeBatch(db);
+      
+      // Get all users
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      
+      // Create a notification for each user
+      usersSnapshot.docs.forEach(userDoc => {
+        const notificationRef = doc(collection(db, 'users', userDoc.id, 'notifications'));
+        batch.set(notificationRef, {
+          title: notificationTitle,
+          message: notificationMessage,
+          type: notificationType,
+          read: false,
+          createdAt: serverTimestamp(),
+          isGlobal: true
+        });
+      });
+      
+      // Also store in a global notifications collection for reference
+      const globalNotificationRef = doc(collection(db, 'notifications'));
+      batch.set(globalNotificationRef, {
         title: notificationTitle,
         message: notificationMessage,
         type: notificationType,
-        read: false,
-        createdAt: new Date().toISOString()
-      };
+        recipientCount: usersSnapshot.docs.length,
+        sentBy: user?.uid,
+        sentByName: user?.displayName || 'Admin',
+        createdAt: serverTimestamp()
+      });
+      
+      await batch.commit();
 
-      // Store in localStorage for now (should be Firestore in production)
-      const storedNotifications = localStorage.getItem('campusfind_notifications') || '[]';
-      const notifications = JSON.parse(storedNotifications);
-      notifications.push(notification);
-      localStorage.setItem('campusfind_notifications', JSON.stringify(notifications));
-
-      success('Global notification sent!');
+      success(`Global notification sent to ${usersSnapshot.docs.length} users!`);
       setNotificationTitle('');
       setNotificationMessage('');
     } catch (err) {
       error('Failed to send notification');
+      console.error(err);
     }
   };
+
 
   if (!isAdmin) {
     return (
