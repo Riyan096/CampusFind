@@ -124,8 +124,9 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
       await addItemToFirestore(newItem);
       
       // Award points for reporting an item
-      const stats = addPoints(10); // 10 points for reporting
+      const stats = await addPoints(10); // 10 points for reporting
       console.log(`🎉 Item reported! Earned 10 points! Total: ${stats.points} points`);
+
       
       onSuccess();
     } catch (err: any) {

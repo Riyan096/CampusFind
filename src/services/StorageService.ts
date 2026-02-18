@@ -1,8 +1,12 @@
 import { ItemType, ItemCategory, CampusLocation, ItemStatus } from '../types';
 import type { Item, UserStats } from '../types';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { db } from './firebase';
+import { getAuth } from 'firebase/auth';
 
 const STORAGE_KEY = 'campus_find_items_v2';
 const STATS_KEY = 'campus_find_stats_v2';
+
 
 const MOCK_ITEMS: Item[] = [
   {
@@ -117,15 +121,83 @@ export const getUserStats = (): UserStats => {
 };
 
 
-export const saveUserStats = (stats: UserStats): UserStats => {
+export const saveUserStats = async (stats: UserStats): Promise<UserStats> => {
   localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  
+  // Sync to Firestore if user is logged in
+  const auth = getAuth();
+  const user = auth.currentUser;
+  if (user) {
+    try {
+      await setDoc(doc(db, 'users', user.uid), {
+        points: stats.points,
+        itemsReported: stats.itemsReported,
+        itemsReturned: stats.itemsReturned,
+        itemsClaimed: stats.itemsClaimed,
+        lastActive: stats.lastActive
+      }, { merge: true });
+    } catch (err) {
+      console.error('Failed to sync stats to Firestore:', err);
+    }
+  }
+  
   return stats;
 };
 
-export const addPoints = (amount: number) => {
+
+export const addPoints = async (amount: number): Promise<UserStats> => {
   const stats = getUserStats();
   stats.points += amount;
   stats.itemsReturned += 1;
+  stats.lastActive = new Date().toISOString();
   localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  
+  // Sync to Firestore if user is logged in
+  const auth = getAuth();
+  const user = auth.currentUser;
+  if (user) {
+    try {
+      await setDoc(doc(db, 'users', user.uid), {
+        points: stats.points,
+        itemsReturned: stats.itemsReturned,
+        lastActive: stats.lastActive
+      }, { merge: true });
+    } catch (err) {
+      console.error('Failed to sync points to Firestore:', err);
+    }
+  }
+  
   return stats;
+};
+
+// Sync stats from Firestore to localStorage (call this on app load)
+export const syncStatsFromFirestore = async (): Promise<UserStats | null> => {
+  const auth = getAuth();
+  const user = auth.currentUser;
+  if (!user) return null;
+  
+  try {
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    if (userDoc.exists()) {
+      const data = userDoc.data();
+      const stats: UserStats = {
+        points: data.points || 0,
+        itemsReported: data.itemsReported || 0,
+        itemsReturned: data.itemsReturned || 0,
+        itemsClaimed: data.itemsClaimed || 0,
+        lastActive: data.lastActive || new Date().toISOString(),
+        badges: data.badges || []
+      };
+      localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+      return stats;
+    }
+  } catch (err) {
+    console.error('Failed to sync stats from Firestore:', err);
+  }
+  return null;
+};
+
+// Clear local stats (call this when admin resets points)
+export const clearLocalStats = (): void => {
+  localStorage.removeItem(STATS_KEY);
 };

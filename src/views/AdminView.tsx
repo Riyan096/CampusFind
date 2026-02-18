@@ -6,6 +6,8 @@ import { db } from '../services/firebase';
 import { Button } from '../components/UI';
 import { useToast } from '../hooks/useToast';
 import { ItemType } from '../types';
+import { clearLocalStats } from '../services/StorageService';
+
 
 
 
@@ -141,9 +143,14 @@ export const AdminView: React.FC = () => {
       );
       
       await Promise.all(updatePromises);
+      
+      // Clear localStorage stats as well
+      clearLocalStats();
+      
       success('All user points have been reset');
       fetchData();
     } catch (err) {
+
       error('Failed to reset points');
       console.error(err);
     }
@@ -159,9 +166,14 @@ export const AdminView: React.FC = () => {
         itemsReturned: 0,
         itemsClaimed: 0
       });
+      
+      // Clear localStorage stats as well
+      clearLocalStats();
+      
       success('User points reset successfully');
       fetchData();
     } catch (err) {
+
       error('Failed to reset user points');
       console.error(err);
     }

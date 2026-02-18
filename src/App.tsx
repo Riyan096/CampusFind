@@ -17,7 +17,8 @@ import { useToast } from './hooks/useToast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 
-import { getItems, getUserStats } from './services/StorageService';
+import { getItems, getUserStats, syncStatsFromFirestore } from './services/StorageService';
+
 import { subscribeToItems } from './services/itemService';
 
 import type { Item, UserStats } from './types';
@@ -53,15 +54,28 @@ const AppContent: React.FC = () => {
             setItems(firestoreItems);
         });
         
-        // Also load user stats from localStorage
-        try {
-            setStats(getUserStats());
-        } catch (err) {
-            console.error('Error loading user stats:', err);
-        }
+        // Sync user stats from Firestore to localStorage, then load
+        const loadStats = async () => {
+            try {
+                // First try to sync from Firestore
+                const syncedStats = await syncStatsFromFirestore();
+                if (syncedStats) {
+                    setStats(syncedStats);
+                } else {
+                    // Fall back to localStorage
+                    setStats(getUserStats());
+                }
+            } catch (err) {
+                console.error('Error loading user stats:', err);
+                setStats(getUserStats());
+            }
+        };
+        
+        loadStats();
         
         return () => unsubscribe();
     }, [isAuthenticated]);
+
 
 
     const refreshData = useCallback(() => {
