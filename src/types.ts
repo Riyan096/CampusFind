@@ -85,9 +85,11 @@ export interface Item {
   userContact?: string;
   aiTags?: string[];
   reportedBy?: string;
+  reporterName?: string;
   createdAt?: string;
   updatedAt?: string;
 }
+
 
 
 export interface UserStats {

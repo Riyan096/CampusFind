@@ -94,8 +94,11 @@ export interface Item {
   aiTags?: string[];
   /** ID of the user who reported the item */
   reportedBy?: string;
+  /** Name of the user who reported the item */
+  reporterName?: string;
   /** ID of the user who claimed the item */
   claimedBy?: string;
+
 }
 
 /** User statistics and achievements */

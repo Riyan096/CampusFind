@@ -110,7 +110,9 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
         status: ItemStatus.OPEN,
         aiTags,
         reportedBy: user.uid,
+        reporterName: user.displayName || 'Anonymous',
       };
+
       
       // Only add imageUrl if there's an image (Firestore doesn't allow undefined)
       if (image) {

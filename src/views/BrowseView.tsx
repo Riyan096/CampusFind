@@ -54,10 +54,14 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
 
   // Fetch reporter name when item is selected
   useEffect(() => {
-    const fetchReporterName = async () => {
-      if (selectedItem?.reportedBy) {
+    // Use reporterName from item if available, otherwise fetch from user document
+    if (selectedItem?.reporterName) {
+      setReporterName(selectedItem.reporterName);
+    } else if (selectedItem?.reportedBy) {
+      // Fallback: fetch from user document for legacy items
+      const fetchReporterName = async () => {
         try {
-          const userDoc = await getDoc(doc(db, 'users', selectedItem.reportedBy));
+          const userDoc = await getDoc(doc(db, 'users', selectedItem.reportedBy!));
           if (userDoc.exists()) {
             const userData = userDoc.data();
             setReporterName(userData.displayName || userData.email || 'Unknown User');
@@ -68,13 +72,13 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
           console.error('Error fetching reporter:', err);
           setReporterName('Unknown User');
         }
-      } else {
-        setReporterName('');
-      }
-    };
-    
-    fetchReporterName();
+      };
+      fetchReporterName();
+    } else {
+      setReporterName('');
+    }
   }, [selectedItem]);
+
 
   // Debounce search input for better performance
   const debouncedSearch = useDebounce(search, 300);
