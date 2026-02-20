@@ -99,6 +99,31 @@ export const ProfileView: React.FC = () => {
     fileInputRef.current?.click();
   };
 
+  const handleRemovePhoto = async () => {
+    if (!user) return;
+    
+    if (!confirm('Remove your profile picture?')) return;
+    
+    try {
+      setUploadingPhoto(true);
+      setPhotoURL('');
+      
+      // Remove from Firestore
+      await updateDoc(doc(db, 'users', user.uid), {
+        photoURL: '',
+        updatedAt: new Date().toISOString(),
+      });
+      
+      success('Profile picture removed');
+    } catch (err) {
+      console.error('Error removing photo:', err);
+      error('Failed to remove photo');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
@@ -262,7 +287,18 @@ export const ProfileView: React.FC = () => {
                 accept="image/*"
                 className="hidden"
               />
+              {photoURL && (
+                <button
+                  onClick={handleRemovePhoto}
+                  disabled={uploadingPhoto}
+                  className="mb-2 text-xs text-red-500 hover:text-red-700 flex items-center gap-1 mx-auto transition-colors"
+                >
+                  <span className="material-icons text-sm">delete</span>
+                  Remove photo
+                </button>
+              )}
               <p className="text-xs text-gray-500 mb-4">Click to change photo</p>
+
 
               <h2 className="text-xl font-bold text-gray-800 mb-1">
                 {user.displayName || 'Anonymous User'}
