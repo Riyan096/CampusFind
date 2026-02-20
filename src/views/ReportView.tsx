@@ -24,6 +24,11 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
   const [category, setCategory] = useState<ItemCategory>(ItemCategory.OTHER);
   const [location, setLocation] = useState<CampusLocation>(CampusLocation.STUDENT_CENTER);
   const [aiTags, setAiTags] = useState<string[]>([]);
+  const [useAI, setUseAI] = useState<boolean>(() => {
+    // Load preference from localStorage, default to true
+    const saved = localStorage.getItem('campusfind_use_ai');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -44,6 +49,12 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
     setType(newType);
   }, []);
 
+  const handleToggleAI = useCallback(() => {
+    const newValue = !useAI;
+    setUseAI(newValue);
+    localStorage.setItem('campusfind_use_ai', JSON.stringify(newValue));
+  }, [useAI]);
+
   const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -54,8 +65,8 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
       const base64 = reader.result as string;
       setImage(base64);
       
-      // If finding an item, auto-analyze
-      if (type === ItemType.FOUND) {
+      // If finding an item AND AI is enabled, auto-analyze
+      if (type === ItemType.FOUND && useAI) {
         setLoading(true);
         try {
           const analysis = await analyzeItemImage(base64);
@@ -71,7 +82,7 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
       }
     };
     reader.readAsDataURL(file);
-  }, [type]);
+  }, [type, useAI]);
 
   const handleRemoveImage = useCallback(() => {
     setImage(null);
@@ -191,6 +202,31 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
 
 
       <Card className="p-6 space-y-6">
+        {/* AI Toggle - Only show for FOUND items */}
+        {type === ItemType.FOUND && (
+          <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-100">
+            <div className="flex items-center gap-2">
+              <span className="material-icons text-blue-600">auto_awesome</span>
+              <div>
+                <p className="text-sm font-medium text-gray-800">AI Image Analysis</p>
+                <p className="text-xs text-gray-500">Automatically fill details from photo</p>
+              </div>
+            </div>
+            <button
+              onClick={handleToggleAI}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                useAI ? 'bg-primary' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  useAI ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        )}
+
         {/* Image Upload */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -304,3 +340,4 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
 });
 
 ReportView.displayName = 'ReportView';
+
