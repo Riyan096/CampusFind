@@ -3,8 +3,10 @@ import { ItemType, ItemCategory, CampusLocation, ItemStatus, LostItemStatus, Fou
 
 
 import { Button, Input, Select, Card } from '../components/UI';
-import { analyzeItemImage, findSmartMatches } from '../services/geminiService';
-import { addItemToFirestore, getItemsByType } from '../services/itemService';
+import { analyzeItemImage } from '../services/geminiService';
+import { addItemToFirestore } from '../services/itemService';
+import { checkForMatchesAndNotify, type MatchResult } from '../services/matchingService';
+
 import { useAuth } from '../context/AuthContext';
 import { addPoints } from '../services/StorageService';
 import { createNotification } from '../services/notificationService';
@@ -56,64 +58,44 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
     []
   );
 
+  // Handle matches found by the matching service
+  const handleMatchesFound = useCallback((matches: MatchResult[]) => {
+    const potentialMatches: PotentialMatch[] = matches.map(match => ({
+      item: match.foundItem,
+      confidence: match.confidence
+    }));
+    setPotentialMatches(potentialMatches);
+    setShowMatches(true);
+  }, []);
+
   // Check for matching lost items when AI analysis is complete
   const checkForMatches = useCallback(async (analysis: { title: string; description: string; category: ItemCategory; tags: string[] }) => {
     if (!analysis.title || analysis.title === 'Unknown Item') return;
     
     setCheckingMatches(true);
     try {
-      // Get all lost items
-      const lostItems = await getItemsByType(ItemType.LOST);
-      
-      // Filter to only open lost items
-      const openLostItems = lostItems.filter(item => item.status === ItemStatus.OPEN);
-      
-      if (openLostItems.length === 0) {
-        setPotentialMatches([]);
-        return;
-      }
+      // Create a temporary found item object for matching
+      const tempFoundItem: Item = {
+        id: 'temp',
+        type: ItemType.FOUND,
+        title: analysis.title,
+        description: analysis.description,
+        category: analysis.category,
+        location: CampusLocation.STUDENT_CENTER, // Default, will be updated
+        date: new Date().toISOString(),
+        status: FoundItemStatus.AVAILABLE,
+        aiTags: analysis.tags
+      };
 
-      // Prepare items for AI matching
-      const itemsForMatching = openLostItems.map(item => ({
-        id: item.id,
-        title: item.title,
-        description: item.description,
-        category: item.category,
-        location: item.location,
-        tags: item.aiTags || []
-      }));
-
-      // Use AI to find matches
-      const matchQuery = `${analysis.title} ${analysis.description} ${analysis.category} ${analysis.tags.join(' ')}`;
-      const matchedIds = await findSmartMatches(matchQuery, JSON.stringify(itemsForMatching));
-      
-      if (matchedIds && matchedIds.length > 0) {
-        // Create potential matches with confidence levels
-        const matches: PotentialMatch[] = matchedIds
-          .map((id, index) => {
-            const item = openLostItems.find(i => i.id === id);
-            if (!item) return null;
-            
-            // Determine confidence based on position in results
-            const confidence: 'high' | 'medium' | 'low' = 
-              index === 0 ? 'high' : index < 3 ? 'medium' : 'low';
-            
-            return { item, confidence };
-          })
-          .filter((m): m is PotentialMatch => m !== null)
-          .slice(0, 5); // Show top 5 matches
-        
-        setPotentialMatches(matches);
-        setShowMatches(true);
-      } else {
-        setPotentialMatches([]);
-      }
+      // Use the new matching service
+      await checkForMatchesAndNotify(tempFoundItem, handleMatchesFound);
     } catch (err) {
       console.error('Error checking for matches:', err);
     } finally {
       setCheckingMatches(false);
     }
-  }, []);
+  }, [handleMatchesFound]);
+
 
   // Memoized callbacks
   const handleTypeChange = useCallback((newType: ItemType) => {
@@ -237,6 +219,12 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
       const stats = await addPoints(10); // 10 points for reporting
       console.log(`🎉 Item reported! Earned 10 points! Total: ${stats.points} points`);
 
+      // Check for matches after reporting
+      if (type === ItemType.FOUND) {
+        // For found items, check against lost items
+        const tempItem = { ...newItem, id: 'temp' };
+        await checkForMatchesAndNotify(tempItem, handleMatchesFound);
+      }
       
       onSuccess();
     } catch (err: any) {
@@ -246,7 +234,8 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
       alert(`Failed to save item: ${errorMessage}`);
     }
 
-  }, [type, title, description, category, location, image, aiTags, user, onSuccess]);
+  }, [type, title, description, category, location, image, aiTags, user, onSuccess, handleMatchesFound]);
+
 
 
   const handleTriggerFileInput = useCallback(() => {
