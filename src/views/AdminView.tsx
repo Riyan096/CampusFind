@@ -7,6 +7,8 @@ import { Button } from '../components/UI';
 import { useToast } from '../hooks/useToast';
 import { ItemType } from '../types';
 import { clearLocalStats } from '../services/StorageService';
+import { getDefaultStreakInfo } from '../services/gamificationService';
+
 
 
 
@@ -129,16 +131,18 @@ export const AdminView: React.FC = () => {
   };
 
   const handleResetAllPoints = async () => {
-    if (!confirm('WARNING: This will reset ALL user points to 0. This cannot be undone. Continue?')) return;
+    if (!confirm('WARNING: This will reset ALL user points, stats, streaks, and achievements to 0. This cannot be undone. Continue?')) return;
     
     try {
-      // Update all users' points to 0
+      // Update all users' points and gamification data to 0
       const updatePromises = users.map(user => 
         updateDoc(doc(db, 'users', user.uid), {
           points: 0,
           itemsReported: 0,
           itemsReturned: 0,
-          itemsClaimed: 0
+          itemsClaimed: 0,
+          streaks: getDefaultStreakInfo(),
+          unlockedAchievements: []
         })
       );
       
@@ -147,7 +151,7 @@ export const AdminView: React.FC = () => {
       // Clear localStorage stats as well
       clearLocalStats();
       
-      success('All user points have been reset');
+      success('All user points, stats, and achievements have been reset');
       fetchData();
     } catch (err) {
 
@@ -156,21 +160,24 @@ export const AdminView: React.FC = () => {
     }
   };
 
+
   const handleResetUserPoints = async (userId: string) => {
-    if (!confirm('Reset this user\'s points to 0?')) return;
+    if (!confirm('Reset this user\'s points, stats, streaks, and achievements to 0?')) return;
     
     try {
       await updateDoc(doc(db, 'users', userId), {
         points: 0,
         itemsReported: 0,
         itemsReturned: 0,
-        itemsClaimed: 0
+        itemsClaimed: 0,
+        streaks: getDefaultStreakInfo(),
+        unlockedAchievements: []
       });
       
       // Clear localStorage stats as well
       clearLocalStats();
       
-      success('User points reset successfully');
+      success('User points, stats, and achievements reset successfully');
       fetchData();
     } catch (err) {
 
@@ -178,6 +185,7 @@ export const AdminView: React.FC = () => {
       console.error(err);
     }
   };
+
 
 
 
@@ -326,16 +334,18 @@ export const AdminView: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <span className="material-icons text-red-600 text-3xl">restart_alt</span>
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-600">Reset Points</h3>
-                    <p className="text-sm text-gray-500">Reset all user points to 0</p>
+                    <h3 className="text-lg font-semibold text-gray-600">Reset All Stats</h3>
+                    <p className="text-sm text-gray-500">Reset all user points, streaks, and achievements</p>
                   </div>
                 </div>
+
                 <button
                   onClick={handleResetAllPoints}
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
                 >
-                  Reset All Points
+                  Reset All Stats
                 </button>
+
               </div>
             </div>
           </div>
