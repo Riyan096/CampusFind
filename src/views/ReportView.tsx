@@ -1,14 +1,20 @@
-import React, { useState, useRef, useCallback, useMemo } from 'react';
-import { ItemType, ItemCategory, CampusLocation, ItemStatus } from '../types';
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import { ItemType, ItemCategory, CampusLocation, ItemStatus, type Item } from '../types';
 import { Button, Input, Select, Card } from '../components/UI';
-import { analyzeItemImage } from '../services/geminiService';
-import { addItemToFirestore } from '../services/itemService';
+import { analyzeItemImage, findSmartMatches } from '../services/geminiService';
+import { addItemToFirestore, getItemsByType } from '../services/itemService';
 import { useAuth } from '../context/AuthContext';
 import { addPoints } from '../services/StorageService';
+import { createNotification } from '../services/notificationService';
 
 
 interface ReportViewProps {
   onSuccess: () => void;
+}
+
+interface PotentialMatch {
+  item: Item;
+  confidence: 'high' | 'medium' | 'low';
 }
 
 export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) => {
@@ -25,10 +31,14 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
   const [location, setLocation] = useState<CampusLocation>(CampusLocation.STUDENT_CENTER);
   const [aiTags, setAiTags] = useState<string[]>([]);
   const [useAI, setUseAI] = useState<boolean>(() => {
-    // Load preference from localStorage, default to true
     const saved = localStorage.getItem('campusfind_use_ai');
     return saved !== null ? JSON.parse(saved) : true;
   });
+  
+  // Matching State
+  const [potentialMatches, setPotentialMatches] = useState<PotentialMatch[]>([]);
+  const [checkingMatches, setCheckingMatches] = useState(false);
+  const [showMatches, setShowMatches] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -44,9 +54,71 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
     []
   );
 
+  // Check for matching lost items when AI analysis is complete
+  const checkForMatches = useCallback(async (analysis: { title: string; description: string; category: ItemCategory; tags: string[] }) => {
+    if (!analysis.title || analysis.title === 'Unknown Item') return;
+    
+    setCheckingMatches(true);
+    try {
+      // Get all lost items
+      const lostItems = await getItemsByType(ItemType.LOST);
+      
+      // Filter to only open lost items
+      const openLostItems = lostItems.filter(item => item.status === ItemStatus.OPEN);
+      
+      if (openLostItems.length === 0) {
+        setPotentialMatches([]);
+        return;
+      }
+
+      // Prepare items for AI matching
+      const itemsForMatching = openLostItems.map(item => ({
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        category: item.category,
+        location: item.location,
+        tags: item.aiTags || []
+      }));
+
+      // Use AI to find matches
+      const matchQuery = `${analysis.title} ${analysis.description} ${analysis.category} ${analysis.tags.join(' ')}`;
+      const matchedIds = await findSmartMatches(matchQuery, JSON.stringify(itemsForMatching));
+      
+      if (matchedIds && matchedIds.length > 0) {
+        // Create potential matches with confidence levels
+        const matches: PotentialMatch[] = matchedIds
+          .map((id, index) => {
+            const item = openLostItems.find(i => i.id === id);
+            if (!item) return null;
+            
+            // Determine confidence based on position in results
+            const confidence: 'high' | 'medium' | 'low' = 
+              index === 0 ? 'high' : index < 3 ? 'medium' : 'low';
+            
+            return { item, confidence };
+          })
+          .filter((m): m is PotentialMatch => m !== null)
+          .slice(0, 5); // Show top 5 matches
+        
+        setPotentialMatches(matches);
+        setShowMatches(true);
+      } else {
+        setPotentialMatches([]);
+      }
+    } catch (err) {
+      console.error('Error checking for matches:', err);
+    } finally {
+      setCheckingMatches(false);
+    }
+  }, []);
+
   // Memoized callbacks
   const handleTypeChange = useCallback((newType: ItemType) => {
     setType(newType);
+    // Clear matches when switching types
+    setPotentialMatches([]);
+    setShowMatches(false);
   }, []);
 
   const handleToggleAI = useCallback(() => {
@@ -74,6 +146,9 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
           setDescription(analysis.description);
           setCategory(analysis.category);
           setAiTags(analysis.tags);
+          
+          // Check for matching lost items
+          await checkForMatches(analysis);
         } catch (err) {
           console.error("AI Analysis failed", err);
         } finally {
@@ -82,10 +157,12 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
       }
     };
     reader.readAsDataURL(file);
-  }, [type, useAI]);
+  }, [type, useAI, checkForMatches]);
 
   const handleRemoveImage = useCallback(() => {
     setImage(null);
+    setPotentialMatches([]);
+    setShowMatches(false);
   }, []);
 
   const handleTitleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -103,6 +180,25 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
   const handleLocationChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     setLocation(e.target.value as CampusLocation);
   }, []);
+
+  const handleNotifyOwner = useCallback(async (match: PotentialMatch) => {
+    if (!user || !match.item.reportedBy) return;
+    
+    try {
+      await createNotification({
+        userId: match.item.reportedBy,
+        title: 'Potential Match Found!',
+        message: `Someone found an item that might be yours: "${title}". Check the browse page for details.`,
+        type: 'item_match',
+        relatedItemId: match.item.id,
+      });
+      
+      alert(`Notification sent to the owner of "${match.item.title}"!`);
+    } catch (err) {
+      console.error('Error sending notification:', err);
+      alert('Failed to send notification. Please try again.');
+    }
+  }, [user, title]);
 
   const handleSubmit = useCallback(async () => {
     if (!user) {
@@ -270,6 +366,86 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
             onChange={handleImageUpload} 
           />
         </div>
+
+        {/* Potential Matches Section */}
+        {type === ItemType.FOUND && showMatches && potentialMatches.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="material-icons text-amber-600">notifications_active</span>
+              <h3 className="font-semibold text-gray-800">Potential Matches Found!</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-3">
+              These lost items might match what you found. Consider notifying the owners:
+            </p>
+            
+            <div className="space-y-3">
+              {potentialMatches.map((match) => (
+                <div 
+                  key={match.item.id} 
+                  className="bg-white rounded-lg p-3 border border-amber-100 flex items-start gap-3"
+                >
+                  {match.item.imageUrl && (
+                    <img 
+                      src={match.item.imageUrl} 
+                      alt={match.item.title}
+                      className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-medium text-gray-800 truncate">{match.item.title}</h4>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        match.confidence === 'high' 
+                          ? 'bg-green-100 text-green-700' 
+                          : match.confidence === 'medium'
+                          ? 'bg-yellow-100 text-yellow-700'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {match.confidence === 'high' ? 'High Match' : match.confidence === 'medium' ? 'Medium Match' : 'Possible Match'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 line-clamp-2">{match.item.description}</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Lost at: {match.item.location} • Reported by: {match.item.reporterName || 'Unknown'}
+                    </p>
+                  </div>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => handleNotifyOwner(match)}
+                    className="flex-shrink-0 text-xs"
+                  >
+                    Notify Owner
+                  </Button>
+                </div>
+              ))}
+            </div>
+            
+            <button
+              onClick={() => setShowMatches(false)}
+              className="mt-3 text-sm text-gray-500 hover:text-gray-700"
+            >
+              Dismiss matches
+            </button>
+          </div>
+        )}
+
+        {/* No Matches Message */}
+        {type === ItemType.FOUND && showMatches && potentialMatches.length === 0 && !checkingMatches && (
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+            <span className="material-icons text-gray-400 text-3xl mb-2">search_off</span>
+            <p className="text-sm text-gray-600">No matching lost items found.</p>
+            <p className="text-xs text-gray-500 mt-1">Your found item will still be posted for others to see.</p>
+          </div>
+        )}
+
+        {/* Checking Matches Loading */}
+        {type === ItemType.FOUND && checkingMatches && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+            <span className="material-icons text-blue-500 text-3xl mb-2 animate-spin">autorenew</span>
+            <p className="text-sm text-blue-700">Checking for matching lost items...</p>
+          </div>
+        )}
 
         {/* Details Form */}
         <div className="space-y-4">
