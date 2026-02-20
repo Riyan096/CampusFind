@@ -3,6 +3,7 @@ import type { Item, UserStats } from '../types';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { getAuth } from 'firebase/auth';
+import { getDefaultStreakInfo, awardPointsAndCheckAchievements } from './gamificationService';
 
 const STORAGE_KEY = 'campus_find_items_v2';
 const STATS_KEY = 'campus_find_stats_v2';
@@ -114,10 +115,22 @@ export const getUserStats = (): UserStats => {
       itemsReported: 0,
       lastActive: new Date().toISOString(),
       itemsClaimed: 0,
-      badges: []
+      badges: [],
+      streaks: getDefaultStreakInfo(),
+      unlockedAchievements: []
     };
   }
-  return JSON.parse(stored);
+  
+  // Migrate old stats format to new format
+  const parsed = JSON.parse(stored);
+  if (!parsed.streaks) {
+    parsed.streaks = getDefaultStreakInfo();
+  }
+  if (!parsed.unlockedAchievements) {
+    parsed.unlockedAchievements = [];
+  }
+  
+  return parsed;
 };
 
 
@@ -134,6 +147,8 @@ export const saveUserStats = async (stats: UserStats): Promise<UserStats> => {
         itemsReported: stats.itemsReported,
         itemsReturned: stats.itemsReturned,
         itemsClaimed: stats.itemsClaimed,
+        streaks: stats.streaks,
+        unlockedAchievements: stats.unlockedAchievements,
         lastActive: stats.lastActive
       }, { merge: true });
     } catch (err) {
@@ -170,6 +185,20 @@ export const addPoints = async (amount: number): Promise<UserStats> => {
   return stats;
 };
 
+// New gamified add points function
+export const addPointsWithGamification = async (
+  amount: number, 
+  activityType: 'report' | 'return' | 'claim'
+): Promise<{ stats: UserStats; newAchievements: any[]; leveledUp: boolean }> => {
+  const currentStats = getUserStats();
+  const result = await awardPointsAndCheckAchievements(currentStats, amount, activityType);
+  
+  // Save updated stats
+  localStorage.setItem(STATS_KEY, JSON.stringify(result.stats));
+  
+  return result;
+};
+
 // Sync stats from Firestore to localStorage (call this on app load)
 export const syncStatsFromFirestore = async (): Promise<UserStats | null> => {
   const auth = getAuth();
@@ -186,7 +215,9 @@ export const syncStatsFromFirestore = async (): Promise<UserStats | null> => {
         itemsReturned: data.itemsReturned || 0,
         itemsClaimed: data.itemsClaimed || 0,
         lastActive: data.lastActive || new Date().toISOString(),
-        badges: data.badges || []
+        badges: data.badges || [],
+        streaks: data.streaks || getDefaultStreakInfo(),
+        unlockedAchievements: data.unlockedAchievements || []
       };
       localStorage.setItem(STATS_KEY, JSON.stringify(stats));
       return stats;

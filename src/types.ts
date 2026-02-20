@@ -114,6 +114,32 @@ export interface Item {
 
 
 
+export interface StreakInfo {
+  currentStreak: number;
+  longestStreak: number;
+  lastReportDate: string;
+  weeklyActivity: boolean[]; // 7 days, true if active
+}
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: 'bronze' | 'silver' | 'gold' | 'platinum';
+  pointsBonus: number;
+  condition: {
+    type: 'itemsReported' | 'itemsReturned' | 'itemsClaimed' | 'streak' | 'points';
+    threshold: number;
+  };
+}
+
+export interface UserAchievement {
+  achievementId: string;
+  unlockedAt: string;
+  progress: number; // 0-100
+}
+
 export interface UserStats {
   points: number;
   itemsReported: number;
@@ -121,4 +147,16 @@ export interface UserStats {
   lastActive: string;
   itemsClaimed: number;
   badges: string[];
+  streaks: StreakInfo;
+  unlockedAchievements: UserAchievement[];
+}
+
+export interface LeaderboardEntry {
+  userId: string;
+  displayName: string;
+  photoURL?: string;
+  points: number;
+  itemsReported: number;
+  itemsReturned: number;
+  rank?: number;
 }

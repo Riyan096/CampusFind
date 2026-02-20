@@ -5,6 +5,7 @@ import { db } from '../services/firebase';
 import { Button, Input } from '../components/UI';
 import { useToast } from '../hooks/useToast';
 import { getUserStats } from '../services/StorageService';
+import { getDefaultStreakInfo } from '../services/gamificationService';
 import type { UserStats } from '../types';
 
 export const ProfileView: React.FC = () => {
@@ -17,8 +18,11 @@ export const ProfileView: React.FC = () => {
     itemsReported: 0,
     lastActive: new Date().toISOString(),
     itemsClaimed: 0,
-    badges: []
+    badges: [],
+    streaks: getDefaultStreakInfo(),
+    unlockedAchievements: []
   });
+
   
   // Form state
   const [displayName, setDisplayName] = useState('');

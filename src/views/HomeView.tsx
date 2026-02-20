@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useCallback, useMemo, useState } from "react";
 import type { Item } from '../types';
 import { ItemType, ItemCategory, LostItemStatus, FoundItemStatus } from '../types';
+import { StreakDisplay } from '../components/StreakDisplay';
+import { AchievementsPanel } from '../components/AchievementsPanel';
+
 
 
 interface HomeViewProps {
@@ -9,10 +12,12 @@ interface HomeViewProps {
   onChangeTab: (tab: string) => void;
 }
 
-export const HomeView: React.FC<HomeViewProps> = React.memo(({ items, onChangeTab }) => {
+export const HomeView: React.FC<HomeViewProps> = React.memo(({ items, stats: userStats, onChangeTab }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<any>(null);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [showAchievements, setShowAchievements] = useState(false);
+
 
   // Memoize recent items to prevent recalculation
   const recentItems = useMemo(() => items.slice(0, 4), [items]);
@@ -185,11 +190,64 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ items, onChangeTa
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-800 tracking-tight">{greeting.text}</h1>
         <p className="text-gray-500 mt-1">{greeting.subtext}</p>
-
       </div>
 
+      {/* Gamification Widgets */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        {/* Streak Display */}
+        {userStats?.streaks && (
+          <StreakDisplay streaks={userStats.streaks} />
+        )}
+        
+        {/* Achievements Preview */}
+        <div 
+          className="bg-white rounded-xl border border-cream-accent p-4 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => setShowAchievements(true)}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-full bg-gradient-to-br from-yellow-100 to-amber-100">
+                <span className="material-icons text-2xl text-yellow-600">emoji_events</span>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-gray-800">
+                  {userStats?.unlockedAchievements?.length || 0} / 12
+                </div>
+                <div className="text-sm text-gray-500">Achievements Unlocked</div>
+              </div>
+            </div>
+            <span className="material-icons text-gray-400">chevron_right</span>
+          </div>
+          
+          {/* Progress bar */}
+          <div className="mt-3">
+            <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-yellow-400 to-amber-500 transition-all duration-500"
+                style={{ width: `${((userStats?.unlockedAchievements?.length || 0) / 12) * 100}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
 
-
+      {/* Achievements Panel Modal */}
+      {showAchievements && userStats && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => setShowAchievements(false)}
+        >
+          <div 
+            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            <AchievementsPanel 
+              stats={userStats} 
+              onClose={() => setShowAchievements(false)} 
+            />
+          </div>
+        </div>
+      )}
 
       {/* Quick Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

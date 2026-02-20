@@ -81,10 +81,12 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
     { id: 'browse', label: 'Reports', icon: 'inventory_2' },
     { id: 'chat', label: 'Messages', icon: 'chat' },
     { id: 'map', label: 'Campus Map', icon: 'map' },
+    { id: 'leaderboard', label: 'Leaderboard', icon: 'emoji_events' },
     { id: 'profile', label: 'Profile', icon: 'person' },
     { id: 'info', label: 'App Info', icon: 'info' },
     ...(user?.isAdmin ? [{ id: 'admin', label: 'Admin', icon: 'admin_panel_settings' }] : []),
   ];
+
 
   // Subscribe to real-time notifications
   useEffect(() => {

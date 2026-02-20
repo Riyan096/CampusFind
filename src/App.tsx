@@ -9,8 +9,7 @@ import { LoginView } from './views/LoginView';
 import { ChatView } from './views/ChatView';
 import { AdminView } from './views/AdminView';
 import { ProfileView } from './views/ProfileView';
-
-
+import { LeaderboardView } from './views/LeaderboardView';
 
 import { ToastContainer } from './components/Toast';
 import { useToast } from './hooks/useToast';
@@ -18,12 +17,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 
 import { getItems, getUserStats, syncStatsFromFirestore } from './services/StorageService';
-
 import { subscribeToItems } from './services/itemService';
-
 import type { Item, UserStats } from './types';
-
-
 
 const AppContent: React.FC = () => {
     const [activeTab, setActiveTab] = useState('home');
@@ -34,13 +29,18 @@ const AppContent: React.FC = () => {
         itemsReported: 0,
         lastActive: new Date().toISOString(),
         itemsClaimed: 0,
-        badges: []
+        badges: [],
+        streaks: {
+            currentStreak: 0,
+            longestStreak: 0,
+            lastReportDate: new Date().toISOString(),
+            weeklyActivity: [false, false, false, false, false, false, false]
+        },
+
+        unlockedAchievements: []
     });
     const [searchQuery, setSearchQuery] = useState('');
     const [activeChatItem, setActiveChatItem] = useState<{ itemId: string; itemTitle: string; itemOwnerId?: string; chatId?: string } | null>(null);
-
-
-
 
     const { toasts, removeToast, success, error } = useToast();
     const { user, loading, isAuthenticated, logout } = useAuth();
@@ -76,8 +76,6 @@ const AppContent: React.FC = () => {
         return () => unsubscribe();
     }, [isAuthenticated]);
 
-
-
     const refreshData = useCallback(() => {
         try {
             // Items are now loaded via Firestore subscription
@@ -88,8 +86,6 @@ const AppContent: React.FC = () => {
             console.error(err);
         }
     }, [error]);
-
-
 
     const handleReportSuccess = useCallback(() => {
         refreshData();
@@ -107,7 +103,6 @@ const AppContent: React.FC = () => {
         success('Status updated successfully');
     }, [refreshData, success]);
 
-
     const handleSearch = useCallback((query: string) => {
         setSearchQuery(query);
         setActiveTab('browse');
@@ -119,8 +114,6 @@ const AppContent: React.FC = () => {
     }, []);
 
     const handleChatSelect = useCallback((chatId: string, itemId?: string, itemTitle?: string) => {
-        // When selecting from notification, we may not have itemOwnerId
-        // The ChatView will handle finding the chat by chatId
         setActiveChatItem({ 
             itemId: itemId || '', 
             itemTitle: itemTitle || 'Chat', 
@@ -129,10 +122,6 @@ const AppContent: React.FC = () => {
         });
         setActiveTab('chat');
     }, []);
-
-
-
-
 
     const renderContent = () => {
         switch (activeTab) {
@@ -144,9 +133,6 @@ const AppContent: React.FC = () => {
                 return <BrowseView items={items} onItemClick={refreshData} onItemsChange={handleItemsChange} onStatusChange={handleStatusChange} searchQuery={searchQuery} onStartChat={handleStartChat} />;
             case 'chat':
                 return <ChatView itemId={activeChatItem?.itemId} itemTitle={activeChatItem?.itemTitle} itemOwnerId={activeChatItem?.itemOwnerId} chatId={activeChatItem?.chatId} />;
-
-
-
             case 'map':
                 return <MapView items={items} />;
             case 'info':
@@ -155,12 +141,12 @@ const AppContent: React.FC = () => {
                 return <AdminView />;
             case 'profile':
                 return <ProfileView />;
+            case 'leaderboard':
+                return <LeaderboardView />;
             default:
                 return <HomeView items={items} stats={stats} onChangeTab={setActiveTab} />;
-
         }
     };
-
 
     // Show loading state
     if (loading) {
@@ -187,13 +173,11 @@ const AppContent: React.FC = () => {
     return (
         <>
             <Layout activeTab={activeTab} onTabChange={setActiveTab} stats={stats} onSearch={handleSearch} user={user} onLogout={logout} onChatSelect={handleChatSelect}>
-
                 {renderContent()}
             </Layout>
             <ToastContainer toasts={toasts} onClose={removeToast} />
         </>
     );
-
 };
 
 const App: React.FC = () => {
@@ -205,6 +189,5 @@ const App: React.FC = () => {
         </ThemeProvider>
     );
 };
-
 
 export default App;
