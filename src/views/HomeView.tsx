@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useEffect, useRef, useCallback, useMemo, useState } from "react";
 import type { Item } from '../types';
-import { ItemType, ItemStatus } from '../types';
+import { ItemType, ItemCategory, LostItemStatus, FoundItemStatus } from '../types';
 
 
 interface HomeViewProps {
@@ -12,11 +12,12 @@ interface HomeViewProps {
 export const HomeView: React.FC<HomeViewProps> = React.memo(({ items, onChangeTab }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<any>(null);
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   // Memoize recent items to prevent recalculation
   const recentItems = useMemo(() => items.slice(0, 4), [items]);
 
-  // Calculate real statistics
+  // Calculate enhanced statistics
   const stats = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -29,17 +30,77 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ items, onChangeTa
     const itemsFoundToday = todayItems.filter(item => item.type === ItemType.FOUND).length;
     const itemsLostToday = todayItems.filter(item => item.type === ItemType.LOST).length;
     
-    const resolvedItems = items.filter(item => item.status === ItemStatus.CLAIMED);
-
+    // Enhanced return rate calculation - includes all resolved statuses
+    const resolvedStatuses = [
+      LostItemStatus.CLAIMED, 
+      LostItemStatus.RECOVERED,
+      FoundItemStatus.RETURNED
+    ];
+    const resolvedItems = items.filter(item => resolvedStatuses.includes(item.status as any));
     const returnRate = items.length > 0 ? Math.round((resolvedItems.length / items.length) * 100) : 0;
+    
+    // Category breakdown
+    const categoryStats = Object.values(ItemCategory).map(category => {
+      const categoryItems = items.filter(item => item.category === category);
+      const resolved = categoryItems.filter(item => resolvedStatuses.includes(item.status as any));
+      return {
+        category,
+        total: categoryItems.length,
+        resolved: resolved.length,
+        rate: categoryItems.length > 0 ? Math.round((resolved.length / categoryItems.length) * 100) : 0
+      };
+    }).filter(stat => stat.total > 0).sort((a, b) => b.rate - a.rate);
+
+    // Trend calculation (compare last 7 days vs previous 7 days)
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const fourteenDaysAgo = new Date(today);
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+    
+    const lastWeekItems = items.filter(item => {
+      const itemDate = new Date(item.date);
+      return itemDate >= sevenDaysAgo && itemDate < today;
+    });
+    const previousWeekItems = items.filter(item => {
+      const itemDate = new Date(item.date);
+      return itemDate >= fourteenDaysAgo && itemDate < sevenDaysAgo;
+    });
+    
+    const lastWeekResolved = lastWeekItems.filter(item => resolvedStatuses.includes(item.status as any)).length;
+    const previousWeekResolved = previousWeekItems.filter(item => resolvedStatuses.includes(item.status as any)).length;
+    
+    const lastWeekRate = lastWeekItems.length > 0 ? (lastWeekResolved / lastWeekItems.length) * 100 : 0;
+    const previousWeekRate = previousWeekItems.length > 0 ? (previousWeekResolved / previousWeekItems.length) * 100 : 0;
+    
+    const trend = lastWeekRate > previousWeekRate ? 'up' : lastWeekRate < previousWeekRate ? 'down' : 'stable';
+    const trendValue = previousWeekRate > 0 ? Math.round(((lastWeekRate - previousWeekRate) / previousWeekRate) * 100) : 0;
     
     return {
       itemsFoundToday,
       itemsLostToday,
       returnRate,
+      categoryStats,
+      trend,
+      trendValue,
+      totalItems: items.length,
+      resolvedCount: resolvedItems.length,
       avgReturnTime: items.length > 0 ? '24h' : '-'
     };
   }, [items]);
+
+  // Get color based on return rate
+  const getRateColor = (rate: number) => {
+    if (rate >= 70) return 'text-green-600';
+    if (rate >= 40) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  const getRateBgColor = (rate: number) => {
+    if (rate >= 70) return 'bg-green-500';
+    if (rate >= 40) return 'bg-yellow-500';
+    return 'bg-red-500';
+  };
+
 
 
   // Dynamic greeting based on time of day
@@ -140,10 +201,44 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ items, onChangeTa
           <div className="text-2xl font-bold text-red-500">{stats.itemsLostToday}</div>
           <div className="text-sm text-gray-500">Items Lost Today</div>
         </div>
-        <div className="bg-white p-4 rounded-xl border border-cream-accent shadow-sm">
-          <div className="text-2xl font-bold text-secondary">{stats.returnRate}%</div>
-          <div className="text-sm text-gray-500">Return Rate</div>
+        <div className="bg-white p-4 rounded-xl border border-cream-accent shadow-sm cursor-pointer hover:shadow-md transition-shadow" onClick={() => setShowBreakdown(!showBreakdown)}>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className={`text-2xl font-bold ${getRateColor(stats.returnRate)}`}>
+                {stats.returnRate}%
+                {stats.totalItems >= 10 && (
+                  <span className="text-sm ml-2">
+                    {stats.trend === 'up' ? '📈' : stats.trend === 'down' ? '📉' : '➡️'}
+                  </span>
+                )}
+              </div>
+              <div className="text-sm text-gray-500">Return Rate</div>
+            </div>
+            {stats.totalItems >= 5 && (
+              <span className="material-icons text-gray-400 text-sm">
+                {showBreakdown ? 'expand_less' : 'expand_more'}
+              </span>
+            )}
+          </div>
+          
+          {/* Progress bar */}
+          {stats.totalItems > 0 && (
+            <div className="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div 
+                className={`h-full ${getRateBgColor(stats.returnRate)} transition-all duration-500`}
+                style={{ width: `${stats.returnRate}%` }}
+              />
+            </div>
+          )}
+          
+          {/* Mini breakdown */}
+          {stats.totalItems > 0 && !showBreakdown && (
+            <div className="mt-2 text-xs text-gray-500">
+              {stats.resolvedCount} of {stats.totalItems} items returned
+            </div>
+          )}
         </div>
+
         <div className="bg-white p-4 rounded-xl border border-cream-accent shadow-sm">
           <div className="text-2xl font-bold text-primary">{stats.avgReturnTime}</div>
           <div className="text-sm text-gray-500">Avg. Return Time</div>
@@ -151,7 +246,78 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ items, onChangeTa
 
       </div>
 
-
+      {/* Return Rate Breakdown Panel */}
+      {showBreakdown && stats.totalItems >= 5 && (
+        <div className="bg-white p-6 rounded-xl border border-cream-accent shadow-sm animate-slide-up">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-gray-800">Return Rate Breakdown</h3>
+            <button 
+              onClick={() => setShowBreakdown(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <span className="material-icons">close</span>
+            </button>
+          </div>
+          
+          {/* Overall stats */}
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="text-center p-3 bg-gray-50 rounded-lg">
+              <div className="text-2xl font-bold text-primary">{stats.totalItems}</div>
+              <div className="text-xs text-gray-500">Total Items</div>
+            </div>
+            <div className="text-center p-3 bg-green-50 rounded-lg">
+              <div className="text-2xl font-bold text-green-600">{stats.resolvedCount}</div>
+              <div className="text-xs text-gray-500">Returned</div>
+            </div>
+            <div className="text-center p-3 bg-blue-50 rounded-lg">
+              <div className="text-2xl font-bold text-blue-600">
+                {stats.trend === 'up' ? '+' : stats.trend === 'down' ? '-' : ''}{stats.trendValue}%
+              </div>
+              <div className="text-xs text-gray-500">vs Last Week</div>
+            </div>
+          </div>
+          
+          {/* Category breakdown */}
+          {stats.categoryStats.length > 0 && (
+            <div>
+              <h4 className="text-sm font-semibold text-gray-700 mb-3">By Category</h4>
+              <div className="space-y-3">
+                {stats.categoryStats.slice(0, 5).map((stat) => (
+                  <div key={stat.category} className="flex items-center gap-3">
+                    <div className="w-24 text-sm text-gray-600 truncate">{stat.category}</div>
+                    <div className="flex-1 h-6 bg-gray-100 rounded-full overflow-hidden relative">
+                      <div 
+                        className={`h-full ${getRateBgColor(stat.rate)} transition-all duration-500`}
+                        style={{ width: `${stat.rate}%` }}
+                      />
+                      <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-gray-700">
+                        {stat.rate}%
+                      </span>
+                    </div>
+                    <div className="w-16 text-xs text-gray-500 text-right">
+                      {stat.resolved}/{stat.total}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Performance indicator */}
+          <div className="mt-4 p-3 rounded-lg bg-gray-50 border border-gray-200">
+            <div className="flex items-center gap-2">
+              <span className="material-icons text-primary">lightbulb</span>
+              <span className="text-sm text-gray-700">
+                {stats.returnRate >= 70 
+                  ? "Excellent! The community is doing great at returning items."
+                  : stats.returnRate >= 40
+                  ? "Good progress! Keep reporting found items to improve this rate."
+                  : "Let's work together! Report any items you find to help others."}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Recent Items Section */}
       <div>

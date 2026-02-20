@@ -4,18 +4,19 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { ItemType, ItemCategory, ItemStatus, CampusLocation } from '../types';
+import { ItemType, ItemCategory, LostItemStatus, FoundItemStatus, CampusLocation } from '../types';
 
 interface FilterState {
   dateRange: 'all' | 'today' | 'week' | 'month';
   startDate: string;
   endDate: string;
   locations: CampusLocation[];
-  status: ItemStatus[];
+  status: (LostItemStatus | FoundItemStatus)[];
   categories: ItemCategory[];
   type: ItemType | 'ALL';
   sortBy: 'newest' | 'oldest' | 'alphabetical';
 }
+
 
 interface AdvancedSearchFiltersProps {
   filters: FilterState;
@@ -86,7 +87,7 @@ export const AdvancedSearchFilters: React.FC<AdvancedSearchFiltersProps> = ({
     });
   }, [filters, onChange]);
 
-  const handleStatusToggle = useCallback((status: ItemStatus) => {
+  const handleStatusToggle = useCallback((status: LostItemStatus | FoundItemStatus) => {
     const newStatus = filters.status.includes(status)
       ? filters.status.filter(s => s !== status)
       : [...filters.status, status];
@@ -96,6 +97,7 @@ export const AdvancedSearchFilters: React.FC<AdvancedSearchFiltersProps> = ({
       status: newStatus
     });
   }, [filters, onChange]);
+
 
   const handleCategoryToggle = useCallback((category: ItemCategory) => {
     const newCategories = filters.categories.includes(category)
@@ -277,25 +279,43 @@ export const AdvancedSearchFilters: React.FC<AdvancedSearchFiltersProps> = ({
               Status
             </h4>
             <div className="flex flex-wrap gap-2">
-              {Object.values(ItemStatus).map(status => (
+              {Object.values(LostItemStatus).map(status => (
                 <button
                   key={status}
                   onClick={() => handleStatusToggle(status)}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
                     filters.status.includes(status)
-                      ? 'bg-secondary text-primary-dark border-secondary'
+                      ? 'bg-red-100 text-red-700 border-red-300'
                       : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
                   }`}
 
                 >
-                  {status === ItemStatus.OPEN ? 'Still Looking' : 
-                   status === ItemStatus.PENDING ? 'Pending' :
-                   status === ItemStatus.CLAIMED ? 'Claimed' :
-                   status === ItemStatus.RESOLVED ? 'Resolved' : status}
+                  {status === LostItemStatus.STILL_LOST ? 'Still Lost' : 
+                   status === LostItemStatus.MATCH_FOUND ? 'Match Found' :
+                   status === LostItemStatus.CLAIMED ? 'Claimed' :
+                   status === LostItemStatus.RECOVERED ? 'Recovered' : status}
+                </button>
+              ))}
+              {Object.values(FoundItemStatus).map(status => (
+                <button
+                  key={status}
+                  onClick={() => handleStatusToggle(status)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border ${
+                    filters.status.includes(status)
+                      ? 'bg-primary/20 text-primary border-primary'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
+                  }`}
+
+                >
+                  {status === FoundItemStatus.AVAILABLE ? 'Available' : 
+                   status === FoundItemStatus.PENDING_CLAIM ? 'Pending Claim' :
+                   status === FoundItemStatus.RETURNED ? 'Returned' :
+                   status === FoundItemStatus.UNCLAIMED ? 'Unclaimed' : status}
                 </button>
               ))}
             </div>
           </div>
+
 
 
           {/* Categories */}

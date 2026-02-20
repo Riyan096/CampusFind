@@ -51,6 +51,15 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
   const [filterType, setFilterType] = useState<ItemType | 'ALL'>('ALL');
   const [filterCat, setFilterCat] = useState<ItemCategory | 'ALL'>('ALL');
   const [advancedFilters, setAdvancedFilters] = useState<FilterState>(defaultFilters);
+  const [activeTab, setActiveTab] = useState<'active' | 'resolved'>('active');
+
+  // Helper to check if item is resolved
+  const isResolvedItem = useCallback((item: Item) => {
+    return item.status === LostItemStatus.CLAIMED || 
+           item.status === LostItemStatus.RECOVERED ||
+           item.status === FoundItemStatus.RETURNED;
+  }, []);
+
 
 
   // Fetch reporter name when item is selected
@@ -108,8 +117,10 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
       const matchesSearch = item.title.toLowerCase().includes(debouncedSearch.toLowerCase()) || item.description.toLowerCase().includes(debouncedSearch.toLowerCase());
       const matchesType = filterType === 'ALL' || item.type === filterType;
       const matchesCat = filterCat === 'ALL' || item.category === filterCat;
-      return matchesSearch && matchesType && matchesCat;
+      const matchesTab = activeTab === 'active' ? !isResolvedItem(item) : isResolvedItem(item);
+      return matchesSearch && matchesType && matchesCat && matchesTab;
     });
+
 
     // Apply advanced filters
     if (advancedFilters.dateRange !== 'all' || advancedFilters.startDate || advancedFilters.endDate) {
@@ -134,8 +145,9 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
     }
 
     if (advancedFilters.status.length > 0) {
-      result = result.filter(item => advancedFilters.status.includes(item.status));
+      result = result.filter(item => advancedFilters.status.includes(item.status as LostItemStatus | FoundItemStatus));
     }
+
 
     if (advancedFilters.categories.length > 0) {
       result = result.filter(item => advancedFilters.categories.includes(item.category));
@@ -160,7 +172,8 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
     });
 
     return result;
-  }, [items, debouncedSearch, filterType, filterCat, advancedFilters]);
+  }, [items, debouncedSearch, filterType, filterCat, advancedFilters, activeTab, isResolvedItem]);
+
 
 
   // Memoized callbacks to prevent unnecessary re-renders
@@ -189,6 +202,11 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
     setAdvancedFilters(defaultFilters);
   }, []);
 
+  const handleTabChange = useCallback((tab: 'active' | 'resolved') => {
+    setActiveTab(tab);
+  }, []);
+
+
 
   const handleClearSearch = useCallback(() => {
     setSearch('');
@@ -207,7 +225,7 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
     return isAdmin || item.reportedBy === user.uid;
   }, [user, isAdmin]);
 
-  const handleStatusChange = useCallback(async (newStatus: string) => {
+  const handleStatusChange = useCallback(async (newStatus: LostItemStatus | FoundItemStatus) => {
     if (selectedItem) {
       if (!canModifyItem(selectedItem)) {
         alert('You can only change the status of items you reported.');
@@ -215,7 +233,9 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
       }
       try {
         await updateItemStatusInFirestore(selectedItem.id, newStatus);
-        setSelectedItem({ ...selectedItem, status: newStatus });
+        setSelectedItem({ ...selectedItem, status: newStatus as unknown as ItemStatus });
+
+
         
         // Award points when item is claimed/resolved
         if (newStatus === LostItemStatus.CLAIMED || newStatus === FoundItemStatus.RETURNED) {
@@ -272,6 +292,42 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Tab Navigation */}
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => handleTabChange('active')}
+          className={`flex-1 py-3 px-4 rounded-lg font-medium text-sm transition-all border ${
+            activeTab === 'active' 
+              ? 'bg-primary text-white border-primary shadow-md' 
+              : 'bg-white text-gray-600 border-gray-200 hover:border-primary/50'
+          }`}
+        >
+          <span className="flex items-center justify-center gap-2">
+            <span className="material-icons text-lg">search</span>
+            Active Items
+            <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-full text-xs">
+              {items.filter(item => !isResolvedItem(item)).length}
+            </span>
+          </span>
+        </button>
+        <button
+          onClick={() => handleTabChange('resolved')}
+          className={`flex-1 py-3 px-4 rounded-lg font-medium text-sm transition-all border ${
+            activeTab === 'resolved' 
+              ? 'bg-green-600 text-white border-green-600 shadow-md' 
+              : 'bg-white text-gray-600 border-gray-200 hover:border-green-400'
+          }`}
+        >
+          <span className="flex items-center justify-center gap-2">
+            <span className="material-icons text-lg">check_circle</span>
+            Resolved
+            <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-full text-xs">
+              {items.filter(item => isResolvedItem(item)).length}
+            </span>
+          </span>
+        </button>
+      </div>
+
       {/* Advanced Search Filters */}
       <AdvancedSearchFilters
         filters={advancedFilters}
@@ -279,6 +335,7 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
         onReset={() => setAdvancedFilters(defaultFilters)}
         itemCount={filteredItems.length}
       />
+
 
       {/* Search & Filters */}
       <div className="top-0 bg-background-light pt-2 pb-4 space-y-4">
@@ -394,12 +451,27 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
           ))
         ) : (
           <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">
-            <span className="material-icons text-6xl mb-4 text-gray-200">search_off</span>
-            <p className="text-lg font-medium text-gray-500">No items found matching your filters.</p>
+            <span className="material-icons text-6xl mb-4 text-gray-200">
+              {activeTab === 'resolved' ? 'inventory_2' : 'search_off'}
+            </span>
+            <p className="text-lg font-medium text-gray-500">
+              {activeTab === 'resolved' 
+                ? 'No resolved items yet. Items marked as claimed or returned will appear here.'
+                : 'No active items found matching your filters.'}
+            </p>
             <button onClick={handleClearFilters} className="mt-4 text-primary font-medium hover:underline">
               Clear all filters
             </button>
+            {activeTab === 'resolved' && (
+              <button 
+                onClick={() => handleTabChange('active')}
+                className="mt-2 text-green-600 font-medium hover:underline text-sm"
+              >
+                View active items
+              </button>
+            )}
           </div>
+
         )}
 
 
@@ -481,9 +553,10 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
                     {canModifyItem(selectedItem) ? (
                       <select
                         value={selectedItem.status}
-                        onChange={(e) => handleStatusChange(e.target.value)}
+                        onChange={(e) => handleStatusChange(e.target.value as LostItemStatus | FoundItemStatus)}
                         className="w-full px-3 py-1.5 bg-white border border-cream-accent rounded-lg text-sm font-medium text-gray-800 focus:ring-2 focus:ring-primary/50 outline-none cursor-pointer"
                       >
+
                         {selectedItem.type === ItemType.LOST ? (
                           <>
                             <option value={LostItemStatus.STILL_LOST}>Still Lost</option>
