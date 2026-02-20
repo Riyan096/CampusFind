@@ -1,5 +1,7 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { ItemType, ItemCategory, CampusLocation, ItemStatus, type Item } from '../types';
+import { ItemType, ItemCategory, CampusLocation, ItemStatus, LostItemStatus, FoundItemStatus, type Item } from '../types';
+
+
 import { Button, Input, Select, Card } from '../components/UI';
 import { analyzeItemImage, findSmartMatches } from '../services/geminiService';
 import { addItemToFirestore, getItemsByType } from '../services/itemService';
@@ -214,7 +216,8 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
         category,
         location,
         date: new Date().toISOString(),
-        status: ItemStatus.OPEN,
+        status: type === ItemType.LOST ? LostItemStatus.STILL_LOST : FoundItemStatus.AVAILABLE,
+
         aiTags,
         reportedBy: user.uid,
         reporterName: user.displayName || 'Anonymous',
@@ -516,4 +519,3 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
 });
 
 ReportView.displayName = 'ReportView';
-

@@ -12,12 +12,30 @@ export enum ItemCategory {
   OTHER = 'Other'
 }
 
+// Status for LOST items (from owner's perspective)
+export enum LostItemStatus {
+  STILL_LOST = 'STILL_LOST',      // Item is still missing
+  MATCH_FOUND = 'MATCH_FOUND',    // Potential match found
+  CLAIMED = 'CLAIMED',            // Owner found their item
+  RECOVERED = 'RECOVERED'         // Successfully returned to owner
+}
+
+// Status for FOUND items (from finder's perspective)
+export enum FoundItemStatus {
+  AVAILABLE = 'AVAILABLE',        // Found, waiting for owner
+  PENDING_CLAIM = 'PENDING_CLAIM', // Someone claims it's theirs
+  RETURNED = 'RETURNED',          // Successfully returned to owner
+  UNCLAIMED = 'UNCLAIMED'         // No one claimed it after period
+}
+
+// Legacy status enum for backward compatibility
 export enum ItemStatus {
   OPEN = 'OPEN',
   PENDING = 'PENDING',
   CLAIMED = 'CLAIMED',
   RESOLVED = 'RESOLVED'
 }
+
 
 export enum CampusLocation {
   // Libraries
