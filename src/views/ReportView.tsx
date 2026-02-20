@@ -61,12 +61,15 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
   // Handle matches found by the matching service
   const handleMatchesFound = useCallback((matches: MatchResult[]) => {
     const potentialMatches: PotentialMatch[] = matches.map(match => ({
-      item: match.foundItem,
-      confidence: match.confidence
+      item: match.lostItem,
+      confidence: match.confidence,
+      score: match.score,
+      reasons: match.reasons
     }));
     setPotentialMatches(potentialMatches);
     setShowMatches(true);
   }, []);
+
 
   // Check for matching lost items when AI analysis is complete
   const checkForMatches = useCallback(async (analysis: { title: string; description: string; category: ItemCategory; tags: string[] }) => {
