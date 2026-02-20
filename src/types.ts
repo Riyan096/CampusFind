@@ -90,6 +90,9 @@ export enum CampusLocation {
   OTHER = "Other"
 }
 
+// Union type for all possible item statuses
+export type ItemStatusType = ItemStatus | LostItemStatus | FoundItemStatus | string;
+
 export interface Item {
   id: string;
   type: ItemType;
@@ -99,7 +102,7 @@ export interface Item {
   location: CampusLocation;
   date: string;
   imageUrl?: string;
-  status: ItemStatus;
+  status: ItemStatusType;
   userContact?: string;
   aiTags?: string[];
   reportedBy?: string;
@@ -107,6 +110,7 @@ export interface Item {
   createdAt?: string;
   updatedAt?: string;
 }
+
 
 
 

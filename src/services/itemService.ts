@@ -12,8 +12,9 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Item, ItemStatus } from '../types';
-import { ItemType, ItemCategory, ItemStatus as StatusEnum } from '../types';
+import type { Item, ItemStatusType } from '../types';
+import { ItemType, ItemCategory } from '../types';
+
 
 const ITEMS_COLLECTION = 'items';
 
@@ -82,13 +83,14 @@ export const updateItemInFirestore = async (id: string, updates: Partial<Item>):
 };
 
 // Update item status
-export const updateItemStatusInFirestore = async (id: string, status: ItemStatus): Promise<void> => {
+export const updateItemStatusInFirestore = async (id: string, status: ItemStatusType): Promise<void> => {
   const itemRef = doc(db, ITEMS_COLLECTION, id);
   await updateDoc(itemRef, {
     status,
     updatedAt: serverTimestamp(),
   });
 };
+
 
 // Delete an item
 export const deleteItemFromFirestore = async (id: string): Promise<void> => {
@@ -108,10 +110,11 @@ export const getItemsByType = async (type: ItemType): Promise<Item[]> => {
 };
 
 // Get items by status
-export const getItemsByStatus = async (status: ItemStatus): Promise<Item[]> => {
+export const getItemsByStatus = async (status: ItemStatusType): Promise<Item[]> => {
   const allItems = await getAllItems();
   return allItems.filter(item => item.status === status);
 };
+
 
 // Search items
 export const searchItems = async (query: string): Promise<Item[]> => {

@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import type { Item } from '../types';
-import { ItemType, ItemCategory, ItemStatus } from '../types';
+import { ItemType, ItemCategory, ItemStatus, LostItemStatus, FoundItemStatus } from '../types';
+
 import { Input } from '../components/UI';
 import { deleteItemFromFirestore, updateItemStatusInFirestore } from '../services/itemService';
 import { doc, getDoc } from 'firebase/firestore';
@@ -206,7 +207,7 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
     return isAdmin || item.reportedBy === user.uid;
   }, [user, isAdmin]);
 
-  const handleStatusChange = useCallback(async (newStatus: ItemStatus) => {
+  const handleStatusChange = useCallback(async (newStatus: string) => {
     if (selectedItem) {
       if (!canModifyItem(selectedItem)) {
         alert('You can only change the status of items you reported.');
@@ -217,7 +218,7 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
         setSelectedItem({ ...selectedItem, status: newStatus });
         
         // Award points when item is claimed/resolved
-        if (newStatus === ItemStatus.CLAIMED) {
+        if (newStatus === LostItemStatus.CLAIMED || newStatus === FoundItemStatus.RETURNED) {
           const stats = await addPoints(50); // Award 50 points for resolving an item
           alert(`🎉 Item resolved! You earned 50 points! Total: ${stats.points} points`);
 
@@ -240,6 +241,7 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
       }
     }
   }, [selectedItem, onStatusChange, canModifyItem]);
+
 
 
 
@@ -479,19 +481,35 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
                     {canModifyItem(selectedItem) ? (
                       <select
                         value={selectedItem.status}
-                        onChange={(e) => handleStatusChange(e.target.value as ItemStatus)}
+                        onChange={(e) => handleStatusChange(e.target.value)}
                         className="w-full px-3 py-1.5 bg-white border border-cream-accent rounded-lg text-sm font-medium text-gray-800 focus:ring-2 focus:ring-primary/50 outline-none cursor-pointer"
                       >
-                        <option value={ItemStatus.OPEN}>Still Looking</option>
-                        <option value={ItemStatus.CLAIMED}>Claimed</option>
+                        {selectedItem.type === ItemType.LOST ? (
+                          <>
+                            <option value={LostItemStatus.STILL_LOST}>Still Lost</option>
+                            <option value={LostItemStatus.MATCH_FOUND}>Match Found</option>
+                            <option value={LostItemStatus.CLAIMED}>Claimed</option>
+                            <option value={LostItemStatus.RECOVERED}>Recovered</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value={FoundItemStatus.AVAILABLE}>Available</option>
+                            <option value={FoundItemStatus.PENDING_CLAIM}>Pending Claim</option>
+                            <option value={FoundItemStatus.RETURNED}>Returned</option>
+                            <option value={FoundItemStatus.UNCLAIMED}>Unclaimed</option>
+                          </>
+                        )}
                       </select>
                     ) : (
                       <p className="px-3 py-1.5 bg-gray-100 border border-cream-accent rounded-lg text-sm font-medium text-gray-800">
-                        {selectedItem.status === ItemStatus.OPEN ? 'Still Looking' : 'Claimed'}
+                        {selectedItem.status === LostItemStatus.STILL_LOST || selectedItem.status === FoundItemStatus.AVAILABLE ? 'Still Looking' : 
+                         selectedItem.status === LostItemStatus.CLAIMED || selectedItem.status === FoundItemStatus.RETURNED ? 'Resolved' : 
+                         selectedItem.status}
                       </p>
                     )}
                   </div>
                 </div>
+
 
                 <div className="flex items-center gap-3">
                   <span className="material-icons text-secondary">person</span>
