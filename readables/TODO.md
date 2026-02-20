@@ -237,8 +237,16 @@
   - Resets points, items counters, streaks, and achievements
   - Files modified: `src/views/AdminView.tsx`
 
+- [x] **Profile Picture Upload** - Users can upload profile pictures
+  - Clickable profile picture with camera overlay on hover
+  - Image compression (max 300x300, JPEG 0.8 quality)
+  - Base64 storage in Firestore (free, no Firebase Storage needed)
+  - Profile picture displayed in sidebar
+  - Files modified: `src/views/ProfileView.tsx`, `src/components/Layout.tsx`
+
 
 ## Future Enhancements 📝 PLANNED
+
 
 ### High Priority
 - [ ] **Item Image Upload to Firebase Storage** - Currently using base64, should migrate to Firebase Storage for better performance
@@ -257,8 +265,6 @@
 - [ ] **Mobile App** - React Native or PWA version
 - [ ] **Offline Support** - PWA with offline item browsing
 - [ ] **Analytics Dashboard v2** - Charts and graphs for admin analytics
-- [x] **Gamification** - Leaderboards, streaks, achievements ✅ COMPLETED
-
 - [ ] **Integration with Campus Systems** - Student ID verification, campus news feed
 - [ ] **Voice Search** - Search items using voice commands
 - [ ] **Barcode/QR Scanner** - For ID cards and books with barcodes
