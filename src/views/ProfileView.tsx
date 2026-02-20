@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -7,6 +7,7 @@ import { useToast } from '../hooks/useToast';
 import { getUserStats } from '../services/StorageService';
 import { getDefaultStreakInfo } from '../services/gamificationService';
 import type { UserStats } from '../types';
+
 
 export const ProfileView: React.FC = () => {
   const { user, updateUserProfile } = useAuth();
@@ -33,8 +34,12 @@ export const ProfileView: React.FC = () => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [photoURL, setPhotoURL] = useState<string>('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load user data
+
   useEffect(() => {
     if (user) {
       setDisplayName(user.displayName || '');
@@ -53,11 +58,13 @@ export const ProfileView: React.FC = () => {
         const data = userDoc.data();
         setPhone(data.phone || '');
         setBio(data.bio || '');
+        setPhotoURL(data.photoURL || '');
       }
     } catch (err) {
       console.error('Error loading profile:', err);
     }
   };
+
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,8 +80,10 @@ export const ProfileView: React.FC = () => {
         displayName,
         phone,
         bio,
+        photoURL,
         updatedAt: new Date().toISOString(),
       });
+
       
       success('Profile updated successfully!');
       setIsEditing(false);
@@ -86,7 +95,95 @@ export const ProfileView: React.FC = () => {
     }
   };
 
+  const handlePhotoClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      error('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      error('Image size must be less than 2MB');
+      return;
+    }
+
+    setUploadingPhoto(true);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64String = reader.result as string;
+        
+        // Compress image if too large
+        let compressedPhoto = base64String;
+        if (base64String.length > 500000) {
+          compressedPhoto = await compressImage(base64String);
+        }
+
+        setPhotoURL(compressedPhoto);
+        
+        // Save to Firestore immediately
+        await updateDoc(doc(db, 'users', user.uid), {
+          photoURL: compressedPhoto,
+          updatedAt: new Date().toISOString(),
+        });
+        
+        success('Profile picture updated!');
+        setUploadingPhoto(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Error uploading photo:', err);
+      error('Failed to upload photo');
+      setUploadingPhoto(false);
+    }
+  };
+
+  const compressImage = (base64String: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.src = base64String;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(base64String);
+          return;
+        }
+
+        // Calculate new dimensions (max 300x300)
+        let width = img.width;
+        let height = img.height;
+        const maxSize = 300;
+
+        if (width > height && width > maxSize) {
+          height = (height * maxSize) / width;
+          width = maxSize;
+        } else if (height > maxSize) {
+          width = (width * maxSize) / height;
+          height = maxSize;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Convert to JPEG with 0.8 quality
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.onerror = () => resolve(base64String);
+    });
+  };
+
   const handleChangePassword = async (e: React.FormEvent) => {
+
     e.preventDefault();
     if (!user) return;
     
@@ -141,11 +238,32 @@ export const ProfileView: React.FC = () => {
           <div className="space-y-6">
             {/* Profile Card */}
             <div className="bg-white rounded-xl shadow-soft p-6 text-center">
-              <div className="w-24 h-24 mx-auto mb-4 rounded-full bg-primary/10 border-4 border-primary flex items-center justify-center">
-                <span className="material-icons text-5xl text-primary">
-                  {user.displayName ? 'person' : 'account_circle'}
-                </span>
+              <div 
+                className="w-24 h-24 mx-auto mb-4 rounded-full bg-primary/10 border-4 border-primary flex items-center justify-center overflow-hidden cursor-pointer hover:opacity-80 transition-opacity relative group"
+                onClick={handlePhotoClick}
+              >
+                {uploadingPhoto ? (
+                  <span className="material-icons text-3xl text-primary animate-spin">refresh</span>
+                ) : photoURL ? (
+                  <img src={photoURL} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="material-icons text-5xl text-primary">
+                    {user.displayName ? 'person' : 'account_circle'}
+                  </span>
+                )}
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="material-icons text-white text-2xl">camera_alt</span>
+                </div>
               </div>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handlePhotoUpload}
+                accept="image/*"
+                className="hidden"
+              />
+              <p className="text-xs text-gray-500 mb-4">Click to change photo</p>
+
               <h2 className="text-xl font-bold text-gray-800 mb-1">
                 {user.displayName || 'Anonymous User'}
               </h2>
