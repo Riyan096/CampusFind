@@ -160,11 +160,20 @@ export const saveUserStats = async (stats: UserStats): Promise<UserStats> => {
 };
 
 
-export const addPoints = async (amount: number): Promise<UserStats> => {
+export const addPoints = async (amount: number, activityType?: 'report' | 'return' | 'claim'): Promise<UserStats> => {
   const stats = getUserStats();
   stats.points += amount;
-  stats.itemsReturned += 1;
   stats.lastActive = new Date().toISOString();
+  
+  // Only increment counters if activity type is specified
+  if (activityType === 'report') {
+    stats.itemsReported += 1;
+  } else if (activityType === 'return') {
+    stats.itemsReturned += 1;
+  } else if (activityType === 'claim') {
+    stats.itemsClaimed += 1;
+  }
+  
   localStorage.setItem(STATS_KEY, JSON.stringify(stats));
   
   // Sync to Firestore if user is logged in
@@ -172,11 +181,21 @@ export const addPoints = async (amount: number): Promise<UserStats> => {
   const user = auth.currentUser;
   if (user) {
     try {
-      await setDoc(doc(db, 'users', user.uid), {
+      const updateData: any = {
         points: stats.points,
-        itemsReturned: stats.itemsReturned,
         lastActive: stats.lastActive
-      }, { merge: true });
+      };
+      
+      // Only update the specific counter that changed
+      if (activityType === 'report') {
+        updateData.itemsReported = stats.itemsReported;
+      } else if (activityType === 'return') {
+        updateData.itemsReturned = stats.itemsReturned;
+      } else if (activityType === 'claim') {
+        updateData.itemsClaimed = stats.itemsClaimed;
+      }
+      
+      await setDoc(doc(db, 'users', user.uid), updateData, { merge: true });
     } catch (err) {
       console.error('Failed to sync points to Firestore:', err);
     }
@@ -184,6 +203,7 @@ export const addPoints = async (amount: number): Promise<UserStats> => {
   
   return stats;
 };
+
 
 // New gamified add points function
 export const addPointsWithGamification = async (

@@ -239,8 +239,9 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
         
         // Award points when item is claimed/resolved
         if (newStatus === LostItemStatus.CLAIMED || newStatus === FoundItemStatus.RETURNED) {
-          const stats = await addPoints(50); // Award 50 points for resolving an item
+          const stats = await addPoints(50, 'return'); // Award 50 points for resolving an item
           alert(`🎉 Item resolved! You earned 50 points! Total: ${stats.points} points`);
+
 
           
           // Send email notification to item reporter
