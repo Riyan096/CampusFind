@@ -175,10 +175,11 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
       await createNotification({
         userId: match.item.reportedBy,
         title: 'Potential Match Found!',
-        message: `Someone found an item that might be yours: "${title}". Check the browse page for details.`,
+        message: `Someone found an item that might be yours: "${title}". Check the Reports page for details.`,
         type: 'item_match',
         relatedItemId: match.item.id,
       });
+
       
       alert(`Notification sent to the owner of "${match.item.title}"!`);
     } catch (err) {
