@@ -10,7 +10,8 @@ import type { UserStats } from '../types';
 
 
 export const ProfileView: React.FC = () => {
-  const { user, updateUserProfile } = useAuth();
+  const { user, updateUserProfile, updateUserPhoto } = useAuth();
+
   const { success, error } = useToast();
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState<UserStats>({
@@ -154,13 +155,17 @@ export const ProfileView: React.FC = () => {
 
         setPhotoURL(compressedPhoto);
         
-        // Save to Firestore immediately
+        // Update AuthContext immediately for sidebar update
+        updateUserPhoto(compressedPhoto);
+        
+        // Save to Firestore
         await updateDoc(doc(db, 'users', user.uid), {
           photoURL: compressedPhoto,
           updatedAt: new Date().toISOString(),
         });
         
         success('Profile picture updated!');
+
         setUploadingPhoto(false);
       };
       reader.readAsDataURL(file);

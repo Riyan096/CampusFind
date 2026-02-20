@@ -29,9 +29,11 @@ interface AuthContextType {
   signup: (email: string, password: string, displayName: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUserProfile: (displayName: string) => Promise<void>;
+  updateUserPhoto: (photoURL: string) => void;
   isAuthenticated: boolean;
   isAdmin: boolean;
 }
+
 
 
 
@@ -122,6 +124,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(prev => prev ? { ...prev, displayName } : null);
   };
 
+  const updateUserPhoto = (photoURL: string) => {
+    // Update local user state immediately for UI responsiveness
+    setUser(prev => prev ? { ...prev, photoURL } : null);
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -130,9 +137,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       signup,
       logout,
       updateUserProfile,
+      updateUserPhoto,
       isAuthenticated: !!user,
       isAdmin: user?.isAdmin || false,
     }}>
+
 
 
       {children}
