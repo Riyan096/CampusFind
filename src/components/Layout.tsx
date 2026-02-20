@@ -227,7 +227,10 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
         
         {/* User Profile Section */}
         <div className="p-4 border-t border-primary-dark">
-          <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 cursor-pointer transition-colors">
+          <div 
+            className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 cursor-pointer transition-colors"
+            onClick={() => onTabChange('profile')}
+          >
             <div className="w-10 h-10 rounded-full bg-secondary/20 border-2 border-secondary flex items-center justify-center text-secondary font-bold overflow-hidden">
               {user?.photoURL ? (
                 <img src={user.photoURL} alt="Profile" className="w-full h-full object-cover" />
@@ -235,6 +238,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
                 <User className="w-5 h-5" />
               )}
             </div>
+
 
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-white truncate flex items-center gap-2">
