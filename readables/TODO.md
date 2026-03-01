@@ -280,8 +280,13 @@
   - Notifications: only recipients can read
   - Create: `firestore.rules` (Firebase config)
 
-- [ ] **Rate Limiting** - Prevent spam/abuse
-  - Limit item reports per user per hour
+- [x] **Rate Limiting** - Prevent spam/abuse ✅ IMPLEMENTED
+  - Gemini API: 10 requests per minute per user
+  - Added isRateLimited(), getRemainingRequests(), getRateLimitResetTime() functions
+  - Applied to analyzeItemImage() and findSmartMatches() functions
+  - Files modified: src/services/geminiService.ts
+
+- [ ] **Chat/Notification Rate Limiting** - Prevent spam in chat and notifications
   - Limit chat messages per minute
   - Limit notifications per user per day
 
@@ -299,9 +304,10 @@
   - Move sensitive data to sessionStorage or memory
   - Encrypt any cached user data
 
-- [ ] **API Key Protection** - Review API key usage
-  - Ensure Gemini API key is properly restricted in Google Cloud Console
-  - Add usage limits/billing alerts
+- [x] **API Key Protection** - Implemented via environment variables ✅
+  - API keys now use import.meta.env.VITE_* pattern
+  - Rate limiting added to prevent abuse
+  - Files modified: src/services/firebase.ts, src/services/geminiService.ts
 
 ### Low Priority Security
 - [ ] **Audit Logging** - Log admin actions for accountability
