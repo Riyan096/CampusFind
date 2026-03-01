@@ -259,6 +259,56 @@
   - Files modified: `src/views/AppInfo.tsx`
 
 
+## Phase 23: Security Improvements 📝 IN PROGRESS
+
+### Critical Security Issues
+- [ ] **Input Sanitization** - Sanitize all user inputs (title, description) before storing to prevent XSS
+  - Use DOMPurify or similar library to sanitize rich text
+  - Escape HTML entities in user-generated content
+  - Files to modify: `itemService.ts`, `ReportView.tsx`, `ChatView.tsx`
+
+- [ ] **Image Upload Validation** - Add proper file validation before upload
+  - Check file type (allow only jpg, png, gif, webp)
+  - Check file size (max 5MB)
+  - Check image dimensions (max 2048x2048)
+  - Files to modify: `ReportView.tsx`, `ProfileView.tsx`
+
+- [ ] **Firestore Security Rules** - Implement Firebase security rules
+  - Users can only edit their own items
+  - Users can only delete their own items (unless admin)
+  - Chat messages: only participants can read/write
+  - Notifications: only recipients can read
+  - Create: `firestore.rules` (Firebase config)
+
+- [ ] **Rate Limiting** - Prevent spam/abuse
+  - Limit item reports per user per hour
+  - Limit chat messages per minute
+  - Limit notifications per user per day
+
+### Medium Priority Security
+- [ ] **Content Moderation** - AI-generated content can be inappropriate
+  - Add profanity filter for titles/descriptions
+  - Add image content moderation
+
+- [ ] **Profile Data Validation** - Validate all profile fields
+  - Max length for bio, display name
+  - Phone number format validation
+  - Email format validation
+
+- [ ] **Secure Storage** - Review what's stored in localStorage
+  - Move sensitive data to sessionStorage or memory
+  - Encrypt any cached user data
+
+- [ ] **API Key Protection** - Review API key usage
+  - Ensure Gemini API key is properly restricted in Google Cloud Console
+  - Add usage limits/billing alerts
+
+### Low Priority Security
+- [ ] **Audit Logging** - Log admin actions for accountability
+- [ ] **Account Lockout** - Lock account after failed login attempts
+- [ ] **Session Timeout** - Auto-logout after inactivity
+
+
 ## Future Enhancements 📝 PLANNED
 
 
