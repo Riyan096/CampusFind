@@ -1,6 +1,6 @@
 /**
  * Advanced Search Filters Component
- * Provides date range, location, status, and category filters
+ * Has date range, location, status, and category filters
  */
 
 import React, { useState, useCallback } from 'react';

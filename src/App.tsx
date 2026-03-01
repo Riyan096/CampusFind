@@ -10,13 +10,10 @@ import { ChatView } from './views/ChatView';
 import { AdminView } from './views/AdminView';
 import { ProfileView } from './views/ProfileView';
 import { LeaderboardView } from './views/LeaderboardView';
-
 import { ToastContainer } from './components/Toast';
 import { useToast } from './hooks/useToast';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { ThemeProvider } from './context/ThemeContext';
-
-import { getItems, getUserStats, syncStatsFromFirestore } from './services/StorageService';
+import { getUserStats, syncStatsFromFirestore } from './services/StorageService';
 import { subscribeToItems } from './services/itemService';
 import type { Item, UserStats } from './types';
 
@@ -45,7 +42,7 @@ const AppContent: React.FC = () => {
     const { toasts, removeToast, success, error } = useToast();
     const { user, loading, isAuthenticated, logout } = useAuth();
 
-    // Load initial data from Firestore
+    // initial data from Firestore
     useEffect(() => {
         if (!isAuthenticated) return;
         
@@ -78,8 +75,6 @@ const AppContent: React.FC = () => {
 
     const refreshData = useCallback(() => {
         try {
-            // Items are now loaded via Firestore subscription
-            // Just refresh user stats from localStorage
             setStats(getUserStats());
         } catch (err) {
             error('Failed to load data');
@@ -182,11 +177,9 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => {
     return (
-        <ThemeProvider>
-            <AuthProvider>
-                <AppContent />
-            </AuthProvider>
-        </ThemeProvider>
+        <AuthProvider>
+            <AppContent />
+        </AuthProvider>
     );
 };
 
