@@ -91,21 +91,12 @@ Visit http://localhost:5173
 - **Build Tools**: Vite, ESLint, PostCSS
 - **Deployment**: Firebase Hosting
 
-## 🎯 Use Cases
+## Use Cases
 
 1. **Student Lost Item** - Report lost item, get notified when found
 2. **Student Found Item** - Report found item, help owner recover it
 3. **Campus Admin** - Manage items, users, and analytics
 4. **Community Building** - Help others, earn points, climb leaderboard
-
-## 📈 Analytics
-
-The system tracks:
-- Item recovery rates
-- User activity patterns
-- Return rate trends
-- Category-wise statistics
-- User engagement metrics
 
 ## Deployment
 
