@@ -19,7 +19,7 @@ CampusFind is a web app for reporting and finding lost items on campus. Built wi
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/your-username/CampusFind.git
+git clone https://github.com/Riyan096/CampusFind.git
 cd CampusFind
 ```
 
@@ -59,17 +59,6 @@ Visit http://localhost:5173
 2. **Student Found Item** - Report found item, help owner recover it
 3. **Campus Admin** - Manage items, users, and analytics
 4. **Community Building** - Help others, earn points, climb leaderboard
-
-## Deployment
-
-### Firebase Hosting
-```bash
-# Build the app
-npm run build
-
-# Deploy to Firebase
-firebase deploy --only hosting
-```
 
 ## Contributing
 
