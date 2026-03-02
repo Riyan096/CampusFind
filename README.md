@@ -78,3 +78,5 @@ firebase deploy --only hosting
 3. Make your changes
 4. Add tests if applicable
 5. Submit pull request
+
+Currently built specifically focusing on Wayne State University. No external locations can be found for now.
