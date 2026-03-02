@@ -3,6 +3,74 @@ import { ItemCategory, CampusLocation } from "../types";
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
+// Rate limiting configuration
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute window
+const MAX_REQUESTS_PER_WINDOW = 10; // Max requests per minute
+
+// Track API requests for rate limiting
+interface RateLimitEntry {
+  count: number;
+  resetTime: number;
+}
+
+const requestCounts = new Map<string, RateLimitEntry>();
+
+/**
+ * Check if the request should be rate limited
+ * @param key - Unique identifier (e.g., user ID or IP)
+ * @returns true if rate limited, false otherwise
+ */
+const isRateLimited = (key: string): boolean => {
+  const now = Date.now();
+  const entry = requestCounts.get(key);
+  
+  if (!entry || now > entry.resetTime) {
+    // Reset or create new rate limit entry
+    requestCounts.set(key, {
+      count: 1,
+      resetTime: now + RATE_LIMIT_WINDOW_MS
+    });
+    return false;
+  }
+  
+  if (entry.count >= MAX_REQUESTS_PER_WINDOW) {
+    // Rate limit exceeded
+    return true;
+  }
+  
+  // Increment count
+  entry.count++;
+  return false;
+};
+
+/**
+ * Get remaining requests for a key
+ */
+export const getRemainingRequests = (key: string): number => {
+  const now = Date.now();
+  const entry = requestCounts.get(key);
+  
+  if (!entry || now > entry.resetTime) {
+    return MAX_REQUESTS_PER_WINDOW;
+  }
+  
+  return Math.max(0, MAX_REQUESTS_PER_WINDOW - entry.count);
+};
+
+/**
+ * Get rate limit reset time in seconds
+ */
+export const getRateLimitResetTime = (key: string): number => {
+  const now = Date.now();
+  const entry = requestCounts.get(key);
+  
+  if (!entry) {
+    return 0;
+  }
+  
+  return Math.max(0, Math.ceil((entry.resetTime - now) / 1000));
+};
+
 // Lazy initialization - only create client when needed
 let ai: GoogleGenAI | null = null;
 
@@ -27,7 +95,22 @@ export interface AIAnalysisResult {
 }
 
 //Analyzes an image of a found item to automatically extract details.
-export const analyzeItemImage = async (base64Image: string): Promise<AIAnalysisResult> => {
+export const analyzeItemImage = async (base64Image: string, userId?: string): Promise<AIAnalysisResult> => {
+  // Apply rate limiting using user ID or IP as key
+  const rateLimitKey = userId || 'anonymous';
+  
+  if (isRateLimited(rateLimitKey)) {
+    const resetIn = getRateLimitResetTime(rateLimitKey);
+    console.warn(`Rate limit exceeded. Try again in ${resetIn} seconds.`);
+    return {
+        title: "Unknown Item",
+        description: `Rate limit exceeded. Please wait ${resetIn} seconds before trying again.`,
+        category: ItemCategory.OTHER,
+        color: "Unknown",
+        tags: []
+    };
+  }
+  
   const aiClient = getAI();
   if (!aiClient) {
     console.warn("No API Key provided for Gemini. AI features disabled.");
@@ -96,14 +179,23 @@ export const analyzeItemImage = async (base64Image: string): Promise<AIAnalysisR
   }
 };
 
-//Smart search/matching
+//Smart search/matching with rate limiting
 
-export const findSmartMatches = async (query: string, itemsJson: string) => {
+export const findSmartMatches = async (query: string, itemsJson: string, userId?: string) => {
+  // Apply rate limiting
+  const rateLimitKey = userId || 'anonymous';
+  
+  if (isRateLimited(rateLimitKey)) {
+    console.warn(`Rate limit exceeded for user ${rateLimitKey}. Try again later.`);
+    return [];
+  }
+  
   const aiClient = getAI();
   if (!aiClient) {
     console.warn("No API Key provided for Gemini. Smart search disabled.");
     return [];
   }
+
 
   try {
     const response = await aiClient.models.generateContent({
