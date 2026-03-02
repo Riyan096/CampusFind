@@ -259,7 +259,7 @@
   - Files modified: `src/views/AppInfo.tsx`
 
 
-## Phase 23: Security Improvements 📝 IN PROGRESS
+
 
 ### Critical Security Issues
 - [ ] **Input Sanitization** - Sanitize all user inputs (title, description) before storing to prevent XSS
@@ -280,7 +280,7 @@
   - Notifications: only recipients can read
   - Create: `firestore.rules` (Firebase config)
 
-- [x] **Rate Limiting** - Prevent spam/abuse ✅ IMPLEMENTED
+- [x] **Rate Limiting** - Prevent spam/abuse
   - Gemini API: 10 requests per minute per user
   - Added isRateLimited(), getRemainingRequests(), getRateLimitResetTime() functions
   - Applied to analyzeItemImage() and findSmartMatches() functions
@@ -304,7 +304,7 @@
   - Move sensitive data to sessionStorage or memory
   - Encrypt any cached user data
 
-- [x] **API Key Protection** - Implemented via environment variables ✅
+- [x] **API Key Protection** - Implemented via environment variables
   - API keys now use import.meta.env.VITE_* pattern
   - Rate limiting added to prevent abuse
   - Files modified: src/services/firebase.ts, src/services/geminiService.ts
@@ -315,9 +315,9 @@
 - [ ] **Session Timeout** - Auto-logout after inactivity
 
 
-## Future Enhancements 📝 PLANNED
 
 
+## Future Enhancements
 
 ### High Priority
 - [ ] **Item Image Upload to Firebase Storage** - Currently using base64, should migrate to Firebase Storage for better performance
@@ -330,7 +330,7 @@
 - [ ] **Bulk Operations** - Allow admins to bulk delete/modify items
 
 ### Low Priority / Nice to Have
-- [x] **Dark Mode** - Toggle between light/dark themes (REMOVED - all dark mode classes cleaned from codebase)
+- [ ] **Dark Mode** - Toggle between light/dark themes
 - [ ] **Multi-language Support** - i18n for international students
 - [ ] **Social Sharing** - Share lost/found items on social media
 - [ ] **Mobile App** - React Native or PWA version
