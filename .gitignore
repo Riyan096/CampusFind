@@ -26,3 +26,4 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+readables/ADMIN_GUIDE.md
