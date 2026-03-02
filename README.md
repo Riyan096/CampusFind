@@ -1,43 +1,19 @@
 # CampusFind - Campus Lost & Found Management System
 
-CampusFind is a comprehensive web application designed to help students and staff report, track, and recover lost items on campus. Built with modern web technologies and Firebase integration, it provides a centralized platform for lost and found management with real-time features.
+CampusFind is a web app for reporting and finding lost items on campus. Built with React and Firebase, it helps students and staff manage lost and found items with real-time features.
 
 ## Features
 
-### Core Functionality
-- **Lost & Found Reporting** - Report lost or found items with photos and details
+- **Lost & Found Reporting** - Report items with photos and details
 - **Real-time Item Browsing** - Search and filter items across campus
 - **Smart Item Matching** - AI-powered matching using Gemini API
 - **Real-time Chat** - Instant messaging between users
 - **Notifications System** - Real-time notifications for important events
-
-### Advanced Features
 - **Firebase Authentication** - Secure user registration and login
 - **Gamification System** - Points, streaks, achievements, and leaderboard
 - **Admin Dashboard** - Complete admin interface for user and item management
 - **Email Notifications** - Automated email alerts for key actions
 - **Advanced Search** - Filter by date, location, category, and status
-
-### Technical Features
-- **TypeScript** - Type-safe development throughout
-- **React 19** - Modern React with hooks and patterns
-- **Firebase Integration** - Authentication, Firestore, Realtime Database
-- **Responsive Design** - Mobile-friendly interface
-- **Performance Optimized** - React.memo, useCallback, lazy loading
-
-## Key Benefits
-
-- **Increased Recovery Rates** - Smart matching helps return items faster
-- **Time Savings** - Automated notifications and streamlined processes
-- **Enhanced User Experience** - Modern, intuitive interface
-- **Data-Driven Insights** - Analytics and reporting for campus administration
-- **Community Engagement** - Gamification encourages participation
-
-## Prerequisites
-
-- Node.js (v18 or higher)
-- Firebase project with configured services
-- Gemini API key (for AI features)
 
 ## Installation
 
@@ -69,20 +45,6 @@ npm run dev
 5. **Open your browser**
 Visit http://localhost:5173
 
-## Firebase Setup
-
-1. **Create Firebase Project**
-   - Go to [Firebase Console](https://console.firebase.google.com)
-   - Create new project
-   - Enable Authentication (Email/Password)
-   - Enable Firestore Database
-   - Enable Realtime Database
-
-2. **Configure Firebase**
-   - Copy configuration from Firebase Console
-   - Add to your `.env` file
-   - Deploy security rules (see documentation)
-
 ## Technologies Used
 
 - **Frontend**: React, TypeScript, Vite, Tailwind CSS
@@ -109,7 +71,7 @@ npm run build
 firebase deploy --only hosting
 ```
 
-##  Contributing
+## Contributing
 
 1. Fork the repository
 2. Create feature branch
