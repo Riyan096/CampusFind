@@ -20,7 +20,7 @@ export const AppInfo: React.FC = () => {
             <Shield className="w-6 h-6 text-primary" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-gray-800 mb-2">Our Mission</h2>
+            <h2 className="text-xl font-bold text-gray-800 mb-2">The Mission</h2>
             <p className="text-gray-600 leading-relaxed">
               CampusFind helps students and faculty reconnect with their lost belongings quickly and securely. 
               No more checking multiple lost & found boxes or scrolling through social media posts.
