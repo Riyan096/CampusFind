@@ -290,6 +290,8 @@
   - Limit chat messages per minute
   - Limit notifications per user per day
 
+- [ ] **Input Sanitization** - Risk of XSS attacks through user inputs, sanitize all user-generated content
+
 ### Medium Priority Security
 - [ ] **Content Moderation** - AI-generated content can be inappropriate
   - Add profanity filter for titles/descriptions
@@ -309,6 +311,10 @@
   - Rate limiting added to prevent abuse
   - Files modified: src/services/firebase.ts, src/services/geminiService.ts
 
+- [ ] **Content Moderation** - Add profanity filter and image content moderation for inappropriate content
+- [ ] **Profile Data Validation** - Possible risk of SQL injection, oversized input. Validate all profile fields (length, limits, format validation)
+- [ ] **Rate Limiting for Chat** - Limit chat messages per minute for spams
+
 ### Low Priority Security
 - [ ] **Audit Logging** - Log admin actions for accountability
 - [ ] **Account Lockout** - Lock account after failed login attempts
@@ -321,6 +327,7 @@
 
 ### High Priority
 - [ ] **Item Image Upload to Firebase Storage** - Currently using base64, should migrate to Firebase Storage for better performance
+
 
 ### Medium Priority
 - [ ] **Item Categories Management** - Allow admins to add/edit custom categories
