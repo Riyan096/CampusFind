@@ -57,7 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.warn('Firestore not accessible:', firestoreError);
           }
           
-          // Check if user is admin (by email or admin flag in Firestore)
+// Check if user is admin (by email or admin flag in Firestore)
           const isAdmin = userData?.isAdmin === true || 
                          firebaseUser.email === 'admin@campusfind.com';
           
@@ -95,7 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Update profile with display name
     await updateProfile(userCredential.user, { displayName });
     
-    // Create user document in Firestore
+// Create user document in Firestore
     // Check if this is the first user (make them admin) or specific admin email
     const isAdmin = email === 'admin@campusfind.com';
     
