@@ -14,6 +14,7 @@ import {
   clearAllNotifications,
   type Notification 
 } from '../services/notificationService';
+import { sanitizeSearchInput } from '../utils/sanitize';
 
 interface User {
   uid: string;
@@ -180,14 +181,15 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
   }, []);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
+    setSearchQuery(sanitizeSearchInput(e.target.value));
   };
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && searchQuery.trim()) {
+    const q = sanitizeSearchInput(searchQuery, true);
+    if (e.key === 'Enter' && q) {
       e.preventDefault();
       onTabChange('browse');
-      onSearch?.(searchQuery.trim());
+      onSearch?.(q);
       setSearchQuery('');
     }
   };

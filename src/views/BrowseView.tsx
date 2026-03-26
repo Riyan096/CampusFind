@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { addPoints } from '../services/StorageService';
 import { AdvancedSearchFilters, defaultFilters, type FilterState } from '../components/AdvancedSearchFilters';
 import { emailService } from '../services/emailService';
+import { sanitizeSearchInput } from '../utils/sanitize';
 
 
 
@@ -43,7 +44,7 @@ interface BrowseViewProps {
 
 export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItemClick, onItemsChange, onStatusChange, searchQuery, onStartChat }) => {
   const { user, isAdmin } = useAuth();
-  const [search, setSearch] = useState(searchQuery || '');
+  const [search, setSearch] = useState(() => sanitizeSearchInput(searchQuery || ''));
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [reporterName, setReporterName] = useState<string>('');
 
@@ -178,7 +179,7 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
 
   // Memoized callbacks to prevent unnecessary re-renders
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearch(e.target.value);
+    setSearch(sanitizeSearchInput(e.target.value));
   }, []);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -269,7 +270,7 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
   // Sync with external search query
   React.useEffect(() => {
     if (searchQuery) {
-      setSearch(searchQuery);
+      setSearch(sanitizeSearchInput(searchQuery, true));
     }
   }, [searchQuery]);
 
@@ -597,11 +598,11 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
 
 
               <div className="flex gap-3 pt-2">
-                {user?.uid !== selectedItem.reportedBy && (
+                {selectedItem.reportedBy && user?.uid !== selectedItem.reportedBy && (
                   <button
                     onClick={() => {
                       if (onStartChat) {
-                        onStartChat(selectedItem.id, selectedItem.title, selectedItem.reportedBy || '');
+                        onStartChat(selectedItem.id, selectedItem.title, selectedItem.reportedBy);
                       }
                       handleCloseModal();
                     }}

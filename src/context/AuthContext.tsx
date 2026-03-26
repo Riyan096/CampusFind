@@ -10,6 +10,7 @@ import {
 
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
+import { LIMITS, sanitizeEmailInput, sanitizePlainText } from '../utils/sanitize';
 
 interface User {
   uid: string;
@@ -86,23 +87,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 
   const login = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
+    const safeEmail = sanitizeEmailInput(email);
+    await signInWithEmailAndPassword(auth, safeEmail, password);
   };
 
   const signup = async (email: string, password: string, displayName: string) => {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const safeEmail = sanitizeEmailInput(email);
+    const safeName = sanitizePlainText(displayName, LIMITS.displayName, { multiline: false });
+    const userCredential = await createUserWithEmailAndPassword(auth, safeEmail, password);
     
     // Update profile with display name
-    await updateProfile(userCredential.user, { displayName });
+    await updateProfile(userCredential.user, { displayName: safeName });
     
 // Create user document in Firestore
     // Check if this is the first user (make them admin) or specific admin email
-    const isAdmin = email === 'admin@campusfind.com';
+    const isAdmin = safeEmail === 'admin@campusfind.com';
     
     await setDoc(doc(db, 'users', userCredential.user.uid), {
       uid: userCredential.user.uid,
-      email,
-      displayName,
+      email: safeEmail,
+      displayName: safeName,
       isAdmin,
       createdAt: new Date().toISOString(),
       itemsReported: 0,
@@ -119,9 +123,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateUserProfile = async (displayName: string) => {
     if (!auth.currentUser) throw new Error('No user logged in');
-    await updateProfile(auth.currentUser, { displayName });
+    const safeName = sanitizePlainText(displayName, LIMITS.displayName, { multiline: false });
+    await updateProfile(auth.currentUser, { displayName: safeName });
     // Update local user state
-    setUser(prev => prev ? { ...prev, displayName } : null);
+    setUser(prev => prev ? { ...prev, displayName: safeName } : null);
   };
 
   const updateUserPhoto = (photoURL: string) => {

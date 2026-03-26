@@ -7,6 +7,7 @@ import { useToast } from '../hooks/useToast';
 import { getUserStats } from '../services/StorageService';
 import { getDefaultStreakInfo } from '../services/gamificationService';
 import type { UserStats } from '../types';
+import { LIMITS, sanitizePhoneInput, sanitizePlainText } from '../utils/sanitize';
 
 
 export const ProfileView: React.FC = () => {
@@ -73,14 +74,16 @@ export const ProfileView: React.FC = () => {
     
     setLoading(true);
     try {
-      // Update Firebase Auth profile
-      await updateUserProfile(displayName);
-      
-      // Update Firestore user document
+      const safeName = sanitizePlainText(displayName, LIMITS.displayName, { multiline: false });
+      const safePhone = sanitizePhoneInput(phone);
+      const safeBio = sanitizePlainText(bio, LIMITS.bio, { multiline: true });
+
+      await updateUserProfile(safeName);
+
       await updateDoc(doc(db, 'users', user.uid), {
-        displayName,
-        phone,
-        bio,
+        displayName: safeName,
+        phone: safePhone,
+        bio: safeBio,
         photoURL,
         updatedAt: new Date().toISOString(),
       });

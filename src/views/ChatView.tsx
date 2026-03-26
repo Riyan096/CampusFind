@@ -13,6 +13,7 @@ import {
 } from '../services/chatService';
 import { createNotification } from '../services/notificationService';
 import { Button, Input } from '../components/UI';
+import { LIMITS, sanitizeFirestoreDocId, sanitizePlainText } from '../utils/sanitize';
 
 interface ChatViewProps {
   itemId?: string;
@@ -53,15 +54,39 @@ export const ChatView: React.FC<ChatViewProps> = ({
     
     try {
       const chatId = await createChat(itemId, itemTitle, user.uid, user.displayName || 'Anonymous');
+      const safeTitle = sanitizePlainText(itemTitle, LIMITS.title, { multiline: false });
       
       // If there's an item owner, add them as a participant too
       if (itemOwnerId && itemOwnerId !== user.uid) {
         await joinChat(chatId, itemOwnerId, 'Item Owner');
       }
+
+      // Optimistically open the created chat before subscription refresh.
+      setActiveChat({
+        id: chatId,
+        itemId,
+        itemTitle: safeTitle,
+        participants: {
+          [user.uid]: {
+            name: user.displayName || 'Anonymous',
+            joinedAt: Date.now(),
+          },
+          ...(itemOwnerId && itemOwnerId !== user.uid
+            ? {
+                [itemOwnerId]: {
+                  name: 'Item Owner',
+                  joinedAt: Date.now(),
+                },
+              }
+            : {}),
+        },
+        createdAt: Date.now(),
+      });
       
       // Chat will be added to list via subscription
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating chat:', error);
+      alert(error?.message || 'Unable to create chat. Check Firebase Realtime Database rules.');
     }
   }, [user, itemOwnerId]);
 
@@ -136,7 +161,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeChat || !user || !newMessage.trim()) return;
+    if (!activeChat || !user) return;
+
+    const safeContent = sanitizePlainText(newMessage, LIMITS.chatMessage, { multiline: true });
+    if (!safeContent) return;
     
     setLoading(true);
     try {
@@ -144,18 +172,21 @@ export const ChatView: React.FC<ChatViewProps> = ({
         activeChat.id!,
         user.uid,
         user.displayName || 'Anonymous',
-        newMessage.trim()
+        safeContent
       );
       
       // Notify other participants
       const participantIds = Object.keys(activeChat.participants);
+      const senderLabel = sanitizePlainText(user.displayName || 'Anonymous', LIMITS.displayName, {
+        multiline: false,
+      });
       for (const participantId of participantIds) {
         if (participantId !== user.uid) {
           try {
             await createNotification({
               userId: participantId,
-              title: `New message from ${user.displayName || 'Anonymous'}`,
-              message: newMessage.trim().substring(0, 100),
+              title: `New message from ${senderLabel}`,
+              message: safeContent.substring(0, 100),
               type: 'chat_message',
               relatedChatId: activeChat.id,
               relatedItemId: activeChat.itemId,
@@ -196,10 +227,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   const handleStartNewChat = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !newChatItemId.trim() || !newChatItemTitle.trim()) return;
+    if (!user) return;
+
+    const safeItemId = sanitizeFirestoreDocId(newChatItemId);
+    const safeTitle = sanitizePlainText(newChatItemTitle, LIMITS.title, { multiline: false });
+    if (!safeItemId || !safeTitle) return;
     
     try {
-      await createChat(newChatItemId.trim(), newChatItemTitle.trim(), user.uid, user.displayName || 'Anonymous');
+      await createChat(safeItemId, safeTitle, user.uid, user.displayName || 'Anonymous');
       setNewChatItemId('');
       setNewChatItemTitle('');
       setShowNewChat(false);
@@ -295,7 +330,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 <input
                   type="text"
                   value={newChatItemId}
-                  onChange={(e) => setNewChatItemId(e.target.value)}
+                  onChange={(e) => setNewChatItemId(sanitizeFirestoreDocId(e.target.value))}
                   placeholder="Item ID (e.g., item_123)"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary/50 outline-none bg-white text-gray-900"
                   required
@@ -305,7 +340,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 <input
                   type="text"
                   value={newChatItemTitle}
-                  onChange={(e) => setNewChatItemTitle(e.target.value)}
+                  onChange={(e) =>
+                    setNewChatItemTitle(
+                      sanitizePlainText(e.target.value, LIMITS.title, { multiline: false, trim: false })
+                    )
+                  }
                   placeholder="Item name/title"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary/50 outline-none bg-white text-gray-900"
                   required
@@ -451,7 +490,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 <Input
                   type="text"
                   value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
+                  onChange={(e) =>
+                    setNewMessage(
+                      sanitizePlainText(e.target.value, LIMITS.chatMessage, {
+                        multiline: false,
+                        trim: false,
+                      })
+                    )
+                  }
                   placeholder="Type a message..."
                   className="flex-1"
                 />

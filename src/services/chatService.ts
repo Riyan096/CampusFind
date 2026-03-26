@@ -19,6 +19,7 @@ import {
 
 import { realtimeDb } from './firebase';
 import { emailService } from './emailService';
+import { LIMITS, sanitizeFirestoreDocId, sanitizePlainText } from '../utils/sanitize';
 
 export interface Message {
   id?: string;
@@ -58,15 +59,18 @@ export const createChat = async (
   userId: string, 
   userName: string
 ): Promise<string> => {
+  const safeItemId = sanitizeFirestoreDocId(itemId);
+  const safeTitle = sanitizePlainText(itemTitle, LIMITS.title, { multiline: false });
+  const safeUserName = sanitizePlainText(userName, LIMITS.displayName, { multiline: false });
   const chatRef = push(ref(realtimeDb, 'chats'));
   const chatId = chatRef.key!;
   
   await set(chatRef, {
-    itemId,
-    itemTitle,
+    itemId: safeItemId,
+    itemTitle: safeTitle,
     participants: {
       [userId]: {
-        name: userName,
+        name: safeUserName,
         joinedAt: serverTimestamp(),
       },
     },
@@ -82,9 +86,10 @@ export const joinChat = async (
   userId: string, 
   userName: string
 ): Promise<void> => {
+  const safeUserName = sanitizePlainText(userName, LIMITS.displayName, { multiline: false });
   const participantRef = ref(realtimeDb, `chats/${chatId}/participants/${userId}`);
   await set(participantRef, {
-    name: userName,
+    name: safeUserName,
     joinedAt: serverTimestamp(),
   });
 };
@@ -96,12 +101,14 @@ export const sendMessage = async (
   senderName: string,
   content: string
 ): Promise<void> => {
+  const safeName = sanitizePlainText(senderName, LIMITS.displayName, { multiline: false });
+  const safeContent = sanitizePlainText(content, LIMITS.chatMessage, { multiline: true });
   const messageRef = push(ref(realtimeDb, `chats/${chatId}/messages`));
   
   const messageData = {
     senderId,
-    senderName,
-    content,
+    senderName: safeName,
+    content: safeContent,
     timestamp: serverTimestamp(),
     read: false,
     status: 'sent',
@@ -114,7 +121,7 @@ export const sendMessage = async (
   // Update last message in chat
   const chatRef = ref(realtimeDb, `chats/${chatId}/lastMessage`);
   await set(chatRef, {
-    content: content.substring(0, 100), // Truncate long messages
+    content: safeContent.substring(0, 100), // Truncate long messages
     timestamp: serverTimestamp(),
     senderId,
   });
@@ -128,8 +135,8 @@ export const sendMessage = async (
     for (const participantId of participantIds) {
       emailService.sendNewMessageNotification(
         participantId,
-        senderName,
-        content,
+        safeName,
+        safeContent,
         chatId
       ).catch(err => console.error('Failed to send email notification:', err));
     }

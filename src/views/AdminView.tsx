@@ -8,6 +8,7 @@ import { useToast } from '../hooks/useToast';
 import { ItemType } from '../types';
 import { clearLocalStats } from '../services/StorageService';
 import { getDefaultStreakInfo } from '../services/gamificationService';
+import { LIMITS, sanitizePlainText } from '../utils/sanitize';
 
 
 
@@ -193,6 +194,16 @@ export const AdminView: React.FC = () => {
     e.preventDefault();
     
     try {
+      const safeTitle = sanitizePlainText(notificationTitle, LIMITS.notificationTitle, {
+        multiline: false,
+      });
+      const safeMessage = sanitizePlainText(notificationMessage, LIMITS.notificationMessage, {
+        multiline: true,
+      });
+      const safeSentByName = sanitizePlainText(user?.displayName || 'Admin', LIMITS.displayName, {
+        multiline: false,
+      });
+
       // Create a batch to send notifications to all users
       const batch = writeBatch(db);
       
@@ -203,8 +214,8 @@ export const AdminView: React.FC = () => {
       usersSnapshot.docs.forEach(userDoc => {
         const notificationRef = doc(collection(db, 'users', userDoc.id, 'notifications'));
         batch.set(notificationRef, {
-          title: notificationTitle,
-          message: notificationMessage,
+          title: safeTitle,
+          message: safeMessage,
           type: notificationType,
           read: false,
           createdAt: serverTimestamp(),
@@ -215,12 +226,12 @@ export const AdminView: React.FC = () => {
       // Also store in a global notifications collection for reference
       const globalNotificationRef = doc(collection(db, 'notifications'));
       batch.set(globalNotificationRef, {
-        title: notificationTitle,
-        message: notificationMessage,
+        title: safeTitle,
+        message: safeMessage,
         type: notificationType,
         recipientCount: usersSnapshot.docs.length,
         sentBy: user?.uid,
-        sentByName: user?.displayName || 'Admin',
+        sentByName: safeSentByName,
         createdAt: serverTimestamp()
       });
       

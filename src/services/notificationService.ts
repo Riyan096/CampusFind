@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from './firebase';
+import { LIMITS, sanitizePlainText } from '../utils/sanitize';
 
 export interface Notification {
   id?: string;
@@ -29,8 +30,13 @@ export interface Notification {
 
 // Create a new notification
 export const createNotification = async (notification: Omit<Notification, 'id' | 'createdAt' | 'read'>): Promise<string> => {
-  const docRef = await addDoc(collection(db, 'notifications'), {
+  const safe = {
     ...notification,
+    title: sanitizePlainText(notification.title, LIMITS.notificationTitle, { multiline: false }),
+    message: sanitizePlainText(notification.message, LIMITS.notificationMessage, { multiline: true }),
+  };
+  const docRef = await addDoc(collection(db, 'notifications'), {
+    ...safe,
     read: false,
     createdAt: new Date().toISOString(),
   });

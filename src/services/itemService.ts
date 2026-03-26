@@ -14,9 +14,41 @@ import {
 import { db } from './firebase';
 import type { Item, ItemStatusType } from '../types';
 import { ItemType, ItemCategory } from '../types';
+import {
+  LIMITS,
+  sanitizeImageUrlField,
+  sanitizePlainText,
+  sanitizeSearchInput,
+} from '../utils/sanitize';
 
 
 const ITEMS_COLLECTION = 'items';
+
+function sanitizeItemWrite<T extends Record<string, unknown>>(data: T): T {
+  const out = { ...data } as Record<string, unknown>;
+  if (typeof out.title === 'string') {
+    out.title = sanitizePlainText(out.title, LIMITS.title, { multiline: false });
+  }
+  if (typeof out.description === 'string') {
+    out.description = sanitizePlainText(out.description, LIMITS.description, { multiline: true });
+  }
+  if (typeof out.reporterName === 'string') {
+    out.reporterName = sanitizePlainText(out.reporterName, LIMITS.reporterName, {
+      multiline: false,
+    });
+  }
+  if (Array.isArray(out.aiTags)) {
+    out.aiTags = (out.aiTags as unknown[])
+      .map((t) =>
+        typeof t === 'string' ? sanitizePlainText(t, LIMITS.aiTag, { multiline: false }) : t
+      )
+      .filter((t) => typeof t === 'string' && t.length > 0);
+  }
+  if (typeof out.imageUrl === 'string') {
+    out.imageUrl = sanitizeImageUrlField(out.imageUrl);
+  }
+  return out as T;
+}
 
 // Convert Firestore timestamp to ISO string
 const convertTimestamps = (data: any): any => {
@@ -65,8 +97,9 @@ export const getAllItems = async (): Promise<Item[]> => {
 
 // Add a new item
 export const addItemToFirestore = async (item: Omit<Item, 'id'>): Promise<string> => {
+  const safe = sanitizeItemWrite({ ...item } as Record<string, unknown>) as Omit<Item, 'id'>;
   const docRef = await addDoc(collection(db, ITEMS_COLLECTION), {
-    ...item,
+    ...safe,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -75,9 +108,10 @@ export const addItemToFirestore = async (item: Omit<Item, 'id'>): Promise<string
 
 // Update an item
 export const updateItemInFirestore = async (id: string, updates: Partial<Item>): Promise<void> => {
+  const safe = sanitizeItemWrite({ ...updates } as Record<string, unknown>) as Partial<Item>;
   const itemRef = doc(db, ITEMS_COLLECTION, id);
   await updateDoc(itemRef, {
-    ...updates,
+    ...safe,
     updatedAt: serverTimestamp(),
   });
 };
@@ -119,7 +153,8 @@ export const getItemsByStatus = async (status: ItemStatusType): Promise<Item[]> 
 // Search items
 export const searchItems = async (query: string): Promise<Item[]> => {
   const allItems = await getAllItems();
-  const lowerQuery = query.toLowerCase();
+  const lowerQuery = sanitizeSearchInput(query, true).toLowerCase();
+  if (!lowerQuery) return allItems;
   
   return allItems.filter(item => 
     item.title.toLowerCase().includes(lowerQuery) ||

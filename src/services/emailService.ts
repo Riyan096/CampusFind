@@ -5,6 +5,7 @@
 
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
+import { escapeHtml } from '../utils/sanitize';
 
 interface EmailTemplate {
   subject: string;
@@ -55,10 +56,15 @@ class EmailService {
       const user = await this.getUserEmail(userId);
       if (!user?.email) return false;
 
+      const dn = user.displayName || 'there';
+      const htmlDn = escapeHtml(dn);
+      const htmlTitle = escapeHtml(itemTitle);
+      const htmlClaimedBy = escapeHtml(claimedBy);
+
       const template: EmailTemplate = {
         subject: `🎉 Great news! Your item "${itemTitle}" has been claimed`,
         body: `
-Hi ${user.displayName || 'there'},
+Hi ${dn},
 
 Great news! Your reported item "${itemTitle}" has been claimed by ${claimedBy}.
 
@@ -72,8 +78,8 @@ CampusFind Team
         html: `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
   <h2 style="color: #0C5449;">🎉 Item Claimed!</h2>
-  <p>Hi ${user.displayName || 'there'},</p>
-  <p>Great news! Your reported item <strong>"${itemTitle}"</strong> has been claimed by <strong>${claimedBy}</strong>.</p>
+  <p>Hi ${htmlDn},</p>
+  <p>Great news! Your reported item <strong>"${htmlTitle}"</strong> has been claimed by <strong>${htmlClaimedBy}</strong>.</p>
   <p>The item status has been updated to "Claimed" in the system.</p>
   <p>Thank you for using CampusFind to help return lost items to their owners!</p>
   <br>
@@ -102,14 +108,21 @@ CampusFind Team
       const user = await this.getUserEmail(userId);
       if (!user?.email) return false;
 
+      const dn = user.displayName || 'there';
+      const preview =
+        messagePreview.substring(0, 100) + (messagePreview.length > 100 ? '...' : '');
+      const htmlDn = escapeHtml(dn);
+      const htmlSender = escapeHtml(senderName);
+      const htmlPreview = escapeHtml(preview);
+
       const template: EmailTemplate = {
         subject: `💬 New message from ${senderName} on CampusFind`,
         body: `
-Hi ${user.displayName || 'there'},
+Hi ${dn},
 
 You have a new message from ${senderName}:
 
-"${messagePreview.substring(0, 100)}${messagePreview.length > 100 ? '...' : ''}"
+"${preview}"
 
 Log in to CampusFind to view and reply to this message.
 
@@ -119,10 +132,10 @@ CampusFind Team
         html: `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
   <h2 style="color: #0C5449;">💬 New Message</h2>
-  <p>Hi ${user.displayName || 'there'},</p>
-  <p>You have a new message from <strong>${senderName}</strong>:</p>
+  <p>Hi ${htmlDn},</p>
+  <p>You have a new message from <strong>${htmlSender}</strong>:</p>
   <div style="background: #f5f5f5; padding: 15px; border-left: 4px solid #0C5449; margin: 15px 0;">
-    "${messagePreview.substring(0, 100)}${messagePreview.length > 100 ? '...' : ''}"
+    "${htmlPreview}"
   </div>
   <p><a href="${window.location.origin}/chat" style="background: #0C5449; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Message</a></p>
   <br>
@@ -146,10 +159,13 @@ CampusFind Team
       const user = await this.getUserEmail(userId);
       if (!user?.email) return false;
 
+      const dn = user.displayName || 'there';
+      const htmlDn = escapeHtml(dn);
+
       const template: EmailTemplate = {
         subject: '👋 Welcome to CampusFind!',
         body: `
-Hi ${user.displayName || 'there'},
+Hi ${dn},
 
 Welcome to CampusFind - the easiest way to report and find lost items on campus!
 
@@ -167,7 +183,7 @@ CampusFind Team
         html: `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
   <h2 style="color: #0C5449;">👋 Welcome to CampusFind!</h2>
-  <p>Hi ${user.displayName || 'there'},</p>
+  <p>Hi ${htmlDn},</p>
   <p>Welcome to <strong>CampusFind</strong> - the easiest way to report and find lost items on campus!</p>
   <h3>Here's how to get started:</h3>
   <ol>
@@ -202,10 +218,14 @@ CampusFind Team
       const user = await this.getUserEmail(userId);
       if (!user?.email) return false;
 
+      const dn = user.displayName || 'there';
+      const htmlDn = escapeHtml(dn);
+      const htmlTitle = escapeHtml(itemTitle);
+
       const template: EmailTemplate = {
         subject: `⏰ Your item "${itemTitle}" will expire in ${daysRemaining} days`,
         body: `
-Hi ${user.displayName || 'there'},
+Hi ${dn},
 
 Your reported item "${itemTitle}" will expire in ${daysRemaining} days.
 
@@ -220,8 +240,8 @@ CampusFind Team
         html: `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
   <h2 style="color: #0C5449;">⏰ Item Expiration Reminder</h2>
-  <p>Hi ${user.displayName || 'there'},</p>
-  <p>Your reported item <strong>"${itemTitle}"</strong> will expire in <strong>${daysRemaining} days</strong>.</p>
+  <p>Hi ${htmlDn},</p>
+  <p>Your reported item <strong>"${htmlTitle}"</strong> will expire in <strong>${daysRemaining} days</strong>.</p>
   <p>If the item has been returned, please update its status to "Claimed" in the app.</p>
   <p>If it's still lost/found, no action is needed - it will be automatically archived after expiration.</p>
   <p><a href="${window.location.origin}/browse" style="background: #0C5449; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Your Items</a></p>

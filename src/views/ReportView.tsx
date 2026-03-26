@@ -10,6 +10,7 @@ import { checkForMatchesAndNotify, type MatchResult } from '../services/matching
 import { useAuth } from '../context/AuthContext';
 import { addPoints } from '../services/StorageService';
 import { createNotification } from '../services/notificationService';
+import { LIMITS, sanitizePlainText } from '../utils/sanitize';
 
 
 interface ReportViewProps {
@@ -129,10 +130,14 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
         setLoading(true);
         try {
           const analysis = await analyzeItemImage(base64);
-          setTitle(analysis.title);
-          setDescription(analysis.description);
+          setTitle(sanitizePlainText(analysis.title, LIMITS.title, { multiline: false }));
+          setDescription(sanitizePlainText(analysis.description, LIMITS.description, { multiline: true }));
           setCategory(analysis.category);
-          setAiTags(analysis.tags);
+          setAiTags(
+            analysis.tags
+              .map((t) => sanitizePlainText(t, LIMITS.aiTag, { multiline: false }))
+              .filter((t) => t.length > 0)
+          );
           
           // Check for matching lost items
           await checkForMatches(analysis);
@@ -153,11 +158,13 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
   }, []);
 
   const handleTitleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setTitle(e.target.value);
+    setTitle(sanitizePlainText(e.target.value, LIMITS.title, { multiline: false, trim: false }));
   }, []);
 
   const handleDescriptionChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setDescription(e.target.value);
+    setDescription(
+      sanitizePlainText(e.target.value, LIMITS.description, { multiline: true, trim: false })
+    );
   }, []);
 
   const handleCategoryChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
