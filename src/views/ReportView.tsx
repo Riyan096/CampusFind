@@ -11,10 +11,13 @@ import { useAuth } from '../context/AuthContext';
 import { addPoints } from '../services/StorageService';
 import { createNotification } from '../services/notificationService';
 import { LIMITS, sanitizePlainText } from '../utils/sanitize';
+import { IMAGE_FILE_ACCEPT_REPORT, validateImageFile } from '../utils/imageUploadValidation';
 
 
 interface ReportViewProps {
   onSuccess: () => void;
+  /** Shown when image validation fails (e.g. App-level toast). */
+  onUploadError?: (message: string) => void;
 }
 
 interface PotentialMatch {
@@ -22,7 +25,7 @@ interface PotentialMatch {
   confidence: 'high' | 'medium' | 'low';
 }
 
-export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) => {
+export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, onUploadError }) => {
   const { user } = useAuth();
 
   const [loading, setLoading] = useState(false);
@@ -117,7 +120,15 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
 
   const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    const input = e.target;
     if (!file) return;
+
+    const validation = await validateImageFile(file, 'report');
+    if (!validation.ok) {
+      input.value = '';
+      onUploadError?.(validation.message);
+      return;
+    }
 
     // Convert to base64
     const reader = new FileReader();
@@ -149,12 +160,21 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
       }
     };
     reader.readAsDataURL(file);
-  }, [type, useAI, checkForMatches]);
+  }, [type, useAI, checkForMatches, onUploadError]);
 
   const handleRemoveImage = useCallback(() => {
     setImage(null);
+    setAiTags([]);
     setPotentialMatches([]);
     setShowMatches(false);
+  }, []);
+
+  const handleRemoveAiTag = useCallback((index: number) => {
+    setAiTags((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleClearAiTags = useCallback(() => {
+    setAiTags([]);
   }, []);
 
   const handleTitleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -341,7 +361,9 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
             >
               <span className="material-icons text-4xl mb-2 text-gray-400">add_a_photo</span>
               <p className="text-sm font-medium">Tap to take photo or upload</p>
-              <p className="text-xs text-gray-400 mt-1">Supports JPG, PNG</p>
+              <p className="text-xs text-gray-400 mt-1">
+                JPG, PNG, or WebP — max 5 MB, 2048×2048 px
+              </p>
             </div>
           ) : (
             <div className="relative rounded-xl overflow-hidden bg-gray-100 border border-gray-200">
@@ -365,7 +387,7 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
           <input 
             ref={fileInputRef} 
             type="file" 
-            accept="image/*" 
+            accept={IMAGE_FILE_ACCEPT_REPORT} 
             className="hidden" 
             onChange={handleImageUpload} 
           />
@@ -488,16 +510,37 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess }) 
           </div>
           
           {aiTags.length > 0 && (
-             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">AI Tags</label>
-                <div className="flex flex-wrap gap-2">
-                   {aiTags.map(tag => (
-                      <span key={tag} className="px-3 py-1 bg-cream-accent text-primary-dark text-xs font-medium rounded-full border border-primary/10">
-                        #{tag}
-                      </span>
-                   ))}
-                </div>
-             </div>
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <label className="text-sm font-medium text-gray-700">AI Tags</label>
+                <button
+                  type="button"
+                  onClick={handleClearAiTags}
+                  className="text-xs text-gray-500 hover:text-gray-800 underline-offset-2 hover:underline"
+                >
+                  Clear all
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mb-2">Remove tags that do not match your item.</p>
+              <div className="flex flex-wrap gap-2">
+                {aiTags.map((tag, index) => (
+                  <span
+                    key={`ai-tag-${index}`}
+                    className="inline-flex items-center gap-0.5 pl-3 pr-1 py-1 bg-cream-accent text-primary-dark text-xs font-medium rounded-full border border-primary/10"
+                  >
+                    <span>#{tag}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveAiTag(index)}
+                      aria-label={`Remove tag ${tag}`}
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-gray-500 hover:bg-primary/15 hover:text-gray-800 transition-colors"
+                    >
+                      <span className="material-icons text-base leading-none">close</span>
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
           )}
 
 

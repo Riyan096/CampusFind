@@ -262,12 +262,12 @@
 
 
 ### Critical Security Issues
-- [ ] **Input Sanitization** - Sanitize all user inputs (title, description) before storing to prevent XSS
+- [x] **Input Sanitization** - Sanitize all user inputs (title, description) before storing to prevent XSS
   - Use DOMPurify or similar library to sanitize rich text
   - Escape HTML entities in user-generated content
   - Files to modify: `itemService.ts`, `ReportView.tsx`, `ChatView.tsx`
 
-- [ ] **Image Upload Validation** - Add proper file validation before upload
+- [x] **Image Upload Validation** - Add proper file validation before upload
   - Check file type (allow only jpg, png, gif, webp)
   - Check file size (max 5MB)
   - Check image dimensions (max 2048x2048)
@@ -289,8 +289,6 @@
 - [ ] **Chat/Notification Rate Limiting** - Prevent spam in chat and notifications
   - Limit chat messages per minute
   - Limit notifications per user per day
-
-- [ ] **Input Sanitization** - Risk of XSS attacks through user inputs, sanitize all user-generated content
 
 ### Medium Priority Security
 - [ ] **Content Moderation** - AI-generated content can be inappropriate

@@ -123,7 +123,7 @@ const AppContent: React.FC = () => {
             case 'home':
                 return <HomeView items={items} stats={stats} onChangeTab={setActiveTab} />;
             case 'report':
-                return <ReportView onSuccess={handleReportSuccess} />;
+                return <ReportView onSuccess={handleReportSuccess} onUploadError={error} />;
             case 'browse':
                 return <BrowseView items={items} onItemClick={refreshData} onItemsChange={handleItemsChange} onStatusChange={handleStatusChange} searchQuery={searchQuery} onStartChat={handleStartChat} />;
             case 'chat':
@@ -135,7 +135,7 @@ const AppContent: React.FC = () => {
             case 'admin':
                 return <AdminView />;
             case 'profile':
-                return <ProfileView />;
+                return <ProfileView onToastSuccess={success} onToastError={error} />;
             case 'leaderboard':
                 return <LeaderboardView />;
             default:

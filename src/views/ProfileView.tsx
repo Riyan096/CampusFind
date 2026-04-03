@@ -8,12 +8,23 @@ import { getUserStats } from '../services/StorageService';
 import { getDefaultStreakInfo } from '../services/gamificationService';
 import type { UserStats } from '../types';
 import { LIMITS, sanitizePhoneInput, sanitizePlainText } from '../utils/sanitize';
+import { IMAGE_FILE_ACCEPT_PROFILE, validateImageFile } from '../utils/imageUploadValidation';
 
+export interface ProfileViewProps {
+  /** Prefer App-level toast so messages appear in ToastContainer. */
+  onToastSuccess?: (message: string) => void;
+  onToastError?: (message: string) => void;
+}
 
-export const ProfileView: React.FC = () => {
+export const ProfileView: React.FC<ProfileViewProps> = ({
+  onToastSuccess,
+  onToastError,
+}) => {
   const { user, updateUserProfile, updateUserPhoto } = useAuth();
 
-  const { success, error } = useToast();
+  const fallbackToast = useToast();
+  const success = onToastSuccess ?? fallbackToast.success;
+  const error = onToastError ?? fallbackToast.error;
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState<UserStats>({
     points: 0,
@@ -130,17 +141,13 @@ export const ProfileView: React.FC = () => {
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    const input = e.target;
     if (!file || !user) return;
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      error('Please select an image file');
-      return;
-    }
-
-    // Validate file size (max 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      error('Image size must be less than 2MB');
+    const validation = await validateImageFile(file, 'profile');
+    if (!validation.ok) {
+      input.value = '';
+      error(validation.message);
       return;
     }
 
@@ -292,7 +299,7 @@ export const ProfileView: React.FC = () => {
                 type="file"
                 ref={fileInputRef}
                 onChange={handlePhotoUpload}
-                accept="image/*"
+                accept={IMAGE_FILE_ACCEPT_PROFILE}
                 className="hidden"
               />
               {photoURL && (
