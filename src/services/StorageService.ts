@@ -1,5 +1,5 @@
 import { ItemType, ItemCategory, CampusLocation, ItemStatus } from '../types';
-import type { Item, UserStats } from '../types';
+import type { Achievement, Item, UserStats } from '../types';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
 import { getAuth } from 'firebase/auth';
@@ -160,63 +160,58 @@ export const saveUserStats = async (stats: UserStats): Promise<UserStats> => {
 };
 
 
-export const addPoints = async (amount: number, activityType?: 'report' | 'return' | 'claim'): Promise<UserStats> => {
+export type AddPointsResult = {
+  stats: UserStats;
+  newAchievements: Achievement[];
+};
+
+/** Awards points; when `activityType` is set, runs streaks + achievement checks and syncs full stats to Firestore. */
+export const addPoints = async (
+  amount: number,
+  activityType?: 'report' | 'return' | 'claim'
+): Promise<AddPointsResult> => {
+  if (activityType) {
+    const currentStats = getUserStats();
+    const { stats, newAchievements } = await awardPointsAndCheckAchievements(
+      currentStats,
+      amount,
+      activityType
+    );
+    return { stats, newAchievements };
+  }
+
   const stats = getUserStats();
   stats.points += amount;
   stats.lastActive = new Date().toISOString();
-  
-  // Only increment counters if activity type is specified
-  if (activityType === 'report') {
-    stats.itemsReported += 1;
-  } else if (activityType === 'return') {
-    stats.itemsReturned += 1;
-  } else if (activityType === 'claim') {
-    stats.itemsClaimed += 1;
-  }
-  
+
   localStorage.setItem(STATS_KEY, JSON.stringify(stats));
-  
-  // Sync to Firestore if user is logged in
+
   const auth = getAuth();
   const user = auth.currentUser;
   if (user) {
     try {
-      const updateData: any = {
-        points: stats.points,
-        lastActive: stats.lastActive
-      };
-      
-      // Only update the specific counter that changed
-      if (activityType === 'report') {
-        updateData.itemsReported = stats.itemsReported;
-      } else if (activityType === 'return') {
-        updateData.itemsReturned = stats.itemsReturned;
-      } else if (activityType === 'claim') {
-        updateData.itemsClaimed = stats.itemsClaimed;
-      }
-      
-      await setDoc(doc(db, 'users', user.uid), updateData, { merge: true });
+      await setDoc(
+        doc(db, 'users', user.uid),
+        {
+          points: stats.points,
+          lastActive: stats.lastActive,
+        },
+        { merge: true }
+      );
     } catch (err) {
       console.error('Failed to sync points to Firestore:', err);
     }
   }
-  
-  return stats;
+
+  return { stats, newAchievements: [] };
 };
 
-
-// New gamified add points function
 export const addPointsWithGamification = async (
-  amount: number, 
+  amount: number,
   activityType: 'report' | 'return' | 'claim'
-): Promise<{ stats: UserStats; newAchievements: any[]; leveledUp: boolean }> => {
+): Promise<{ stats: UserStats; newAchievements: Achievement[]; leveledUp: boolean }> => {
   const currentStats = getUserStats();
-  const result = await awardPointsAndCheckAchievements(currentStats, amount, activityType);
-  
-  // Save updated stats
-  localStorage.setItem(STATS_KEY, JSON.stringify(result.stats));
-  
-  return result;
+  return awardPointsAndCheckAchievements(currentStats, amount, activityType);
 };
 
 // Sync stats from Firestore to localStorage (call this on app load)

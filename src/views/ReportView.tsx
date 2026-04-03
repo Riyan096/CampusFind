@@ -1,5 +1,14 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { ItemType, ItemCategory, CampusLocation, ItemStatus, LostItemStatus, FoundItemStatus, type Item } from '../types';
+import {
+  ItemType,
+  ItemCategory,
+  CampusLocation,
+  ItemStatus,
+  LostItemStatus,
+  FoundItemStatus,
+  type Achievement,
+  type Item,
+} from '../types';
 
 
 import { Button, Input, Select, Card } from '../components/UI';
@@ -15,7 +24,7 @@ import { IMAGE_FILE_ACCEPT_REPORT, validateImageFile } from '../utils/imageUploa
 
 
 interface ReportViewProps {
-  onSuccess: () => void;
+  onSuccess: (payload?: { newAchievements?: Achievement[] }) => void;
   /** Shown when image validation fails (e.g. App-level toast). */
   onUploadError?: (message: string) => void;
 }
@@ -246,9 +255,8 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
       
       await addItemToFirestore(newItem);
       
-      // Award points for reporting an item
-      const stats = await addPoints(10, 'report'); // 10 points for reporting
-      console.log(`🎉 Item reported! Earned 10 points! Total: ${stats.points} points`);
+      // Award points for reporting an item (includes streaks + achievements)
+      const { newAchievements } = await addPoints(10, 'report');
 
 
       // Check for matches after reporting
@@ -258,7 +266,7 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
         await checkForMatchesAndNotify(tempItem, handleMatchesFound);
       }
       
-      onSuccess();
+      onSuccess({ newAchievements });
     } catch (err: any) {
 
       console.error('Error saving item:', err);

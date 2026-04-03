@@ -15,7 +15,7 @@ import { useToast } from './hooks/useToast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { getUserStats, syncStatsFromFirestore } from './services/StorageService';
 import { subscribeToItems } from './services/itemService';
-import type { Item, UserStats } from './types';
+import type { Achievement, Item, UserStats } from './types';
 
 const AppContent: React.FC = () => {
     const [activeTab, setActiveTab] = useState('home');
@@ -82,21 +82,42 @@ const AppContent: React.FC = () => {
         }
     }, [error]);
 
-    const handleReportSuccess = useCallback(() => {
-        refreshData();
-        setActiveTab('browse');
-        success('Item reported successfully!');
-    }, [refreshData, success]);
+    const showAchievementToasts = useCallback(
+        (achievements?: Achievement[]) => {
+            if (!achievements?.length) return;
+            const names = achievements.map((a) => a.name).join(', ');
+            success(
+                achievements.length === 1
+                    ? `Achievement unlocked: ${names}`
+                    : `Achievements unlocked: ${names}`
+            );
+        },
+        [success]
+    );
+
+    const handleReportSuccess = useCallback(
+        (payload?: { newAchievements?: Achievement[] }) => {
+            refreshData();
+            setActiveTab('browse');
+            success('Item reported successfully!');
+            showAchievementToasts(payload?.newAchievements);
+        },
+        [refreshData, success, showAchievementToasts]
+    );
 
     const handleItemsChange = useCallback(() => {
         refreshData();
         success('Item deleted successfully');
     }, [refreshData, success]);
 
-    const handleStatusChange = useCallback(() => {
-        refreshData();
-        success('Status updated successfully');
-    }, [refreshData, success]);
+    const handleStatusChange = useCallback(
+        (payload?: { newAchievements?: Achievement[] }) => {
+            refreshData();
+            success('Status updated successfully');
+            showAchievementToasts(payload?.newAchievements);
+        },
+        [refreshData, success, showAchievementToasts]
+    );
 
     const handleSearch = useCallback((query: string) => {
         setSearchQuery(query);

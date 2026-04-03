@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import type { Item } from '../types';
+import type { Achievement, Item } from '../types';
 import { ItemType, ItemCategory, ItemStatus, LostItemStatus, FoundItemStatus } from '../types';
 
 import { Input } from '../components/UI';
@@ -37,7 +37,7 @@ interface BrowseViewProps {
   items: Item[];
   onItemClick: (item: Item) => void;
   onItemsChange?: () => void;
-  onStatusChange?: () => void;
+  onStatusChange?: (payload?: { newAchievements?: Achievement[] }) => void;
   searchQuery?: string;
   onStartChat?: (itemId: string, itemTitle: string, itemOwnerId: string) => void;
 }
@@ -238,13 +238,13 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
 
 
         
+        let resolveAchievements: Achievement[] | undefined;
+
         // Award points when item is claimed/resolved
         if (newStatus === LostItemStatus.CLAIMED || newStatus === FoundItemStatus.RETURNED) {
-          const stats = await addPoints(50, 'return'); // Award 50 points for resolving an item
-          alert(`🎉 Item resolved! You earned 50 points! Total: ${stats.points} points`);
+          const { newAchievements } = await addPoints(50, 'return');
+          resolveAchievements = newAchievements;
 
-
-          
           // Send email notification to item reporter
           if (selectedItem.reportedBy && user) {
             emailService.sendItemClaimedNotification(
@@ -254,8 +254,10 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
             ).catch(err => console.error('Failed to send email notification:', err));
           }
         }
-        
-        onStatusChange?.();
+
+        onStatusChange?.(
+          resolveAchievements !== undefined ? { newAchievements: resolveAchievements } : undefined
+        );
 
       } catch (err) {
         console.error('Error updating status:', err);
@@ -601,9 +603,9 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(({ items, onItem
                 {selectedItem.reportedBy && user?.uid !== selectedItem.reportedBy && (
                   <button
                     onClick={() => {
-                      if (onStartChat) {
-                        onStartChat(selectedItem.id, selectedItem.title, selectedItem.reportedBy);
-                      }
+                      const reporterId = selectedItem.reportedBy;
+                      if (!reporterId || !onStartChat) return;
+                      onStartChat(selectedItem.id, selectedItem.title, reporterId);
                       handleCloseModal();
                     }}
                     className="flex-1 bg-primary hover:bg-primary-dark text-white font-bold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
