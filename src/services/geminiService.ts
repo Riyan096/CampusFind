@@ -1,5 +1,5 @@
 import {GoogleGenAI, Type} from "@google/genai";
-import { ItemCategory, CampusLocation } from "../types";
+import { ItemCategory } from "../types";
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
@@ -91,7 +91,7 @@ export interface AIAnalysisResult {
     category: ItemCategory;
     color: string;
     tags: string[];
-    location?: CampusLocation;
+  location?: string;
 }
 
 //Analyzes an image of a found item to automatically extract details.

@@ -2,13 +2,13 @@ import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react'
 import {
   ItemType,
   ItemCategory,
-  CampusLocation,
   ItemStatus,
   LostItemStatus,
   FoundItemStatus,
   type Achievement,
   type Item,
 } from '../types';
+import { geocodeAddress, getCurrentLocation } from '../services/geocodeService';
 
 
 import { Button, Input, Select, Card } from '../components/UI';
@@ -45,7 +45,10 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<ItemCategory>(ItemCategory.OTHER);
-  const [location, setLocation] = useState<CampusLocation>(CampusLocation.STUDENT_CENTER);
+  const [location, setLocation] = useState('Campus Center'); // Generic default
+  const [locationLatLng, setLocationLatLng] = useState<[number, number] | null>(null);
+  const [geocodingLocation, setGeocodingLocation] = useState(false);
+  const [locationSearch, setLocationSearch] = useState('');
   const [aiTags, setAiTags] = useState<string[]>([]);
   const [useAI, setUseAI] = useState<boolean>(() => {
     const saved = localStorage.getItem('campusfind_use_ai');
@@ -65,11 +68,8 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
     []
   );
 
-  // Memoized location options
-  const locationOptions = useMemo(() => 
-    Object.values(CampusLocation).map(l => ({ label: l, value: l })),
-    []
-  );
+// Location search state (replaces CampusLocation enum) - TS fixed
+
 
   // Handle matches found by the matching service
   const handleMatchesFound = useCallback((matches: MatchResult[]) => {
@@ -97,7 +97,7 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
         title: analysis.title,
         description: analysis.description,
         category: analysis.category,
-        location: CampusLocation.STUDENT_CENTER, // Default, will be updated
+        location: 'Campus Center', // Generic default
         date: new Date().toISOString(),
         status: FoundItemStatus.AVAILABLE,
         aiTags: analysis.tags
@@ -201,7 +201,7 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
   }, []);
 
   const handleLocationChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    setLocation(e.target.value as CampusLocation);
+    setLocation(e.target.value as string);
   }, []);
 
   const handleNotifyOwner = useCallback(async (match: PotentialMatch) => {
@@ -509,11 +509,11 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
               onChange={handleCategoryChange}
               options={categoryOptions}
             />
-            <Select 
-              label="Location"
+            <Input 
+              label="Location" 
+              placeholder="Campus Center, Starbucks, etc."
               value={location}
-              onChange={handleLocationChange}
-              options={locationOptions}
+              onChange={(e) => setLocation(e.target.value)}
             />
           </div>
           

@@ -4,13 +4,13 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { ItemType, ItemCategory, LostItemStatus, FoundItemStatus, CampusLocation } from '../types';
+import { ItemType, ItemCategory, LostItemStatus, FoundItemStatus } from '../types';
 
 interface FilterState {
   dateRange: 'all' | 'today' | 'week' | 'month';
   startDate: string;
   endDate: string;
-  locations: CampusLocation[];
+  locations: string[];
   status: (LostItemStatus | FoundItemStatus)[];
   categories: ItemCategory[];
   type: ItemType | 'ALL';
@@ -76,7 +76,7 @@ export const AdvancedSearchFilters: React.FC<AdvancedSearchFiltersProps> = ({
     });
   }, [filters, onChange]);
 
-  const handleLocationToggle = useCallback((location: CampusLocation) => {
+  const handleLocationToggle = useCallback((location: string) => {
     const newLocations = filters.locations.includes(location)
       ? filters.locations.filter(l => l !== location)
       : [...filters.locations, location];
@@ -132,12 +132,7 @@ export const AdvancedSearchFilters: React.FC<AdvancedSearchFiltersProps> = ({
     (filters.type !== 'ALL' ? 1 : 0);
 
   const locationGroups = {
-    'Libraries': [CampusLocation.KRESGE_LIBRARY, CampusLocation.UNDERGRAD_LIBRARY, CampusLocation.LAW_LIBRARY],
-    'Academic': [CampusLocation.ART_BUILDING, CampusLocation.SCIENCE_HALL, CampusLocation.ENGINEERING, CampusLocation.BUSINESS_SCHOOL, CampusLocation.LAW_SCHOOL, CampusLocation.CHEMISTRY, CampusLocation.BIOLOGICAL_SCIENCES, CampusLocation.WILSON_HALL, CampusLocation.OLD_MAIN, CampusLocation.STEM_SILC],
-    'Student Centers': [CampusLocation.STUDENT_CENTER, CampusLocation.UNIVERSITY_AUDITORIUM, CampusLocation.DETROIT_OPERA_HOUSE],
-    'Residence': [CampusLocation.ANTHONY_APARTMENTS, CampusLocation.ATCHISON_HALL, CampusLocation.TOWERS_RESIDENCES, CampusLocation.CHATSWORTH_SUITES, CampusLocation.YOUSIF_GHAFAIRI_HALL],
-    'Fitness': [CampusLocation.FITNESS_CENTER, CampusLocation.MATTHAEI_PE_CENTER, CampusLocation.WAYNE_STATE_FIELDHOUSE],
-    'Parking': [CampusLocation.PARKING_1, CampusLocation.PARKING_2, CampusLocation.PARKING_3, CampusLocation.PARKING_4, CampusLocation.PARKING_5, CampusLocation.PARKING_6, CampusLocation.PARKING_7, CampusLocation.PARKING_8]
+    'Popular': ['Library', 'Gym', 'Student Center', 'Cafeteria', 'Parking']
   };
 
   return (

@@ -1,4 +1,4 @@
-import { ItemType, ItemCategory, CampusLocation, ItemStatus } from '../types';
+import { ItemType, ItemCategory, ItemStatus } from '../types';
 import type { Achievement, Item, UserStats } from '../types';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from './firebase';
@@ -16,7 +16,7 @@ const MOCK_ITEMS: Item[] = [
     title: 'Honda Car Keys',
     description: 'Found a set of Honda car keys on a wooden table.',
     category: ItemCategory.KEYS,
-    location: CampusLocation.UNDERGRAD_LIBRARY,
+    location: "Undergrad Library",
     date: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
     status: ItemStatus.OPEN,
     imageUrl: 'https://images.unsplash.com/photo-1623126908029-58cb08a2b272?auto=format&fit=crop&q=80&w=600',
@@ -28,7 +28,7 @@ const MOCK_ITEMS: Item[] = [
     title: 'Airpods Pro Case',
     description: 'White Apple Airpods pro case left in the locker room.',
     category: ItemCategory.ELECTRONICS,
-    location: CampusLocation.FITNESS_CENTER,
+    location: "Fitness Center",
     date: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(), // 5 hours ago
     status: ItemStatus.OPEN,
     imageUrl: 'https://images.unsplash.com/photo-1603351154351-5cf99bc5f16d?auto=format&fit=crop&q=80&w=600',
@@ -40,7 +40,7 @@ const MOCK_ITEMS: Item[] = [
     title: 'Student ID Card',
     description: 'Found a student ID card near the North Cafeteria.',
     category: ItemCategory.ID_CARDS,
-    location: CampusLocation.TOWERS_CAFE,
+    location: "Towers Cafe",
     date: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // Yesterday
     status: ItemStatus.OPEN,
     imageUrl: '', // Intentional no image for "Found" generic icon test
@@ -52,7 +52,7 @@ const MOCK_ITEMS: Item[] = [
     title: 'Apple Watch Series 6',
     description: 'Black smart watch lost in Lab 204.',
     category: ItemCategory.ELECTRONICS,
-    location: CampusLocation.SCIENCE_HALL,
+    location: "Science Hall",
     date: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString(), // Yesterday
     status: ItemStatus.OPEN,
     imageUrl: 'https://images.unsplash.com/photo-1579586337278-3befd40fd17a?auto=format&fit=crop&q=80&w=600',
@@ -64,7 +64,7 @@ const MOCK_ITEMS: Item[] = [
     title: 'Blue Nike Sneaker (Left)',
     description: 'Single blue sneaker found on the bleachers.',
     category: ItemCategory.CLOTHING,
-    location: CampusLocation.WAYNE_STATE_FIELDHOUSE,
+    location: "Wayne State Fieldhouse",
     date: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), // 2 days ago
     status: ItemStatus.OPEN,
     imageUrl: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&q=80&w=600',

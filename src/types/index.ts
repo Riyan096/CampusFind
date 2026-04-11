@@ -32,43 +32,43 @@ export enum ItemCategory {
 }
 
 /** Campus locations where items can be found or lost */
-export enum CampusLocation {
-  KRESGE_LIBRARY = 'Kresge Library',
-  UNDERGRAD_LIBRARY = 'Undergrad Library',
-  LAW_LIBRARY = 'Law Library',
-  ART_BUILDING = 'Art Building',
-  SCIENCE_HALL = 'Science Hall',
-  ENGINEERING = 'Engineering Building',
-  BUSINESS_SCHOOL = 'Business School',
-  LAW_SCHOOL = 'Law School',
-  CHEMISTRY = 'Chemistry Building',
-  BIOLOGICAL_SCIENCES = 'Biological Sciences',
-  WILSON_HALL = 'Wilson Hall',
-  OLD_MAIN = 'Old Main',
-  STEM_SILC = 'STEM SILC',
-  STUDENT_CENTER = 'Student Center',
-  UNIVERSITY_AUDITORIUM = 'University Auditorium',
-  ANTHONY_APARTMENTS = 'Anthony Apartments',
+// export enum CampusLocation {
+//   KRESGE_LIBRARY = 'Kresge Library',
+//   UNDERGRAD_LIBRARY = 'Undergrad Library',
+//   LAW_LIBRARY = 'Law Library',
+//   ART_BUILDING = 'Art Building',
+//   SCIENCE_HALL = 'Science Hall',
+//   ENGINEERING = 'Engineering Building',
+//   BUSINESS_SCHOOL = 'Business School',
+//   LAW_SCHOOL = 'Law School',
+//   CHEMISTRY = 'Chemistry Building',
+//   BIOLOGICAL_SCIENCES = 'Biological Sciences',
+//   WILSON_HALL = 'Wilson Hall',
+//   OLD_MAIN = 'Old Main',
+//   STEM_SILC = 'STEM SILC',
+//   STUDENT_CENTER = 'Student Center',
+//   UNIVERSITY_AUDITORIUM = 'University Auditorium',
+//   ANTHONY_APARTMENTS = 'Anthony Apartments',
 
-  ATCHISON_HALL = 'Atchison Hall',
-  TOWERS_RESIDENCES = 'Towers Residences',
-  CHATSWORTH_SUITES = 'Chatsworth Suites',
-  YOUSIF_GHAFAIRI_HALL = 'Yousif Ghafari Hall',
-  FITNESS_CENTER = 'Fitness Center',
-  MATTHAEI_PE_CENTER = 'Matthaei PE Center',
-  WAYNE_STATE_FIELDHOUSE = 'Wayne State Fieldhouse',
-  TOWERS_CAFE = 'Towers Cafe',
-  PARKING_1 = 'Parking Structure 1',
-  PARKING_2 = 'Parking Structure 2',
-  PARKING_3 = 'Parking Structure 3',
-  PARKING_4 = 'Parking Structure 4',
-  PARKING_5 = 'Parking Structure 5',
-  PARKING_6 = 'Parking Structure 6',
-  PARKING_7 = 'Parking Structure 7',
-  PARKING_8 = 'Parking Structure 8',
-  TECHTOWN = 'TechTown',
-  OTHER = 'Other Location'
-}
+//   ATCHISON_HALL = 'Atchison Hall',
+//   TOWERS_RESIDENCES = 'Towers Residences',
+//   CHATSWORTH_SUITES = 'Chatsworth Suites',
+//   YOUSIF_GHAFAIRI_HALL = 'Yousif Ghafari Hall',
+//   FITNESS_CENTER = 'Fitness Center',
+//   MATTHAEI_PE_CENTER = 'Matthaei PE Center',
+//   WAYNE_STATE_FIELDHOUSE = 'Wayne State Fieldhouse',
+//   TOWERS_CAFE = 'Towers Cafe',
+//   PARKING_1 = 'Parking Structure 1',
+//   PARKING_2 = 'Parking Structure 2',
+//   PARKING_3 = 'Parking Structure 3',
+//   PARKING_4 = 'Parking Structure 4',
+//   PARKING_5 = 'Parking Structure 5',
+//   PARKING_6 = 'Parking Structure 6',
+//   PARKING_7 = 'Parking Structure 7',
+//   PARKING_8 = 'Parking Structure 8',
+//   TECHTOWN = 'TechTown',
+//   OTHER = 'Other Location'
+// }
 
 /** Represents a lost or found item in the system */
 export interface Item {
@@ -83,7 +83,8 @@ export interface Item {
   /** Category the item belongs to */
   category: ItemCategory;
   /** Location where the item was lost or found */
-  location: CampusLocation;
+  location: string;
+  latlng?: [number, number];
   /** ISO date string when the item was reported */
   date: string;
   /** Current status of the item */
@@ -150,7 +151,7 @@ export interface ItemFilters {
   /** Filter by category */
   category?: ItemCategory | 'ALL';
   /** Filter by location */
-  location?: CampusLocation | 'ALL';
+  location?: string | 'ALL';
   /** Filter by status */
   status?: ItemStatus | 'ALL';
 }
@@ -168,7 +169,7 @@ export interface AIAnalysisResult {
   /** AI-generated tags */
   tags: string[];
   /** Suggested location (optional) */
-  location?: CampusLocation;
+  location?: string;
 }
 
 /** Toast notification data */
