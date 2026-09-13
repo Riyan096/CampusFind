@@ -226,7 +226,7 @@ test('normal user cannot tamper with point awards', async () => {
   const db = testEnv.authenticatedContext('reporter-1').firestore();
   const award = db.collection('users').doc('reporter-1').collection('pointAwards').doc('award-1');
 
-  await assertFails(award.create({
+  await assertFails(award.set({
     points: 9999,
     reason: 'fake'
   }));
