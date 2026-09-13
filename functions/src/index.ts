@@ -16,93 +16,39 @@ initializeApp();
 
 const db = getFirestore();
 
-/**
- * ============================================================
- * AWARD POINTS
- * ============================================================
- *
- * Client calls:
- *
- * awardPoints({
- *   activityType: 'report',
- *   itemId: 'abc123'
- * })
- *
- * The client DOES NOT provide the number of points.
- *
- * The server decides the reward.
- */
-
-export const awardPoints = onCall(
-  async request => {
-    if (!request.auth) {
-      throw new HttpsError(
-        'unauthenticated',
-        'You must be signed in to earn points.'
-      );
-    }
-
-    const uid = request.auth.uid;
-
-    const data = request.data as {
-      activityType?: unknown;
-      itemId?: unknown;
-    };
-
-    const activityType = data.activityType;
-    const itemId = data.itemId;
-
-    if (
-      activityType !== 'report' &&
-      activityType !== 'return' &&
-      activityType !== 'claim'
-    ) {
-      throw new HttpsError(
-        'invalid-argument',
-        'Invalid activity type.'
-      );
-    }
-
-    if (
-      typeof itemId !== 'string' ||
-      itemId.trim().length === 0
-    ) {
-      throw new HttpsError(
-        'invalid-argument',
-        'A valid item ID is required.'
-      );
-    }
-
-    try {
-      const result = await db.runTransaction(
-        async transaction => {
-          return await processGamificationActivity(
-            transaction,
-            uid,
-            activityType as ActivityType,
-            itemId
-          );
-        }
-      );
-
-      return result;
-    } catch (error) {
-      console.error(
-        'Gamification transaction failed:',
-        error
-      );
-
-      if (error instanceof HttpsError) {
-        throw error;
-      }
-
-      throw new HttpsError(
-        'internal',
-        'Unable to process gamification activity.'
-      );
-    }
+export const awardPoints = onCall(async request => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'You must be signed in to earn points.');
   }
-);
+
+  const uid = request.auth.uid;
+  const data = request.data as { activityType?: unknown; itemId?: unknown };
+  const activityType = data.activityType;
+  const itemId = data.itemId;
+
+  if (activityType !== 'report' && activityType !== 'return' && activityType !== 'claim') {
+    throw new HttpsError('invalid-argument', 'Invalid activity type.');
+  }
+
+  if (typeof itemId !== 'string' || itemId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'A valid item ID is required.');
+  }
+
+  try {
+    return await db.runTransaction(async transaction => {
+      return await processGamificationActivity(
+        transaction,
+        uid,
+        activityType as ActivityType,
+        itemId
+      );
+    });
+  } catch (error) {
+    console.error('Gamification transaction failed:', error);
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError('internal', 'Unable to process gamification activity.');
+  }
+});
 
 interface ResolutionItem {
   reportedBy?: string;
@@ -111,18 +57,23 @@ interface ResolutionItem {
   [key: string]: unknown;
 }
 
-/**
- * Pure reward calculator used by resolveItem.
- *
- * No Firestore reads/writes happen here. This makes the reward calculation
- * deterministic for a transaction attempt and keeps all I/O in resolveItem.
- */
-const calculateResolutionReward = (
-  stats: UserStats,
-  now: Date
-) => {
-  const pointsAwarded = ACTIVITY_POINTS.return;
+const ALLOWED_TRANSITIONS: Record<string, Record<string, string[]>> = {
+  LOST: {
+    STILL_LOST: ['MATCH_FOUND'],
+    MATCH_FOUND: ['CLAIMED'],
+    CLAIMED: ['RECOVERED'],
+    RECOVERED: []
+  },
+  FOUND: {
+    AVAILABLE: ['PENDING_CLAIM'],
+    PENDING_CLAIM: ['RETURNED', 'UNCLAIMED'],
+    RETURNED: [],
+    UNCLAIMED: []
+  }
+};
 
+const calculateResolutionReward = (stats: UserStats, now: Date) => {
+  const pointsAwarded = ACTIVITY_POINTS.return;
   const updatedStats: UserStats = {
     ...stats,
     points: stats.points + pointsAwarded,
@@ -130,29 +81,18 @@ const calculateResolutionReward = (
     lastActive: now.toISOString()
   };
 
-  const streakResult = {
-    updatedStats,
-    streakIncreased: false
-  };
-
-  const achievementResult = checkAchievements(
-    streakResult.updatedStats,
-    now
-  );
+  const achievementResult = checkAchievements(updatedStats, now);
 
   return {
     stats: achievementResult.updatedStats,
     newAchievements: achievementResult.newAchievements,
     pointsAwarded,
-    streakIncreased: streakResult.streakIncreased
+    streakIncreased: false
   };
 };
 
-const normalizeStats = (
-  data: Record<string, unknown> | undefined
-): UserStats => {
+const normalizeStats = (data: Record<string, unknown> | undefined): UserStats => {
   const defaults = getDefaultUserStats();
-
   return {
     ...defaults,
     ...(data || {}),
@@ -160,9 +100,7 @@ const normalizeStats = (
       ...defaults.streaks,
       ...(data?.streaks as Partial<UserStats['streaks']> | undefined)
     },
-    badges: Array.isArray(data?.badges)
-      ? data.badges as string[]
-      : defaults.badges,
+    badges: Array.isArray(data?.badges) ? data.badges as string[] : defaults.badges,
     unlockedAchievements: Array.isArray(data?.unlockedAchievements)
       ? data.unlockedAchievements as UserStats['unlockedAchievements']
       : defaults.unlockedAchievements
@@ -171,51 +109,31 @@ const normalizeStats = (
 
 export const resolveItem = onCall(async request => {
   if (!request.auth) {
-    throw new HttpsError(
-      'unauthenticated',
-      'You must be signed in to resolve an item.'
-    );
+    throw new HttpsError('unauthenticated', 'You must be signed in to resolve an item.');
   }
 
   const uid = request.auth.uid;
   const itemId = request.data?.itemId;
   const newStatus = request.data?.newStatus;
 
-  if (
-    typeof itemId !== 'string' ||
-    !itemId.trim() ||
-    typeof newStatus !== 'string'
-  ) {
-    throw new HttpsError(
-      'invalid-argument',
-      'A valid item ID and status are required.'
-    );
+  if (typeof itemId !== 'string' || !itemId.trim() || typeof newStatus !== 'string') {
+    throw new HttpsError('invalid-argument', 'A valid item ID and status are required.');
   }
 
   const itemRef = db.collection('items').doc(itemId);
   const actorRef = db.collection('users').doc(uid);
 
   try {
-    const result = await db.runTransaction(async transaction => {
+    return await db.runTransaction(async transaction => {
       const itemSnapshot = await transaction.get(itemRef);
-
-      if (!itemSnapshot.exists) {
-        throw new HttpsError('not-found', 'Item not found.');
-      }
+      if (!itemSnapshot.exists) throw new HttpsError('not-found', 'Item not found.');
 
       const item = itemSnapshot.data() as ResolutionItem | undefined;
-
-      if (!item) {
-        throw new HttpsError('not-found', 'Item data not found.');
-      }
+      if (!item) throw new HttpsError('not-found', 'Item data not found.');
 
       const actorSnapshot = await transaction.get(actorRef);
-
       if (!actorSnapshot.exists) {
-        throw new HttpsError(
-          'failed-precondition',
-          'User profile not found.'
-        );
+        throw new HttpsError('failed-precondition', 'User profile not found.');
       }
 
       const actorData = actorSnapshot.data() || {};
@@ -223,10 +141,7 @@ export const resolveItem = onCall(async request => {
       const reporterId = item.reportedBy;
 
       if (!reporterId) {
-        throw new HttpsError(
-          'failed-precondition',
-          'Item has no valid reporter.'
-        );
+        throw new HttpsError('failed-precondition', 'Item has no valid reporter.');
       }
 
       if (!isAdmin && reporterId !== uid) {
@@ -242,36 +157,21 @@ export const resolveItem = onCall(async request => {
         : await transaction.get(reporterRef);
 
       if (!reporterSnapshot.exists) {
+        throw new HttpsError('failed-precondition', 'Reporter profile not found.');
+      }
+
+      const reporterStats = normalizeStats(reporterSnapshot.data() || {});
+      const validTransitions = ALLOWED_TRANSITIONS[item.type || ''];
+      const allowedNextStatuses = validTransitions?.[item.status || ''];
+
+      if (!allowedNextStatuses) {
         throw new HttpsError(
           'failed-precondition',
-          'Reporter profile not found.'
+          'The item has an invalid or unsupported current status.'
         );
       }
 
-      const reporterData = reporterSnapshot.data() || {};
-      const reporterStats = normalizeStats(reporterData);
-
-      const awardRef = reporterRef
-        .collection('pointAwards')
-        .doc(`${itemId}_return`);
-      const awardSnapshot = await transaction.get(awardRef);
-
-      const validStatuses = item.type === 'LOST'
-        ? ['STILL_LOST', 'MATCH_FOUND', 'CLAIMED', 'RECOVERED']
-        : item.type === 'FOUND'
-          ? ['AVAILABLE', 'PENDING_CLAIM', 'RETURNED', 'UNCLAIMED']
-          : [];
-
-      if (!validStatuses.includes(newStatus)) {
-        throw new HttpsError(
-          'invalid-argument',
-          'Invalid status for this item type.'
-        );
-      }
-
-      const oldStatus = item.status;
-
-      if (oldStatus === newStatus) {
+      if (newStatus === item.status) {
         return {
           item: { ...item, id: itemId },
           stats: reporterStats,
@@ -281,37 +181,18 @@ export const resolveItem = onCall(async request => {
         };
       }
 
+      if (!allowedNextStatuses.includes(newStatus)) {
+        throw new HttpsError(
+          'failed-precondition',
+          `Invalid status transition from ${item.status} to ${newStatus}.`
+        );
+      }
+
       const isResolution = newStatus === 'CLAIMED' || newStatus === 'RETURNED';
-
-      if (newStatus === 'CLAIMED' && item.type !== 'LOST') {
-        throw new HttpsError(
-          'failed-precondition',
-          'A found item cannot be resolved as claimed.'
-        );
-      }
-
-      if (newStatus === 'RETURNED' && item.type !== 'FOUND') {
-        throw new HttpsError(
-          'failed-precondition',
-          'A lost item cannot be resolved as returned.'
-        );
-      }
-
-      if (
-        isResolution &&
-        (oldStatus === 'CLAIMED' ||
-          oldStatus === 'RETURNED' ||
-          oldStatus === 'RECOVERED')
-      ) {
-        throw new HttpsError(
-          'failed-precondition',
-          'The item has already been resolved.'
-        );
-      }
+      const awardRef = reporterRef.collection('pointAwards').doc(`${itemId}_return`);
 
       if (!isResolution) {
         transaction.update(itemRef, { status: newStatus });
-
         return {
           item: { ...item, id: itemId, status: newStatus },
           stats: reporterStats,
@@ -321,6 +202,7 @@ export const resolveItem = onCall(async request => {
         };
       }
 
+      const awardSnapshot = await transaction.get(awardRef);
       if (awardSnapshot.exists) {
         return {
           item: { ...item, id: itemId },
@@ -335,21 +217,15 @@ export const resolveItem = onCall(async request => {
       const reward = calculateResolutionReward(reporterStats, now);
 
       transaction.update(itemRef, { status: newStatus });
-
-      transaction.set(
-        reporterRef,
-        {
-          points: reward.stats.points,
-          itemsReported: reward.stats.itemsReported,
-          itemsReturned: reward.stats.itemsReturned,
-          itemsClaimed: reward.stats.itemsClaimed,
-          streaks: reward.stats.streaks,
-          unlockedAchievements: reward.stats.unlockedAchievements,
-          lastActive: reward.stats.lastActive
-        },
-        { merge: true }
-      );
-
+      transaction.set(reporterRef, {
+        points: reward.stats.points,
+        itemsReported: reward.stats.itemsReported,
+        itemsReturned: reward.stats.itemsReturned,
+        itemsClaimed: reward.stats.itemsClaimed,
+        streaks: reward.stats.streaks,
+        unlockedAchievements: reward.stats.unlockedAchievements,
+        lastActive: reward.stats.lastActive
+      }, { merge: true });
       transaction.create(awardRef, {
         activityType: 'return',
         itemId,
@@ -366,18 +242,9 @@ export const resolveItem = onCall(async request => {
         alreadyResolved: false
       };
     });
-
-    return result;
   } catch (error) {
-    if (error instanceof HttpsError) {
-      throw error;
-    }
-
+    if (error instanceof HttpsError) throw error;
     console.error('resolveItem transaction failed:', error);
-
-    throw new HttpsError(
-      'internal',
-      'Unable to resolve item.'
-    );
+    throw new HttpsError('internal', 'Unable to resolve item.');
   }
 });
