@@ -35,9 +35,33 @@ async function clearItems() {
   }
 }
 
+async function clearUsers() {
+  const snapshot = await adminDb.collection('users').get();
+  if (!snapshot.empty) {
+    const batch = adminDb.batch();
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+  }
+}
+
 async function seedItem(itemId, overrides = {}) {
   await adminDb.collection('items').doc(itemId).set({
     ...baseItem,
+    ...overrides
+  });
+}
+
+async function seedUser(userId, overrides = {}) {
+  await adminDb.collection('users').doc(userId).set({
+    displayName: 'Test User',
+    photoURL: null,
+    isAdmin: false,
+    points: 100,
+    itemsReturned: 2,
+    itemsReported: 3,
+    lastActive: '2026-09-13',
+    itemsClaimed: 1,
+    badges: ['helper'],
     ...overrides
   });
 }
@@ -49,8 +73,12 @@ test.before(async () => {
   });
 });
 
-test.beforeEach(clearItems);
-test.afterEach(clearItems);
+test.beforeEach(async () => {
+  await Promise.all([clearItems(), clearUsers()]);
+});
+test.afterEach(async () => {
+  await Promise.all([clearItems(), clearUsers()]);
+});
 
 test.after(async () => {
   await testEnv.cleanup();
@@ -142,6 +170,38 @@ test('different user cannot edit another reporter item', async () => {
   await assertFails(
     db.collection('items').doc('ownership-bypass').update({
       title: 'Attacker edit'
+    })
+  );
+});
+
+test('normal user cannot modify protected user stats', async () => {
+  await seedUser('reporter-1');
+
+  const db = testEnv.authenticatedContext('reporter-1').firestore();
+  const protectedFields = [
+    ['points', 9999],
+    ['itemsReturned', 999],
+    ['itemsReported', 999],
+    ['lastActive', '2099-01-01'],
+    ['itemsClaimed', 999],
+    ['badges', ['admin']]
+  ];
+
+  for (const [field, value] of protectedFields) {
+    await assertFails(
+      db.collection('users').doc('reporter-1').update({ [field]: value })
+    );
+  }
+});
+
+test('normal user can update allowed profile fields without changing stats', async () => {
+  await seedUser('reporter-1');
+
+  const db = testEnv.authenticatedContext('reporter-1').firestore();
+  await assertSucceeds(
+    db.collection('users').doc('reporter-1').update({
+      displayName: 'Updated User',
+      photoURL: 'https://example.com/avatar.png'
     })
   );
 });
