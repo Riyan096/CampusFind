@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getFirestore } = require('firebase-admin/firestore');
 const { resolveItem } = require('../lib/index.js');
 
 const db = getFirestore();
@@ -25,8 +25,7 @@ const defaultStats = {
 async function seedUser(uid, overrides = {}) {
   await db.collection('users').doc(uid).set({
     ...defaultStats,
-    ...overrides,
-    stats: overrides.stats || undefined
+    ...overrides
   }, { merge: true });
 }
 
