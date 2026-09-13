@@ -18,20 +18,20 @@ The project is being developed with a strong emphasis on **security, server-auth
 
 CampusFind gives a campus community one place to handle the entire lost-and-found workflow:
 
-- 📋 **Report lost or found items** with descriptions, categories, locations, and photos
-- 🔎 **Browse and search listings** using filters such as category, location, date, and status
-- 🤖 **AI-assisted matching** to help identify potential matches between lost and found reports
-- 💬 **Real-time chat** between users involved in an item recovery
-- 🔔 **Notifications** for matches, messages, status changes, and other important activity
-- 📧 **Email notifications** for key account and item events
-- 🏆 **Gamification** with points, achievements, activity streaks, and leaderboards
-- 🛡️ **Admin tools** for managing users, items, and campus activity
-- 🗺️ **Campus-aware location data** for finding items around university locations
-- 🔐 **Firebase Authentication** for authenticated application access
+-  **Report lost or found items** with descriptions, categories, locations, and photos
+-  **Browse and search listings** using filters such as category, location, date, and status
+-  **AI-assisted matching** to help identify potential matches between lost and found reports
+-  **Real-time chat** between users involved in an item recovery
+-  **Notifications** for matches, messages, status changes, and other important activity
+-  **Email notifications** for key account and item events
+-  **Gamification** with points, achievements, activity streaks, and leaderboards
+-  **Admin tools** for managing users, items, and campus activity
+-  **Campus-aware location data** for finding items around university locations
+-  **Firebase Authentication** for authenticated application access
 
 ---
 
-## 🧩 Core Features
+## Core Features
 
 ### Lost & Found Workflow
 
@@ -90,7 +90,7 @@ Notifications can be delivered through the application's notification system and
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 CampusFind follows a service-oriented frontend architecture backed by Firebase.
 
@@ -148,7 +148,7 @@ CampusFind follows a service-oriented frontend architecture backed by Firebase.
 
 ---
 
-## 🔐 Security Engineering
+## Security Engineering
 
 Security is an ongoing part of the project rather than an afterthought.
 
@@ -171,7 +171,7 @@ The next security milestone is hardening the **Realtime Database chat rules**, i
 
 ---
 
-## 🧪 Testing & Development Quality
+## Testing & Development Quality
 
 Firebase Emulator Suite tests are used to verify security-sensitive backend behavior without relying on production data.
 
@@ -311,7 +311,7 @@ The longer-term goals include:
 
 ---
 
-## 🗺️ Roadmap
+## Roadmap
 
 ### Completed / In Progress
 
@@ -343,7 +343,7 @@ The longer-term goals include:
 
 ---
 
-## 🏫 Current Scope
+## Current Scope
 
 CampusFind is currently designed around **Wayne State University** and its campus environment. The application is intentionally campus-focused, with university locations and workflows influencing the product design.
 
@@ -366,7 +366,7 @@ For security-sensitive changes, please include the relevant threat model or auth
 
 ---
 
-## 📌 Project Status
+## Project Status
 
 **Active development**
 
@@ -374,12 +374,8 @@ CampusFind is a continuously evolving portfolio project. Features, security rule
 
 ---
 
-## 👨‍💻 Author
+## Author
 
-Built by **Riyan Ahmed** as a software engineering portfolio project focused on modern web development, Firebase architecture, security engineering, real-time systems, and practical AI integration.
-
+Built by **Mohammad Bhuyia** as a software engineering portfolio project focused on modern web development, Firebase architecture, security engineering, real-time systems, and practical AI integration.
 ---
 
-## 📄 License
-
-No open-source license has currently been specified for this repository. Unless a license is added, the project's source code should be treated as **all rights reserved**.
