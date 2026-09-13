@@ -11,16 +11,16 @@ import {
   serverTimestamp,
   Timestamp
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from './firebase';
 import type { Item, ItemStatusType } from '../types';
-import { ItemType, ItemCategory } from '../types';
+import { ItemType } from '../types';
 import {
   LIMITS,
   sanitizeImageUrlField,
   sanitizePlainText,
   sanitizeSearchInput,
 } from '../utils/sanitize';
-
 
 const ITEMS_COLLECTION = 'items';
 
@@ -116,15 +116,24 @@ export const updateItemInFirestore = async (id: string, updates: Partial<Item>):
   });
 };
 
-// Update item status
-export const updateItemStatusInFirestore = async (id: string, status: ItemStatusType): Promise<void> => {
-  const itemRef = doc(db, ITEMS_COLLECTION, id);
-  await updateDoc(itemRef, {
-    status,
-    updatedAt: serverTimestamp(),
+/**
+ * Change an item's status through the trusted Cloud Function.
+ * Status changes are never written directly by the client.
+ */
+export const updateItemStatusInFirestore = async (
+  id: string,
+  status: ItemStatusType
+): Promise<void> => {
+  const resolveItem = httpsCallable<{ itemId: string; newStatus: string }, unknown>(
+    functions,
+    'resolveItem'
+  );
+
+  await resolveItem({
+    itemId: id,
+    newStatus: status,
   });
 };
-
 
 // Delete an item
 export const deleteItemFromFirestore = async (id: string): Promise<void> => {
@@ -148,7 +157,6 @@ export const getItemsByStatus = async (status: ItemStatusType): Promise<Item[]> 
   const allItems = await getAllItems();
   return allItems.filter(item => item.status === status);
 };
-
 
 // Search items
 export const searchItems = async (query: string): Promise<Item[]> => {
