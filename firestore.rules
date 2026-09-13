@@ -117,7 +117,7 @@ service cloud.firestore {
       allow create: if isSignedIn() && validNotificationCreate();
       allow update: if isSignedIn() && resource.data.userId == request.auth.uid &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
-      allow delete: if isSignedIn() && request.auth.uid == userId;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
     match /adminSettings/{document} {
