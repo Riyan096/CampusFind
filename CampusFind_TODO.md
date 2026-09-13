@@ -80,7 +80,7 @@ Suggested state model to document:
 - [x] Prevent users from changing server-managed timestamps
 - [x] Prevent users from changing status directly
 - [x] Restrict allowed editable fields
-- [ ] Add emulator tests for rule bypass attempts
+- [x] Add emulator tests for rule bypass attempts
 
 ## 4. Lock down user stats — P0
 
