@@ -14,7 +14,7 @@ The project is being developed with a strong emphasis on **security, server-auth
 
 ---
 
-## ✨ What CampusFind Does
+## What CampusFind Does
 
 CampusFind gives a campus community one place to handle the entire lost-and-found workflow:
 
@@ -113,15 +113,15 @@ CampusFind follows a service-oriented frontend architecture backed by Firebase.
         │   Firestore   │   │ Realtime DB    │
         │               │   │                │
         │ Items / Users │   │ Chats / Msgs   │
-        │ Notifications│   │                │
+        │ Notifications │   │                │
         └───────────────┘   └────────────────┘
                 │
         ┌───────▼────────────────────────────────────────┐
         │             Firebase Functions                 │
-        │                                                 │
+        │                                                │
         │ Server-authoritative workflows • Rewards       │
-        │ Protected business logic • Validation           │
-        └──────────────────────┬──────────────────────────┘
+        │ Protected business logic • Validation          │
+        └──────────────────────┬─────────────────────────┘
                                │
                      ┌─────────▼─────────┐
                      │   Gemini / AI     │
