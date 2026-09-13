@@ -1,9 +1,12 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
+const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
-const { resolveItem } = require('../lib/index.js');
 
+initializeApp();
+
+const { resolveItem } = require('../lib/index.js');
 const db = getFirestore();
 
 const defaultStats = {
@@ -48,12 +51,24 @@ async function callResolve(uid, itemId, newStatus) {
 }
 
 async function clear() {
-  const collections = ['items', 'users'];
-  for (const collection of collections) {
+  const usersSnapshot = await db.collection('users').get();
+
+  for (const user of usersSnapshot.docs) {
+    const awards = await user.ref.collection('pointAwards').get();
+    if (!awards.empty) {
+      const batch = db.batch();
+      awards.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+    }
+  }
+
+  for (const collection of ['items', 'users']) {
     const snapshot = await db.collection(collection).get();
-    const batch = db.batch();
-    snapshot.docs.forEach(doc => batch.delete(doc.ref));
-    if (!snapshot.empty) await batch.commit();
+    if (!snapshot.empty) {
+      const batch = db.batch();
+      snapshot.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+    }
   }
 }
 
@@ -146,13 +161,16 @@ test('invalid resolution state is rejected', async () => {
   assert.equal(item.data().status, 'STILL_LOST');
 });
 
-test('already resolved item cannot be resolved again', async () => {
+test('already resolved item cannot transition to another terminal resolution', async () => {
   await seedUser('reporter-1');
-  await seedItem('resolved-item', { status: 'RETURNED' });
+  await seedItem('resolved-item', {
+    type: 'LOST',
+    status: 'RECOVERED'
+  });
 
   await assert.rejects(
-    callResolve('reporter-1', 'resolved-item', 'RETURNED'),
-    error => error.code === 'already-exists' || error.code === 'failed-precondition'
+    callResolve('reporter-1', 'resolved-item', 'CLAIMED'),
+    error => error.code === 'failed-precondition'
   );
 });
 
