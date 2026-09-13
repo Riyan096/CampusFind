@@ -9,7 +9,7 @@
         ".validate": "newData.hasChildren(['createdBy','itemId','itemTitle','participants','createdAt']) && newData.child('createdBy').isString() && newData.child('createdBy').val() == auth.uid && newData.child('participants').child(auth.uid).exists()",
         "participants": {
           "$userId": {
-            ".write": "auth != null && !data.exists() && newData.hasChildren(['name','joinedAt']) && ((auth.uid == $userId && root.child('chats').child($chatId).child('createdBy').val() == auth.uid) || root.child('chats').child($chatId).child('createdBy').val() == auth.uid)",
+            ".write": "auth != null && ((data.exists() && !newData.exists() && auth.uid == $userId) || (!data.exists() && newData.hasChildren(['name','joinedAt']) && root.child('chats').child($chatId).child('createdBy').val() == auth.uid))",
             ".validate": "newData.hasChildren(['name','joinedAt']) && newData.child('name').isString() && newData.child('joinedAt').exists()"
           }
         },
@@ -18,6 +18,10 @@
             ".write": "auth != null && root.child('chats').child($chatId).child('participants').child(auth.uid).exists() && ((!data.exists() && newData.child('senderId').val() == auth.uid) || (data.exists() && newData.child('senderId').val() == data.child('senderId').val()))",
             ".validate": "newData.hasChildren(['senderId','senderName','content','timestamp']) && newData.child('senderId').isString() && newData.child('senderName').isString() && newData.child('content').isString() && newData.child('content').val().length <= 4000 && (data.exists() ? (newData.child('senderId').val() == data.child('senderId').val() && newData.child('content').val() == data.child('content').val()) : newData.child('senderId').val() == auth.uid)"
           }
+        },
+        "lastMessage": {
+          ".write": "auth != null && root.child('chats').child($chatId).child('participants').child(auth.uid).exists() && newData.child('senderId').val() == auth.uid",
+          ".validate": "newData.hasChildren(['content','timestamp','senderId']) && newData.child('content').isString() && newData.child('content').val().length <= 100 && newData.child('senderId').isString() && newData.child('senderId').val() == auth.uid"
         }
       }
     }
