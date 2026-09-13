@@ -44,6 +44,15 @@ async function clearUsers() {
   }
 }
 
+async function clearPointAwards() {
+  const snapshot = await adminDb.collectionGroup('pointAwards').get();
+  if (!snapshot.empty) {
+    const batch = adminDb.batch();
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+  }
+}
+
 async function seedItem(itemId, overrides = {}) {
   await adminDb.collection('items').doc(itemId).set({
     ...baseItem,
@@ -74,10 +83,10 @@ test.before(async () => {
 });
 
 test.beforeEach(async () => {
-  await Promise.all([clearItems(), clearUsers()]);
+  await Promise.all([clearItems(), clearUsers(), clearPointAwards()]);
 });
 test.afterEach(async () => {
-  await Promise.all([clearItems(), clearUsers()]);
+  await Promise.all([clearItems(), clearUsers(), clearPointAwards()]);
 });
 
 test.after(async () => {
@@ -204,4 +213,27 @@ test('normal user can update allowed profile fields without changing stats', asy
       photoURL: 'https://example.com/avatar.png'
     })
   );
+});
+
+test('normal user cannot tamper with point awards', async () => {
+  await seedUser('reporter-1');
+  await adminDb.collection('users').doc('reporter-1').collection('pointAwards').doc('award-1').set({
+    points: 25,
+    reason: 'return',
+    createdAt: '2026-09-13'
+  });
+
+  const db = testEnv.authenticatedContext('reporter-1').firestore();
+  const award = db.collection('users').doc('reporter-1').collection('pointAwards').doc('award-1');
+
+  await assertFails(award.create({
+    points: 9999,
+    reason: 'fake'
+  }));
+
+  await assertFails(award.update({
+    points: 9999
+  }));
+
+  await assertFails(award.delete());
 });

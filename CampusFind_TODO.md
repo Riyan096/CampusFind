@@ -88,7 +88,7 @@ Suggested state model to document:
 - [x] Prevent normal users from editing counters
 - [x] Prevent normal users from editing achievements
 - [x] Prevent normal users from editing streaks
-- [ ] Add explicit tests for every protected field
+- [x] Add explicit tests for every protected field
 
 ## 5. Harden point awards — P0
 
