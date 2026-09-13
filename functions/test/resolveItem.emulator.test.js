@@ -154,7 +154,7 @@ test('invalid resolution state is rejected', async () => {
 
   await assert.rejects(
     callResolve('reporter-1', 'invalid-item', 'RETURNED'),
-    error => error.code === 'failed-precondition'
+    error => error.code === 'invalid-argument'
   );
 
   const item = await db.collection('items').doc('invalid-item').get();
