@@ -1,6 +1,11 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ============================================================
+    // AUTH HELPERS
+    // ============================================================
 
     function isSignedIn() {
       return request.auth != null;
@@ -8,29 +13,69 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() &&
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+        exists(
+          /databases/$(database)/documents/users/$(request.auth.uid)
+        ) &&
+        get(
+          /databases/$(database)/documents/users/$(request.auth.uid)
+        ).data.isAdmin == true;
     }
+
+
+    // ============================================================
+    // ITEM VALIDATION
+    // ============================================================
 
     function validItemType(t) {
       return t in ['LOST', 'FOUND'];
     }
 
     function validCategory(c) {
-      return c in ['Electronics', 'Clothing', 'Keys', 'ID Cards', 'Books', 'Other'];
+      return c in [
+        'Electronics',
+        'Clothing',
+        'Keys',
+        'ID Cards',
+        'Books',
+        'Other'
+      ];
     }
 
     function validStatusForType(t, s) {
-      return (t == 'LOST'  && s in ['STILL_LOST', 'MATCH_FOUND', 'CLAIMED', 'RECOVERED']) ||
-             (t == 'FOUND' && s in ['AVAILABLE', 'PENDING_CLAIM', 'RETURNED', 'UNCLAIMED']);
+      return (
+        t == 'LOST' &&
+        s in [
+          'STILL_LOST',
+          'MATCH_FOUND',
+          'CLAIMED',
+          'RECOVERED'
+        ]
+      ) ||
+      (
+        t == 'FOUND' &&
+        s in [
+          'AVAILABLE',
+          'PENDING_CLAIM',
+          'RETURNED',
+          'UNCLAIMED'
+        ]
+      );
     }
 
     function validItemCreate() {
       let d = request.resource.data;
+
       return d.reportedBy == request.auth.uid &&
-        d.title is string && d.title.size() > 0 && d.title.size() <= 200 &&
-        d.description is string && d.description.size() <= 8000 &&
-        d.location is string && d.location.size() <= 300 &&
+        d.title is string &&
+        d.title.size() > 0 &&
+        d.title.size() <= 200 &&
+
+        d.description is string &&
+        d.description.size() <= 8000 &&
+
+        d.location is string &&
+        d.location.size() <= 300 &&
+
         validItemType(d.type) &&
         validCategory(d.category) &&
         validStatusForType(d.type, d.status);
@@ -39,73 +84,219 @@ service cloud.firestore {
     function validItemUpdate() {
       let d = request.resource.data;
       let before = resource.data;
+
       return d.reportedBy == before.reportedBy &&
-        d.title is string && d.title.size() <= 200 &&
-        d.description is string && d.description.size() <= 8000 &&
+
+        d.title is string &&
+        d.title.size() <= 200 &&
+
+        d.description is string &&
+        d.description.size() <= 8000 &&
+
         validItemType(d.type) &&
         validCategory(d.category) &&
         validStatusForType(d.type, d.status);
     }
 
+
+    // ============================================================
+    // NOTIFICATIONS
+    // ============================================================
+
     function validNotificationCreate() {
       let d = request.resource.data;
+
       return d.userId is string &&
-        exists(/databases/$(database)/documents/users/$(d.userId)) &&
-        d.title is string && d.title.size() > 0 && d.title.size() <= 200 &&
-        d.message is string && d.message.size() <= 4000 &&
-        d.type in ['item_match', 'chat_message', 'status_update', 'system'] &&
+
+        exists(
+          /databases/$(database)/documents/users/$(d.userId)
+        ) &&
+
+        d.title is string &&
+        d.title.size() > 0 &&
+        d.title.size() <= 200 &&
+
+        d.message is string &&
+        d.message.size() <= 4000 &&
+
+        d.type in [
+          'item_match',
+          'chat_message',
+          'status_update',
+          'system'
+        ] &&
+
         d.read == false;
     }
 
-    // Users
+
+    // ============================================================
+    // USERS
+    // ============================================================
+
     match /users/{userId} {
+
       allow read: if isSignedIn();
 
-      // Initial doc created at signup; must not self-grant admin.
-      allow create: if isSignedIn() && request.auth.uid == userId &&
+
+      // ----------------------------------------------------------
+      // Initial signup
+      // ----------------------------------------------------------
+
+      allow create: if isSignedIn() &&
+        request.auth.uid == userId &&
         request.resource.data.isAdmin == false;
 
-      // A user may edit their own profile fields but cannot flip their own isAdmin.
-      // An admin may edit OTHER users' docs (needed for the admin panel / stat resets).
+
+      // ----------------------------------------------------------
+      // User updates
+      // ----------------------------------------------------------
+      //
+      // NORMAL USERS:
+      //   Can only change profile fields.
+      //
+      // They CANNOT change:
+      //   points
+      //   itemsReported
+      //   itemsReturned
+      //   itemsClaimed
+      //   streaks
+      //   unlockedAchievements
+      //   lastActive
+      //
+      // CLOUD FUNCTIONS:
+      //   Firebase Admin SDK bypasses Firestore Security Rules,
+      //   so the trusted backend can still update those fields.
+      //
+      // ADMINS:
+      //   Can edit other users' documents as before.
+      // ----------------------------------------------------------
+
       allow update: if isSignedIn() && (
-        (request.auth.uid == userId &&
-          request.resource.data.isAdmin == resource.data.isAdmin) ||
-        (isAdmin() && request.auth.uid != userId)
+
+        (
+          request.auth.uid == userId &&
+
+          request.resource.data.isAdmin ==
+            resource.data.isAdmin &&
+
+          request.resource.data.diff(resource.data)
+            .affectedKeys()
+            .hasOnly([
+              'displayName',
+              'photoURL'
+            ])
+        )
+
+        ||
+
+        (
+          isAdmin() &&
+          request.auth.uid != userId
+        )
+
       );
+
 
       allow delete: if isAdmin();
 
-      // Per-user notification subcollection used by AdminView's global broadcast
+
+      // ----------------------------------------------------------
+      // Per-user notifications
+      // ----------------------------------------------------------
+
       match /notifications/{notificationId} {
-        allow read: if isSignedIn() && request.auth.uid == userId;
+
+        allow read: if isSignedIn() &&
+          request.auth.uid == userId;
+
         allow create: if isAdmin();
-        allow update: if isSignedIn() && request.auth.uid == userId &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
-        allow delete: if isSignedIn() && request.auth.uid == userId;
+
+        allow update: if isSignedIn() &&
+          request.auth.uid == userId &&
+          request.resource.data
+            .diff(resource.data)
+            .affectedKeys()
+            .hasOnly(['read']);
+
+        allow delete: if isSignedIn() &&
+          request.auth.uid == userId;
+      }
+
+
+      // ----------------------------------------------------------
+      // Point award records
+      // ----------------------------------------------------------
+      //
+      // IMPORTANT:
+      // Users should NOT be able to create fake pointAwards.
+      //
+      // The Cloud Function creates these using Admin SDK.
+      // ----------------------------------------------------------
+
+      match /pointAwards/{awardId} {
+        allow read: if isSignedIn() &&
+          request.auth.uid == userId;
+
+        allow create, update, delete: if false;
       }
     }
 
-    // Items
+
+    // ============================================================
+    // ITEMS
+    // ============================================================
+
     match /items/{itemId} {
+
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && validItemCreate();
+
+      allow create: if isSignedIn() &&
+        validItemCreate();
+
       allow update: if isSignedIn() &&
-        (resource.data.reportedBy == request.auth.uid || isAdmin()) &&
+        (
+          resource.data.reportedBy == request.auth.uid ||
+          isAdmin()
+        ) &&
         validItemUpdate();
+
       allow delete: if isSignedIn() &&
-        (resource.data.reportedBy == request.auth.uid || isAdmin());
+        (
+          resource.data.reportedBy == request.auth.uid ||
+          isAdmin()
+        );
     }
 
-    // Notifications (top-level collection used by chat/match notifications)
+
+    // ============================================================
+    // TOP-LEVEL NOTIFICATIONS
+    // ============================================================
+
     match /notifications/{notificationId} {
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && validNotificationCreate();
-      allow update: if isSignedIn() && resource.data.userId == request.auth.uid &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      allow read: if isSignedIn() &&
+        resource.data.userId == request.auth.uid;
+
+      allow create: if isSignedIn() &&
+        validNotificationCreate();
+
+      allow update: if isSignedIn() &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data
+          .diff(resource.data)
+          .affectedKeys()
+          .hasOnly(['read']);
+
+      allow delete: if isSignedIn() &&
+        resource.data.userId == request.auth.uid;
     }
 
-    // Admin-only settings
+
+    // ============================================================
+    // ADMIN SETTINGS
+    // ============================================================
+
     match /adminSettings/{document} {
       allow read, write: if isAdmin();
     }

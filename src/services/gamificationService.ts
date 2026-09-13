@@ -1,7 +1,18 @@
 import type { Achievement, UserAchievement, UserStats, StreakInfo, LeaderboardEntry } from '../types';
 import { db } from './firebase';
-import { collection, query, orderBy, limit, getDocs, doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, doc, setDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+
+
+export type GamificationActivityType = 'report' | 'return' | 'claim';
+
+export interface GamificationResult {
+  stats: UserStats;
+  newAchievements: Achievement[];
+  pointsAwarded: number;
+  streakIncreased: boolean;
+  alreadyAwarded?: boolean;
+}
 
 // Define all available achievements
 export const ACHIEVEMENTS: Achievement[] = [
@@ -188,58 +199,87 @@ export const updateStreak = (stats: UserStats): { updatedStats: UserStats; strea
 };
 
 // Check for new achievements
-export const checkAchievements = (stats: UserStats): { newAchievements: Achievement[]; updatedStats: UserStats } => {
-  const unlockedIds = new Set(stats.unlockedAchievements?.map(ua => ua.achievementId) || []);
+export const checkAchievements = (
+  stats: UserStats
+): {
+  newAchievements: Achievement[];
+  updatedStats: UserStats;
+} => {
+  const unlockedIds = new Set(
+    stats.unlockedAchievements?.map(
+      ua => ua.achievementId
+    ) || []
+  );
+
   const newAchievements: Achievement[] = [];
-  
+
   for (const achievement of ACHIEVEMENTS) {
     if (unlockedIds.has(achievement.id)) continue;
-    
-    let progress = 0;
+
     let unlocked = false;
-    
+
     switch (achievement.condition.type) {
       case 'itemsReported':
-        progress = Math.min(100, (stats.itemsReported / achievement.condition.threshold) * 100);
-        unlocked = stats.itemsReported >= achievement.condition.threshold;
+        unlocked =
+          stats.itemsReported >=
+          achievement.condition.threshold;
         break;
+
       case 'itemsReturned':
-        progress = Math.min(100, (stats.itemsReturned / achievement.condition.threshold) * 100);
-        unlocked = stats.itemsReturned >= achievement.condition.threshold;
+        unlocked =
+          stats.itemsReturned >=
+          achievement.condition.threshold;
         break;
+
       case 'itemsClaimed':
-        progress = Math.min(100, (stats.itemsClaimed / achievement.condition.threshold) * 100);
-        unlocked = stats.itemsClaimed >= achievement.condition.threshold;
+        unlocked =
+          stats.itemsClaimed >=
+          achievement.condition.threshold;
         break;
+
       case 'streak':
-        progress = Math.min(100, ((stats.streaks?.currentStreak || 0) / achievement.condition.threshold) * 100);
-        unlocked = (stats.streaks?.currentStreak || 0) >= achievement.condition.threshold;
+        unlocked =
+          (stats.streaks?.currentStreak || 0) >=
+          achievement.condition.threshold;
         break;
+
       case 'points':
-        progress = Math.min(100, (stats.points / achievement.condition.threshold) * 100);
-        unlocked = stats.points >= achievement.condition.threshold;
+        unlocked =
+          stats.points >=
+          achievement.condition.threshold;
         break;
     }
-    
+
     if (unlocked) {
       newAchievements.push(achievement);
     }
   }
-  
-  // Add new achievements to user stats
-  const newUserAchievements: UserAchievement[] = newAchievements.map(ach => ({
-    achievementId: ach.id,
-    unlockedAt: new Date().toISOString(),
-    progress: 100
-  }));
-  
+
+  const newUserAchievements: UserAchievement[] =
+    newAchievements.map(ach => ({
+      achievementId: ach.id,
+      unlockedAt: new Date().toISOString(),
+      progress: 100
+    }));
+
   const updatedStats: UserStats = {
     ...stats,
-    unlockedAchievements: [...(stats.unlockedAchievements || []), ...newUserAchievements],
-    points: stats.points + newAchievements.reduce((sum, ach) => sum + ach.pointsBonus, 0)
+    unlockedAchievements: [
+      ...(stats.unlockedAchievements || []),
+      ...newUserAchievements
+    ],
+    points:
+      stats.points +
+      newAchievements.reduce(
+        (sum, ach) => sum + ach.pointsBonus,
+        0
+      )
   };
-  
-  return { newAchievements, updatedStats };
+
+  return {
+    newAchievements,
+    updatedStats
+  };
 };
 
 // Get achievement progress for a user

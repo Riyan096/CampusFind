@@ -146,7 +146,7 @@ const AppContent: React.FC = () => {
             case 'report':
                 return <ReportView onSuccess={handleReportSuccess} onUploadError={error} />;
             case 'browse':
-                return <BrowseView items={items} onItemClick={refreshData} onItemsChange={handleItemsChange} onStatusChange={handleStatusChange} searchQuery={searchQuery} onStartChat={handleStartChat} />;
+                return <BrowseView items={items} onItemsChange={handleItemsChange} onStatusChange={handleStatusChange} searchQuery={searchQuery} onStartChat={handleStartChat} />;
             case 'chat':
                 return <ChatView itemId={activeChatItem?.itemId} itemTitle={activeChatItem?.itemTitle} itemOwnerId={activeChatItem?.itemOwnerId} chatId={activeChatItem?.chatId} />;
             case 'map':
