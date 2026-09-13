@@ -39,12 +39,24 @@ service cloud.firestore {
     function validItemUpdate() {
       let d = request.resource.data;
       let before = resource.data;
-      return d.reportedBy == before.reportedBy &&
+      return d.diff(before).affectedKeys().hasOnly([
+          'title',
+          'description',
+          'category',
+          'location',
+          'latlng',
+          'imageUrl',
+          'aiTags',
+          'reporterName'
+        ]) &&
+        d.reportedBy == before.reportedBy &&
+        d.type == before.type &&
+        d.status == before.status &&
         d.title is string && d.title.size() <= 200 &&
         d.description is string && d.description.size() <= 8000 &&
+        d.location is string && d.location.size() <= 300 &&
         validItemType(d.type) && validCategory(d.category) &&
-        validStatusForType(d.type, d.status) &&
-        d.status == before.status;
+        validStatusForType(d.type, d.status);
     }
 
     function validNotificationCreate() {
