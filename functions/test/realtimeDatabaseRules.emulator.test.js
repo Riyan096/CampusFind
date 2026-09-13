@@ -117,6 +117,25 @@ test('non-member cannot read the conversation', async () => {
   );
 });
 
+test('chat member cannot modify the conversation root', async () => {
+  await seedChat();
+
+  await assertFails(
+    dbFor('member-1').ref('chats/chat-1').update({ itemTitle: 'Hijacked Chat' })
+  );
+});
+
+test('non-member cannot write to an existing conversation', async () => {
+  await seedChat();
+
+  await assertFails(
+    dbFor('outsider').ref('chats/chat-1/participants/outsider').set({
+      name: 'Outsider',
+      joinedAt: 1002
+    })
+  );
+});
+
 test('chat creator can add a participant', async () => {
   await seedChat('chat-1', {
     participants: {
@@ -150,6 +169,22 @@ test('non-creator cannot add themselves to a conversation', async () => {
       name: 'Outsider',
       joinedAt: 1002
     })
+  );
+});
+
+test('participant can leave their own conversation membership', async () => {
+  await seedChat();
+
+  await assertSucceeds(
+    dbFor('member-1').ref('chats/chat-1/participants/member-1').remove()
+  );
+});
+
+test('participant cannot remove another user from the conversation', async () => {
+  await seedChat();
+
+  await assertFails(
+    dbFor('member-1').ref('chats/chat-1/participants/creator-1').remove()
   );
 });
 
@@ -192,6 +227,24 @@ test('non-member cannot send a message even with their own senderId', async () =
       timestamp: 1002,
       read: false
     })
+  );
+});
+
+test('non-member cannot read messages from a conversation', async () => {
+  await seedChat('chat-1', {
+    messages: {
+      'message-1': {
+        senderId: 'member-1',
+        senderName: 'Member',
+        content: 'Private message',
+        timestamp: 1002,
+        read: false
+      }
+    }
+  });
+
+  await assertFails(
+    dbFor('outsider').ref('chats/chat-1/messages').get()
   );
 });
 
