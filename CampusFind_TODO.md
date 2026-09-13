@@ -73,13 +73,13 @@ Suggested state model to document:
 
 ## 3. Lock down item updates — P0
 
-- [ ] Use `diff().affectedKeys()` for item updates
-- [ ] Prevent users from changing `reportedBy`
-- [ ] Prevent users from changing ownership fields
-- [ ] Prevent users from changing moderation fields
-- [ ] Prevent users from changing server-managed timestamps
-- [ ] Prevent users from changing status directly
-- [ ] Restrict allowed editable fields
+- [x] Use `diff().affectedKeys()` for item updates
+- [x] Prevent users from changing `reportedBy`
+- [x] Prevent users from changing ownership fields
+- [x] Prevent users from changing moderation fields
+- [x] Prevent users from changing server-managed timestamps
+- [x] Prevent users from changing status directly
+- [x] Restrict allowed editable fields
 - [ ] Add emulator tests for rule bypass attempts
 
 ## 4. Lock down user stats — P0
