@@ -31,7 +31,7 @@
 
 ## 2. Make item status changes server-authoritative — P0
 
-Current concern: the client still has a direct Firestore status-update path.
+Status changes are now routed through the trusted `resolveItem` callable. The client-side generic item update API explicitly excludes `status`, and Firestore rules reject direct client status changes. The repository audit found the UI status workflow using `resolveItem` rather than direct Firestore status writes.
 
 - [x] Design the allowed item state transitions
 - [x] Decide who can perform each transition
@@ -42,13 +42,13 @@ Current concern: the client still has a direct Firestore status-update path.
 - [x] Update status and related gamification atomically
 - [x] Update `src/services/itemService.ts`
 - [x] Remove direct client status writes from the dedicated status-update service
-- [ ] Search entire repository for `updateDoc(...status...)`
-- [ ] Search for all other client-side status mutation paths
-- [ ] Verify no UI can bypass the callable function
+- [x] Search entire repository for `updateDoc(...status...)`
+- [x] Search for all other client-side status mutation paths
+- [x] Verify no UI can bypass the callable function
 - [x] Block direct client status changes in Firestore rules
 - [x] Add emulator coverage for legal transitions
 - [x] Add emulator coverage for illegal transitions
-- [ ] Run full build + emulator test suite locally
+- [x] Run full build + emulator test suite locally
 
 Suggested state model to document:
 
