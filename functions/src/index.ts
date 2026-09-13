@@ -9,7 +9,6 @@ import {
   ACTIVITY_POINTS,
   checkAchievements,
   getDefaultUserStats,
-  updateStreak,
   UserStats
 } from './gamification';
 
@@ -198,25 +197,16 @@ export const resolveItem = onCall(async request => {
 
   try {
     const result = await db.runTransaction(async transaction => {
-      // ========================================================
-      // READ PHASE — ALL TRANSACTION READS HAPPEN BEFORE WRITES
-      // ========================================================
       const itemSnapshot = await transaction.get(itemRef);
 
       if (!itemSnapshot.exists) {
-        throw new HttpsError(
-          'not-found',
-          'Item not found.'
-        );
+        throw new HttpsError('not-found', 'Item not found.');
       }
 
       const item = itemSnapshot.data() as ResolutionItem | undefined;
 
       if (!item) {
-        throw new HttpsError(
-          'not-found',
-          'Item data not found.'
-        );
+        throw new HttpsError('not-found', 'Item data not found.');
       }
 
       const actorSnapshot = await transaction.get(actorRef);
@@ -246,14 +236,10 @@ export const resolveItem = onCall(async request => {
         );
       }
 
-      // The reporter is the reward recipient. If an admin resolves an item,
-      // the admin is allowed to perform the action but does not receive the
-      // reporter's reward.
       const reporterRef = db.collection('users').doc(reporterId);
-      const reporterSnapshot =
-        reporterId === uid
-          ? actorSnapshot
-          : await transaction.get(reporterRef);
+      const reporterSnapshot = reporterId === uid
+        ? actorSnapshot
+        : await transaction.get(reporterRef);
 
       if (!reporterSnapshot.exists) {
         throw new HttpsError(
@@ -265,21 +251,16 @@ export const resolveItem = onCall(async request => {
       const reporterData = reporterSnapshot.data() || {};
       const reporterStats = normalizeStats(reporterData);
 
-      // Read the deterministic idempotency record before any write.
       const awardRef = reporterRef
         .collection('pointAwards')
         .doc(`${itemId}_return`);
       const awardSnapshot = await transaction.get(awardRef);
 
-      // ========================================================
-      // VALIDATION / CALCULATION PHASE — STILL NO WRITES
-      // ========================================================
-      const validStatuses =
-        item.type === 'LOST'
-          ? ['STILL_LOST', 'MATCH_FOUND', 'CLAIMED', 'RECOVERED']
-          : item.type === 'FOUND'
-            ? ['AVAILABLE', 'PENDING_CLAIM', 'RETURNED', 'UNCLAIMED']
-            : [];
+      const validStatuses = item.type === 'LOST'
+        ? ['STILL_LOST', 'MATCH_FOUND', 'CLAIMED', 'RECOVERED']
+        : item.type === 'FOUND'
+          ? ['AVAILABLE', 'PENDING_CLAIM', 'RETURNED', 'UNCLAIMED']
+          : [];
 
       if (!validStatuses.includes(newStatus)) {
         throw new HttpsError(
@@ -292,10 +273,7 @@ export const resolveItem = onCall(async request => {
 
       if (oldStatus === newStatus) {
         return {
-          item: {
-            ...item,
-            id: itemId
-          },
+          item: { ...item, id: itemId },
           stats: reporterStats,
           newAchievements: [],
           pointsAwarded: 0,
@@ -303,24 +281,16 @@ export const resolveItem = onCall(async request => {
         };
       }
 
-      const isResolution =
-        newStatus === 'CLAIMED' ||
-        newStatus === 'RETURNED';
+      const isResolution = newStatus === 'CLAIMED' || newStatus === 'RETURNED';
 
-      if (
-        newStatus === 'CLAIMED' &&
-        item.type !== 'LOST'
-      ) {
+      if (newStatus === 'CLAIMED' && item.type !== 'LOST') {
         throw new HttpsError(
           'failed-precondition',
           'A found item cannot be resolved as claimed.'
         );
       }
 
-      if (
-        newStatus === 'RETURNED' &&
-        item.type !== 'FOUND'
-      ) {
+      if (newStatus === 'RETURNED' && item.type !== 'FOUND') {
         throw new HttpsError(
           'failed-precondition',
           'A lost item cannot be resolved as returned.'
@@ -340,18 +310,10 @@ export const resolveItem = onCall(async request => {
       }
 
       if (!isResolution) {
-        // Status-only changes do not award points, so no reward write is
-        // needed. The item write is still performed only after all reads.
-        transaction.update(itemRef, {
-          status: newStatus
-        });
+        transaction.update(itemRef, { status: newStatus });
 
         return {
-          item: {
-            ...item,
-            id: itemId,
-            status: newStatus
-          },
+          item: { ...item, id: itemId, status: newStatus },
           stats: reporterStats,
           newAchievements: [],
           pointsAwarded: 0,
@@ -360,13 +322,8 @@ export const resolveItem = onCall(async request => {
       }
 
       if (awardSnapshot.exists) {
-        // The item and award are committed atomically, so an existing award
-        // means this resolution was already successfully processed.
         return {
-          item: {
-            ...item,
-            id: itemId
-          },
+          item: { ...item, id: itemId },
           stats: reporterStats,
           newAchievements: [],
           pointsAwarded: 0,
@@ -375,17 +332,9 @@ export const resolveItem = onCall(async request => {
       }
 
       const now = new Date();
-      const reward = calculateResolutionReward(
-        reporterStats,
-        now
-      );
+      const reward = calculateResolutionReward(reporterStats, now);
 
-      // ========================================================
-      // WRITE PHASE — ALL WRITES HAPPEN AFTER READS/VALIDATION
-      // ========================================================
-      transaction.update(itemRef, {
-        status: newStatus
-      });
+      transaction.update(itemRef, { status: newStatus });
 
       transaction.set(
         reporterRef,
@@ -395,8 +344,7 @@ export const resolveItem = onCall(async request => {
           itemsReturned: reward.stats.itemsReturned,
           itemsClaimed: reward.stats.itemsClaimed,
           streaks: reward.stats.streaks,
-          unlockedAchievements:
-            reward.stats.unlockedAchievements,
+          unlockedAchievements: reward.stats.unlockedAchievements,
           lastActive: reward.stats.lastActive
         },
         { merge: true }
@@ -410,11 +358,7 @@ export const resolveItem = onCall(async request => {
       });
 
       return {
-        item: {
-          ...item,
-          id: itemId,
-          status: newStatus
-        },
+        item: { ...item, id: itemId, status: newStatus },
         stats: reward.stats,
         newAchievements: reward.newAchievements,
         pointsAwarded: reward.pointsAwarded,
@@ -429,11 +373,11 @@ export const resolveItem = onCall(async request => {
       throw error;
     }
 
-    console.error('resolveItem failed:', error);
+    console.error('resolveItem transaction failed:', error);
 
     throw new HttpsError(
       'internal',
-      'Failed to update the item.'
+      'Unable to resolve item.'
     );
   }
 });
