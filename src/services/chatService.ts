@@ -38,6 +38,7 @@ export interface Chat {
   id?: string;
   itemId: string;
   itemTitle: string;
+  createdBy: string;
   participants: {
     [userId: string]: {
       name: string;
@@ -66,6 +67,7 @@ export const createChat = async (
   const chatId = chatRef.key!;
   
   await set(chatRef, {
+    createdBy: userId,
     itemId: safeItemId,
     itemTitle: safeTitle,
     participants: {
