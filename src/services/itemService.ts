@@ -106,9 +106,17 @@ export const addItemToFirestore = async (item: Omit<Item, 'id'>): Promise<string
   return docRef.id;
 };
 
-// Update an item
-export const updateItemInFirestore = async (id: string, updates: Partial<Item>): Promise<void> => {
-  const safe = sanitizeItemWrite({ ...updates } as Record<string, unknown>) as Partial<Item>;
+// Update an item. Status is intentionally excluded: status changes must go
+// through the trusted resolveItem Cloud Function below.
+export const updateItemInFirestore = async (
+  id: string,
+  updates: Omit<Partial<Item>, 'status'>
+): Promise<void> => {
+  if ('status' in updates) {
+    throw new Error('Item status changes must use the resolveItem workflow.');
+  }
+
+  const safe = sanitizeItemWrite({ ...updates } as Record<string, unknown>) as Omit<Partial<Item>, 'status'>;
   const itemRef = doc(db, ITEMS_COLLECTION, id);
   await updateDoc(itemRef, {
     ...safe,
