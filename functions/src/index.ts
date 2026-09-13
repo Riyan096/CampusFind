@@ -5,7 +5,12 @@ import { getFirestore } from 'firebase-admin/firestore';
 
 import {
   processGamificationActivity,
-  ActivityType
+  ActivityType,
+  ACTIVITY_POINTS,
+  checkAchievements,
+  getDefaultUserStats,
+  updateStreak,
+  UserStats
 } from './gamification';
 
 initializeApp();
@@ -31,12 +36,6 @@ const db = getFirestore();
 
 export const awardPoints = onCall(
   async request => {
-    /**
-     * --------------------------------------------------------
-     * 1. REQUIRE AUTHENTICATION
-     * --------------------------------------------------------
-     */
-
     if (!request.auth) {
       throw new HttpsError(
         'unauthenticated',
@@ -46,22 +45,13 @@ export const awardPoints = onCall(
 
     const uid = request.auth.uid;
 
-    /**
-     * --------------------------------------------------------
-     * 2. VALIDATE INPUT
-     * --------------------------------------------------------
-     */
-
     const data = request.data as {
       activityType?: unknown;
       itemId?: unknown;
     };
 
-    const activityType =
-      data.activityType;
-
-    const itemId =
-      data.itemId;
+    const activityType = data.activityType;
+    const itemId = data.itemId;
 
     if (
       activityType !== 'report' &&
@@ -84,26 +74,17 @@ export const awardPoints = onCall(
       );
     }
 
-    /**
-     * --------------------------------------------------------
-     * 3. PROCESS EVERYTHING IN A FIRESTORE TRANSACTION
-     * --------------------------------------------------------
-     *
-     * This prevents race conditions and duplicate rewards.
-     */
-
     try {
-      const result =
-        await db.runTransaction(
-          async transaction => {
-            return await processGamificationActivity(
-              transaction,
-              uid,
-              activityType as ActivityType,
-              itemId
-            );
-          }
-        );
+      const result = await db.runTransaction(
+        async transaction => {
+          return await processGamificationActivity(
+            transaction,
+            uid,
+            activityType as ActivityType,
+            itemId
+          );
+        }
+      );
 
       return result;
     } catch (error) {
@@ -112,9 +93,7 @@ export const awardPoints = onCall(
         error
       );
 
-      if (
-        error instanceof HttpsError
-      ) {
+      if (error instanceof HttpsError) {
         throw error;
       }
 
@@ -126,6 +105,71 @@ export const awardPoints = onCall(
   }
 );
 
+interface ResolutionItem {
+  reportedBy?: string;
+  type?: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Pure reward calculator used by resolveItem.
+ *
+ * No Firestore reads/writes happen here. This makes the reward calculation
+ * deterministic for a transaction attempt and keeps all I/O in resolveItem.
+ */
+const calculateResolutionReward = (
+  stats: UserStats,
+  now: Date
+) => {
+  const pointsAwarded = ACTIVITY_POINTS.return;
+
+  const updatedStats: UserStats = {
+    ...stats,
+    points: stats.points + pointsAwarded,
+    itemsReturned: stats.itemsReturned + 1,
+    lastActive: now.toISOString()
+  };
+
+  const streakResult = {
+    updatedStats,
+    streakIncreased: false
+  };
+
+  const achievementResult = checkAchievements(
+    streakResult.updatedStats,
+    now
+  );
+
+  return {
+    stats: achievementResult.updatedStats,
+    newAchievements: achievementResult.newAchievements,
+    pointsAwarded,
+    streakIncreased: streakResult.streakIncreased
+  };
+};
+
+const normalizeStats = (
+  data: Record<string, unknown> | undefined
+): UserStats => {
+  const defaults = getDefaultUserStats();
+
+  return {
+    ...defaults,
+    ...(data || {}),
+    streaks: {
+      ...defaults.streaks,
+      ...(data?.streaks as Partial<UserStats['streaks']> | undefined)
+    },
+    badges: Array.isArray(data?.badges)
+      ? data.badges as string[]
+      : defaults.badges,
+    unlockedAchievements: Array.isArray(data?.unlockedAchievements)
+      ? data.unlockedAchievements as UserStats['unlockedAchievements']
+      : defaults.unlockedAchievements
+  };
+};
+
 export const resolveItem = onCall(async request => {
   if (!request.auth) {
     throw new HttpsError(
@@ -135,7 +179,6 @@ export const resolveItem = onCall(async request => {
   }
 
   const uid = request.auth.uid;
-
   const itemId = request.data?.itemId;
   const newStatus = request.data?.newStatus;
 
@@ -151,9 +194,13 @@ export const resolveItem = onCall(async request => {
   }
 
   const itemRef = db.collection('items').doc(itemId);
+  const actorRef = db.collection('users').doc(uid);
 
   try {
     const result = await db.runTransaction(async transaction => {
+      // ========================================================
+      // READ PHASE — ALL TRANSACTION READS HAPPEN BEFORE WRITES
+      // ========================================================
       const itemSnapshot = await transaction.get(itemRef);
 
       if (!itemSnapshot.exists) {
@@ -163,7 +210,7 @@ export const resolveItem = onCall(async request => {
         );
       }
 
-      const item = itemSnapshot.data();
+      const item = itemSnapshot.data() as ResolutionItem | undefined;
 
       if (!item) {
         throw new HttpsError(
@@ -172,43 +219,67 @@ export const resolveItem = onCall(async request => {
         );
       }
 
-      const userSnapshot = await transaction.get(
-        db.collection('users').doc(uid)
-      );
+      const actorSnapshot = await transaction.get(actorRef);
 
-      if (!userSnapshot.exists) {
+      if (!actorSnapshot.exists) {
         throw new HttpsError(
           'failed-precondition',
           'User profile not found.'
         );
       }
 
-      const userData = userSnapshot.data();
+      const actorData = actorSnapshot.data() || {};
+      const isAdmin = actorData.isAdmin === true;
+      const reporterId = item.reportedBy;
 
-      const isAdmin = userData?.isAdmin === true;
-      const isReporter = item.reportedBy === uid;
+      if (!reporterId) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Item has no valid reporter.'
+        );
+      }
 
-      if (!isReporter && !isAdmin) {
+      if (!isAdmin && reporterId !== uid) {
         throw new HttpsError(
           'permission-denied',
           'You can only change the status of items you reported.'
         );
       }
 
+      // The reporter is the reward recipient. If an admin resolves an item,
+      // the admin is allowed to perform the action but does not receive the
+      // reporter's reward.
+      const reporterRef = db.collection('users').doc(reporterId);
+      const reporterSnapshot =
+        reporterId === uid
+          ? actorSnapshot
+          : await transaction.get(reporterRef);
+
+      if (!reporterSnapshot.exists) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Reporter profile not found.'
+        );
+      }
+
+      const reporterData = reporterSnapshot.data() || {};
+      const reporterStats = normalizeStats(reporterData);
+
+      // Read the deterministic idempotency record before any write.
+      const awardRef = reporterRef
+        .collection('pointAwards')
+        .doc(`${itemId}_return`);
+      const awardSnapshot = await transaction.get(awardRef);
+
+      // ========================================================
+      // VALIDATION / CALCULATION PHASE — STILL NO WRITES
+      // ========================================================
       const validStatuses =
         item.type === 'LOST'
-          ? [
-              'STILL_LOST',
-              'MATCH_FOUND',
-              'CLAIMED',
-              'RECOVERED'
-            ]
-          : [
-              'AVAILABLE',
-              'PENDING_CLAIM',
-              'RETURNED',
-              'UNCLAIMED'
-            ];
+          ? ['STILL_LOST', 'MATCH_FOUND', 'CLAIMED', 'RECOVERED']
+          : item.type === 'FOUND'
+            ? ['AVAILABLE', 'PENDING_CLAIM', 'RETURNED', 'UNCLAIMED']
+            : [];
 
       if (!validStatuses.includes(newStatus)) {
         throw new HttpsError(
@@ -225,7 +296,7 @@ export const resolveItem = onCall(async request => {
             ...item,
             id: itemId
           },
-          stats: userData,
+          stats: reporterStats,
           newAchievements: [],
           pointsAwarded: 0,
           alreadyResolved: true
@@ -236,30 +307,107 @@ export const resolveItem = onCall(async request => {
         newStatus === 'CLAIMED' ||
         newStatus === 'RETURNED';
 
-      transaction.update(itemRef, {
-        status: newStatus
-      });
+      if (
+        newStatus === 'CLAIMED' &&
+        item.type !== 'LOST'
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'A found item cannot be resolved as claimed.'
+        );
+      }
+
+      if (
+        newStatus === 'RETURNED' &&
+        item.type !== 'FOUND'
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'A lost item cannot be resolved as returned.'
+        );
+      }
+
+      if (
+        isResolution &&
+        (oldStatus === 'CLAIMED' ||
+          oldStatus === 'RETURNED' ||
+          oldStatus === 'RECOVERED')
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The item has already been resolved.'
+        );
+      }
 
       if (!isResolution) {
+        // Status-only changes do not award points, so no reward write is
+        // needed. The item write is still performed only after all reads.
+        transaction.update(itemRef, {
+          status: newStatus
+        });
+
         return {
           item: {
             ...item,
             id: itemId,
             status: newStatus
           },
-          stats: userData,
+          stats: reporterStats,
           newAchievements: [],
-          pointsAwarded: 0
+          pointsAwarded: 0,
+          alreadyResolved: false
         };
       }
 
-      const gamificationResult =
-        await processGamificationActivity(
-          transaction,
-          uid,
-          'return',
-          itemId
-        );
+      if (awardSnapshot.exists) {
+        // The item and award are committed atomically, so an existing award
+        // means this resolution was already successfully processed.
+        return {
+          item: {
+            ...item,
+            id: itemId
+          },
+          stats: reporterStats,
+          newAchievements: [],
+          pointsAwarded: 0,
+          alreadyResolved: true
+        };
+      }
+
+      const now = new Date();
+      const reward = calculateResolutionReward(
+        reporterStats,
+        now
+      );
+
+      // ========================================================
+      // WRITE PHASE — ALL WRITES HAPPEN AFTER READS/VALIDATION
+      // ========================================================
+      transaction.update(itemRef, {
+        status: newStatus
+      });
+
+      transaction.set(
+        reporterRef,
+        {
+          points: reward.stats.points,
+          itemsReported: reward.stats.itemsReported,
+          itemsReturned: reward.stats.itemsReturned,
+          itemsClaimed: reward.stats.itemsClaimed,
+          streaks: reward.stats.streaks,
+          unlockedAchievements:
+            reward.stats.unlockedAchievements,
+          lastActive: reward.stats.lastActive
+        },
+        { merge: true }
+      );
+
+      transaction.create(awardRef, {
+        activityType: 'return',
+        itemId,
+        pointsAwarded: reward.pointsAwarded,
+        createdAt: now
+      });
 
       return {
         item: {
@@ -267,13 +415,11 @@ export const resolveItem = onCall(async request => {
           id: itemId,
           status: newStatus
         },
-        stats: gamificationResult.stats,
-        newAchievements:
-          gamificationResult.newAchievements,
-        pointsAwarded:
-          gamificationResult.pointsAwarded,
-        alreadyResolved:
-          gamificationResult.alreadyAwarded
+        stats: reward.stats,
+        newAchievements: reward.newAchievements,
+        pointsAwarded: reward.pointsAwarded,
+        streakIncreased: reward.streakIncreased,
+        alreadyResolved: false
       };
     });
 
