@@ -95,7 +95,7 @@ Suggested state model to document:
 - [x] Prevent client-created point awards
 - [x] Prevent client modification of point awards
 - [x] Prevent client deletion of point awards
-- [ ] Test award tampering through emulator
+- [x] Test award tampering through emulator
 
 # PHASE 3 — REALTIME DATABASE CHAT SECURITY
 
