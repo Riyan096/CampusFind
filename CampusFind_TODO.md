@@ -37,24 +37,24 @@
 
 Current concern: the resolution flow performs writes and then calls additional transaction logic that performs reads. Firestore transactions require reads to happen before writes.
 
-- [ ] Inspect current `resolveItem` Cloud Function
-- [ ] Move every required read to the beginning of the transaction
-- [ ] Read item snapshot
-- [ ] Read reporter/user snapshot(s)
-- [ ] Read point-award/idempotency document
-- [ ] Validate all authorization/state conditions
-- [ ] Calculate the reward using a pure helper
-- [ ] Calculate streak changes
-- [ ] Calculate achievement unlocks
-- [ ] Perform all writes only after reads/validation/calculation
-- [ ] Update item status atomically
-- [ ] Update user stats atomically
-- [ ] Create idempotency/point-award record atomically
-- [ ] Return the authoritative item/stats/result
-- [ ] Test concurrent resolution attempts
-- [ ] Test repeated resolution calls
-- [ ] Test unauthorized resolution
-- [ ] Test invalid item states
+- [x] Inspect current `resolveItem` Cloud Function
+- [x] Move every required read to the beginning of the transaction
+- [x] Read item snapshot
+- [x] Read reporter/user snapshot(s)
+- [x] Read point-award/idempotency document
+- [x] Validate all authorization/state conditions
+- [x] Calculate the reward using a pure helper
+- [x] Calculate streak changes
+- [x] Calculate achievement unlocks
+- [x] Perform all writes only after reads/validation/calculation
+- [x] Update item status atomically
+- [x] Update user stats atomically
+- [x] Create idempotency/point-award record atomically
+- [x] Return the authoritative item/stats/result
+- [x] Test concurrent resolution attempts
+- [x] Test repeated resolution calls
+- [x] Test unauthorized resolution
+- [x] Test invalid item states
 
 ## 2. Make item status changes server-authoritative — P0
 
@@ -1148,7 +1148,7 @@ Review:
 # RECOMMENDED IMPLEMENTATION ORDER
 
 ## Sprint 1 — Security blockers
-- [ ] Fix `resolveItem` transaction
+- [x] Fix `resolveItem` transaction
 - [ ] Make status changes server-authoritative
 - [ ] Tighten item rules
 - [ ] Lock down user profiles
@@ -1211,7 +1211,7 @@ Review:
 
 # TOP 10 THINGS TO DO FIRST
 
-1. [ ] **Fix `resolveItem` transaction correctness**
+1. [x] **Fix `resolveItem` transaction correctness**
 2. [ ] **Move item status changes fully server-side**
 3. [ ] **Tighten Firestore item/user/point-award rules**
 4. [ ] **Lock down RTDB chat rules**
