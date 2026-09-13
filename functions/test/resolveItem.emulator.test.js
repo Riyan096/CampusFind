@@ -75,9 +75,35 @@ async function clear() {
 test.beforeEach(clear);
 test.after(clear);
 
+test('legal found-item transitions are accepted', async () => {
+  await seedUser('reporter-1');
+  await seedItem('transition-item');
+
+  const pending = await callResolve('reporter-1', 'transition-item', 'PENDING_CLAIM');
+  assert.equal(pending.item.status, 'PENDING_CLAIM');
+  assert.equal(pending.pointsAwarded, 0);
+
+  const returned = await callResolve('reporter-1', 'transition-item', 'RETURNED');
+  assert.equal(returned.item.status, 'RETURNED');
+  assert.equal(returned.pointsAwarded, 50);
+});
+
+test('illegal status transitions are rejected server-side', async () => {
+  await seedUser('reporter-1');
+  await seedItem('illegal-item');
+
+  await assert.rejects(
+    callResolve('reporter-1', 'illegal-item', 'RETURNED'),
+    error => error.code === 'failed-precondition'
+  );
+
+  const item = await db.collection('items').doc('illegal-item').get();
+  assert.equal(item.data().status, 'AVAILABLE');
+});
+
 test('repeated resolution calls award points exactly once', async () => {
   await seedUser('reporter-1');
-  await seedItem('repeat-item');
+  await seedItem('repeat-item', { status: 'PENDING_CLAIM' });
 
   const first = await callResolve('reporter-1', 'repeat-item', 'RETURNED');
   const second = await callResolve('reporter-1', 'repeat-item', 'RETURNED');
@@ -102,7 +128,7 @@ test('repeated resolution calls award points exactly once', async () => {
 
 test('concurrent resolution attempts produce one reward', async () => {
   await seedUser('reporter-1');
-  await seedItem('concurrent-item');
+  await seedItem('concurrent-item', { status: 'PENDING_CLAIM' });
 
   const results = await Promise.allSettled([
     callResolve('reporter-1', 'concurrent-item', 'RETURNED'),
@@ -130,7 +156,7 @@ test('concurrent resolution attempts produce one reward', async () => {
 test('unauthorized resolution is rejected and does not mutate data', async () => {
   await seedUser('reporter-1');
   await seedUser('attacker');
-  await seedItem('private-item');
+  await seedItem('private-item', { status: 'PENDING_CLAIM' });
 
   await assert.rejects(
     callResolve('attacker', 'private-item', 'RETURNED'),
@@ -138,7 +164,7 @@ test('unauthorized resolution is rejected and does not mutate data', async () =>
   );
 
   const item = await db.collection('items').doc('private-item').get();
-  assert.equal(item.data().status, 'AVAILABLE');
+  assert.equal(item.data().status, 'PENDING_CLAIM');
 
   const user = await db.collection('users').doc('reporter-1').get();
   assert.equal(user.data().points, 0);
@@ -154,7 +180,7 @@ test('invalid resolution state is rejected', async () => {
 
   await assert.rejects(
     callResolve('reporter-1', 'invalid-item', 'RETURNED'),
-    error => error.code === 'invalid-argument'
+    error => error.code === 'failed-precondition'
   );
 
   const item = await db.collection('items').doc('invalid-item').get();
@@ -177,7 +203,7 @@ test('already resolved item cannot transition to another terminal resolution', a
 test('admin can resolve an item and the reporter receives the reward', async () => {
   await seedUser('reporter-1');
   await seedUser('admin-1', { isAdmin: true });
-  await seedItem('admin-item');
+  await seedItem('admin-item', { status: 'PENDING_CLAIM' });
 
   const result = await callResolve('admin-1', 'admin-item', 'RETURNED');
 
