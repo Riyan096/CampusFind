@@ -11,10 +11,13 @@ import {
   getDefaultUserStats,
   UserStats
 } from './gamification';
+import { analyzeItemImage, findSmartMatches } from './aiFunctions';
 
 initializeApp();
 
 const db = getFirestore();
+
+export { analyzeItemImage, findSmartMatches };
 
 export const awardPoints = onCall(async request => {
   if (!request.auth) {
