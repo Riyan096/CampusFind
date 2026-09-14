@@ -101,15 +101,17 @@ Suggested state model to document:
 
 ## 6. Redesign RTDB chat rules — P0
 
-- [ ] Verify conversation membership
-- [ ] Verify sender identity
-- [ ] Prevent message impersonation
-- [ ] Prevent editing immutable metadata
-- [ ] Prevent users from writing to arbitrary conversations
-- [ ] Prevent reading conversations without membership
-- [ ] Restrict participant list edits
-- [ ] Restrict message deletion
-- [ ] Add emulator tests
+- [x] Verify conversation membership
+- [x] Verify sender identity
+- [x] Prevent message impersonation
+- [x] Prevent editing immutable metadata
+- [x] Prevent users from writing to arbitrary conversations
+- [x] Prevent reading conversations without membership
+- [x] Restrict participant list edits
+- [x] Restrict message deletion
+- [x] Add emulator tests
+
+Phase 3 chat security is verified with 22/22 passing Realtime Database emulator tests. Coverage includes conversation membership, sender identity, impersonation protection, immutable message metadata, participant membership changes, unauthorized conversation access, arbitrary-field rejection, and message deletion protection.
 
 # PHASE 4 — GEMINI / AI SECURITY
 
