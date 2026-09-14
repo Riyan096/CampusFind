@@ -33,7 +33,7 @@
               ".validate": "newData.isBoolean()"
             },
             "status": {
-              ".validate": "newData.isString() && newData.val() in ['sending', 'sent', 'delivered', 'read']"
+              ".validate": "newData.isString() && (newData.val() == 'sending' || newData.val() == 'sent' || newData.val() == 'delivered' || newData.val() == 'read')"
             },
             "readBy": {
               "$userId": {
