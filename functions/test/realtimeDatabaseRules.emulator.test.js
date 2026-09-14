@@ -351,3 +351,39 @@ test('message write rejects arbitrary unknown fields', async () => {
     })
   );
 });
+
+test('message sender cannot delete their own sent message', async () => {
+  await seedChat('chat-1', {
+    messages: {
+      'message-1': { ...baseMessage }
+    }
+  });
+
+  await assertFails(
+    dbFor('creator-1').ref('chats/chat-1/messages/message-1').remove()
+  );
+});
+
+test('message recipient cannot delete another user\'s message', async () => {
+  await seedChat('chat-1', {
+    messages: {
+      'message-1': { ...baseMessage }
+    }
+  });
+
+  await assertFails(
+    dbFor('member-1').ref('chats/chat-1/messages/message-1').remove()
+  );
+});
+
+test('non-member cannot delete a message from a conversation', async () => {
+  await seedChat('chat-1', {
+    messages: {
+      'message-1': { ...baseMessage }
+    }
+  });
+
+  await assertFails(
+    dbFor('outsider').ref('chats/chat-1/messages/message-1').remove()
+  );
+});
