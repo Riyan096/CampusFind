@@ -21,7 +21,10 @@ export {analyzeItemImage, findSmartMatches};
 
 export const awardPoints = onCall(async (request) => {
   if (!request.auth) {
-    throw new HttpsError("unauthenticated", "You must be signed in to earn points.");
+    throw new HttpsError(
+      "unauthenticated",
+      "You must be signed in to earn points."
+    );
   }
 
   const uid = request.auth.uid;
@@ -29,7 +32,11 @@ export const awardPoints = onCall(async (request) => {
   const activityType = data.activityType;
   const itemId = data.itemId;
 
-  if (activityType !== "report" && activityType !== "return" && activityType !== "claim") {
+  if (
+    activityType !== "report" &&
+    activityType !== "return" &&
+    activityType !== "claim"
+  ) {
     throw new HttpsError("invalid-argument", "Invalid activity type.");
   }
 
@@ -112,15 +119,25 @@ const normalizeStats = (data: Record<string, unknown> | undefined): UserStats =>
 
 export const resolveItem = onCall(async (request) => {
   if (!request.auth) {
-    throw new HttpsError("unauthenticated", "You must be signed in to resolve an item.");
+    throw new HttpsError(
+      "unauthenticated",
+      "You must be signed in to resolve an item."
+    );
   }
 
   const uid = request.auth.uid;
   const itemId = request.data?.itemId;
   const newStatus = request.data?.newStatus;
 
-  if (typeof itemId !== "string" || !itemId.trim() || typeof newStatus !== "string") {
-    throw new HttpsError("invalid-argument", "A valid item ID and status are required.");
+  if (
+    typeof itemId !== "string" ||
+    !itemId.trim() ||
+    typeof newStatus !== "string"
+  ) {
+    throw new HttpsError(
+      "invalid-argument",
+      "A valid item ID and status are required."
+    );
   }
 
   const itemRef = db.collection("items").doc(itemId);
