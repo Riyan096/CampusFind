@@ -30,6 +30,16 @@ const baseChat = {
   createdAt: 1000
 };
 
+const baseMessage = {
+  senderId: 'creator-1',
+  senderName: 'Creator',
+  content: 'Original message',
+  timestamp: 1002,
+  read: false,
+  status: 'sent',
+  readBy: {}
+};
+
 async function clearChats() {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     await context.database().ref('chats').remove();
@@ -234,11 +244,7 @@ test('non-member cannot read messages from a conversation', async () => {
   await seedChat('chat-1', {
     messages: {
       'message-1': {
-        senderId: 'member-1',
-        senderName: 'Member',
-        content: 'Private message',
-        timestamp: 1002,
-        read: false
+        ...baseMessage
       }
     }
   });
@@ -264,6 +270,84 @@ test('chat member can update lastMessage only as themselves', async () => {
       content: 'Impersonated update',
       timestamp: 1003,
       senderId: 'creator-1'
+    })
+  );
+});
+
+test('message recipient can mark a message as read without changing immutable metadata', async () => {
+  await seedChat('chat-1', {
+    messages: {
+      'message-1': { ...baseMessage }
+    }
+  });
+
+  await assertSucceeds(
+    dbFor('member-1').ref('chats/chat-1/messages/message-1').update({
+      read: true,
+      status: 'read',
+      readBy: {
+        'member-1': 1003
+      }
+    })
+  );
+});
+
+test('message sender cannot edit immutable message metadata', async () => {
+  await seedChat('chat-1', {
+    messages: {
+      'message-1': { ...baseMessage }
+    }
+  });
+
+  await assertFails(
+    dbFor('creator-1').ref('chats/chat-1/messages/message-1').update({
+      senderName: 'Impersonated Creator'
+    })
+  );
+
+  await assertFails(
+    dbFor('creator-1').ref('chats/chat-1/messages/message-1').update({
+      content: 'Edited after sending'
+    })
+  );
+
+  await assertFails(
+    dbFor('creator-1').ref('chats/chat-1/messages/message-1').update({
+      timestamp: 9999
+    })
+  );
+});
+
+test('message recipient cannot edit immutable metadata while marking a message read', async () => {
+  await seedChat('chat-1', {
+    messages: {
+      'message-1': { ...baseMessage }
+    }
+  });
+
+  await assertFails(
+    dbFor('member-1').ref('chats/chat-1/messages/message-1').update({
+      senderName: 'Forged Name',
+      read: true,
+      status: 'read',
+      readBy: {
+        'member-1': 1003
+      }
+    })
+  );
+});
+
+test('message write rejects arbitrary unknown fields', async () => {
+  await seedChat();
+
+  await assertFails(
+    dbFor('member-1').ref('chats/chat-1/messages/message-1').set({
+      senderId: 'member-1',
+      senderName: 'Member',
+      content: 'Hello!',
+      timestamp: 1002,
+      read: false,
+      hacked: true
     })
   );
 });
