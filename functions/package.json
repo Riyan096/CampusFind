@@ -1,7 +1,7 @@
 {
   "name": "functions",
   "scripts": {
-    "lint": "eslint --ext .js,.ts .",
+    "lint": "eslint .",
     "build": "tsc",
     "build:watch": "tsc --watch",
     "test:emulator": "npm run build && firebase emulators:exec --only firestore \"node --test test/resolveItem.emulator.test.js\"",
