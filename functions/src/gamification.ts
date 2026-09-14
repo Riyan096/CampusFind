@@ -1,5 +1,5 @@
-import { getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { HttpsError } from 'firebase-functions/v2/https';
+import {getFirestore, Timestamp} from "firebase-admin/firestore";
+import {HttpsError} from "firebase-functions/v2/https";
 
 const db = getFirestore();
 
@@ -10,9 +10,9 @@ const db = getFirestore();
  */
 
 export type ActivityType =
-  | 'report'
-  | 'return'
-  | 'claim';
+  | "report"
+  | "return"
+  | "claim";
 
 export interface StreakInfo {
   currentStreak: number;
@@ -44,19 +44,19 @@ interface Achievement {
   description: string;
   icon: string;
   category:
-    | 'reporting'
-    | 'helping'
-    | 'streak'
-    | 'points'
-    | 'special';
+    | "reporting"
+    | "helping"
+    | "streak"
+    | "points"
+    | "special";
   pointsBonus: number;
   condition: {
     type:
-      | 'itemsReported'
-      | 'itemsReturned'
-      | 'itemsClaimed'
-      | 'streak'
-      | 'points';
+      | "itemsReported"
+      | "itemsReturned"
+      | "itemsClaimed"
+      | "streak"
+      | "points";
     threshold: number;
   };
 }
@@ -77,7 +77,7 @@ interface Achievement {
 export const ACTIVITY_POINTS: Record<ActivityType, number> = {
   report: 10,
   return: 50,
-  claim: 0
+  claim: 0,
 };
 
 /**
@@ -88,173 +88,173 @@ export const ACTIVITY_POINTS: Record<ActivityType, number> = {
 
 export const ACHIEVEMENTS: Achievement[] = [
   {
-    id: 'first_report',
-    title: 'First Report',
-    description: 'Report your first lost or found item',
-    icon: '📝',
-    category: 'reporting',
+    id: "first_report",
+    title: "First Report",
+    description: "Report your first lost or found item",
+    icon: "📝",
+    category: "reporting",
     pointsBonus: 10,
     condition: {
-      type: 'itemsReported',
-      threshold: 1
-    }
+      type: "itemsReported",
+      threshold: 1,
+    },
   },
 
   {
-    id: 'helper',
-    title: 'Helpful Hand',
-    description: 'Help return 3 items',
-    icon: '🤝',
-    category: 'helping',
+    id: "helper",
+    title: "Helpful Hand",
+    description: "Help return 3 items",
+    icon: "🤝",
+    category: "helping",
     pointsBonus: 25,
     condition: {
-      type: 'itemsReturned',
-      threshold: 3
-    }
+      type: "itemsReturned",
+      threshold: 3,
+    },
   },
 
   {
-    id: 'week_warrior',
-    title: 'Week Warrior',
-    description: 'Maintain a 7-day reporting streak',
-    icon: '🔥',
-    category: 'streak',
+    id: "week_warrior",
+    title: "Week Warrior",
+    description: "Maintain a 7-day reporting streak",
+    icon: "🔥",
+    category: "streak",
     pointsBonus: 30,
     condition: {
-      type: 'streak',
-      threshold: 7
-    }
+      type: "streak",
+      threshold: 7,
+    },
   },
 
   {
-    id: 'active_reporter',
-    title: 'Active Reporter',
-    description: 'Report 10 items',
-    icon: '📢',
-    category: 'reporting',
+    id: "active_reporter",
+    title: "Active Reporter",
+    description: "Report 10 items",
+    icon: "📢",
+    category: "reporting",
     pointsBonus: 50,
     condition: {
-      type: 'itemsReported',
-      threshold: 10
-    }
+      type: "itemsReported",
+      threshold: 10,
+    },
   },
 
   {
-    id: 'return_champion',
-    title: 'Return Champion',
-    description: 'Help return 10 items',
-    icon: '🏆',
-    category: 'helping',
+    id: "return_champion",
+    title: "Return Champion",
+    description: "Help return 10 items",
+    icon: "🏆",
+    category: "helping",
     pointsBonus: 75,
     condition: {
-      type: 'itemsReturned',
-      threshold: 10
-    }
+      type: "itemsReturned",
+      threshold: 10,
+    },
   },
 
   {
-    id: 'streak_master',
-    title: 'Streak Master',
-    description: 'Maintain a 30-day reporting streak',
-    icon: '🔥',
-    category: 'streak',
+    id: "streak_master",
+    title: "Streak Master",
+    description: "Maintain a 30-day reporting streak",
+    icon: "🔥",
+    category: "streak",
     pointsBonus: 100,
     condition: {
-      type: 'streak',
-      threshold: 30
-    }
+      type: "streak",
+      threshold: 30,
+    },
   },
 
   {
-    id: 'point_collector',
-    title: 'Point Collector',
-    description: 'Earn 500 points',
-    icon: '💰',
-    category: 'points',
+    id: "point_collector",
+    title: "Point Collector",
+    description: "Earn 500 points",
+    icon: "💰",
+    category: "points",
     pointsBonus: 50,
     condition: {
-      type: 'points',
-      threshold: 500
-    }
+      type: "points",
+      threshold: 500,
+    },
   },
 
   {
-    id: 'power_reporter',
-    title: 'Power Reporter',
-    description: 'Report 25 items',
-    icon: '⚡',
-    category: 'reporting',
+    id: "power_reporter",
+    title: "Power Reporter",
+    description: "Report 25 items",
+    icon: "⚡",
+    category: "reporting",
     pointsBonus: 150,
     condition: {
-      type: 'itemsReported',
-      threshold: 25
-    }
+      type: "itemsReported",
+      threshold: 25,
+    },
   },
 
   {
-    id: 'return_legend',
-    title: 'Return Legend',
-    description: 'Help return 25 items',
-    icon: '👑',
-    category: 'helping',
+    id: "return_legend",
+    title: "Return Legend",
+    description: "Help return 25 items",
+    icon: "👑",
+    category: "helping",
     pointsBonus: 200,
     condition: {
-      type: 'itemsReturned',
-      threshold: 25
-    }
+      type: "itemsReturned",
+      threshold: 25,
+    },
   },
 
   {
-    id: 'dedicated_helper',
-    title: 'Dedicated Helper',
-    description: 'Maintain a 60-day reporting streak',
-    icon: '💪',
-    category: 'streak',
+    id: "dedicated_helper",
+    title: "Dedicated Helper",
+    description: "Maintain a 60-day reporting streak",
+    icon: "💪",
+    category: "streak",
     pointsBonus: 250,
     condition: {
-      type: 'streak',
-      threshold: 60
-    }
+      type: "streak",
+      threshold: 60,
+    },
   },
 
   {
-    id: 'point_hoarder',
-    title: 'Point Hoarder',
-    description: 'Earn 1,000 points',
-    icon: '💎',
-    category: 'points',
+    id: "point_hoarder",
+    title: "Point Hoarder",
+    description: "Earn 1,000 points",
+    icon: "💎",
+    category: "points",
     pointsBonus: 100,
     condition: {
-      type: 'points',
-      threshold: 1000
-    }
+      type: "points",
+      threshold: 1000,
+    },
   },
 
   {
-    id: 'campus_hero',
-    title: 'Campus Hero',
-    description: 'Report 50 items and return 25',
-    icon: '🦸',
-    category: 'special',
+    id: "campus_hero",
+    title: "Campus Hero",
+    description: "Report 50 items and return 25",
+    icon: "🦸",
+    category: "special",
     pointsBonus: 500,
     condition: {
-      type: 'itemsReported',
-      threshold: 50
-    }
+      type: "itemsReported",
+      threshold: 50,
+    },
   },
 
   {
-    id: 'unstoppable',
-    title: 'Unstoppable',
-    description: 'Maintain a 100-day reporting streak',
-    icon: '🚀',
-    category: 'streak',
+    id: "unstoppable",
+    title: "Unstoppable",
+    description: "Maintain a 100-day reporting streak",
+    icon: "🚀",
+    category: "streak",
     pointsBonus: 500,
     condition: {
-      type: 'streak',
-      threshold: 100
-    }
-  }
+      type: "streak",
+      threshold: 100,
+    },
+  },
 ];
 
 /**
@@ -266,7 +266,7 @@ export const ACHIEVEMENTS: Achievement[] = [
 export const getDefaultStreakInfo = (): StreakInfo => ({
   currentStreak: 0,
   longestStreak: 0,
-  lastReportDate: '',
+  lastReportDate: "",
   weeklyActivity: [
     false,
     false,
@@ -274,8 +274,8 @@ export const getDefaultStreakInfo = (): StreakInfo => ({
     false,
     false,
     false,
-    false
-  ]
+    false,
+  ],
 });
 
 export const getDefaultUserStats = (): UserStats => ({
@@ -283,10 +283,10 @@ export const getDefaultUserStats = (): UserStats => ({
   itemsReturned: 0,
   itemsReported: 0,
   itemsClaimed: 0,
-  lastActive: '',
+  lastActive: "",
   badges: [],
   streaks: getDefaultStreakInfo(),
-  unlockedAchievements: []
+  unlockedAchievements: [],
 });
 
 /**
@@ -296,7 +296,7 @@ export const getDefaultUserStats = (): UserStats => ({
  */
 
 const formatDate = (date: Date): string => {
-  return date.toISOString().split('T')[0];
+  return date.toISOString().split("T")[0];
 };
 
 /**
@@ -324,7 +324,7 @@ export const updateStreak = (
 
   const streaks: StreakInfo = {
     ...getDefaultStreakInfo(),
-    ...(stats.streaks || {})
+    ...(stats.streaks || {}),
   };
 
   if (
@@ -338,7 +338,7 @@ export const updateStreak = (
       false,
       false,
       false,
-      false
+      false,
     ];
   }
 
@@ -348,14 +348,14 @@ export const updateStreak = (
   if (streaks.lastReportDate === today) {
     return {
       updatedStats: stats,
-      streakIncreased: false
+      streakIncreased: false,
     };
   }
 
   const dayOfWeek = now.getDay();
 
   const weeklyActivity = [
-    ...streaks.weeklyActivity
+    ...streaks.weeklyActivity,
   ];
 
   weeklyActivity[dayOfWeek] = true;
@@ -387,9 +387,9 @@ export const updateStreak = (
   return {
     updatedStats: {
       ...stats,
-      streaks
+      streaks,
     },
-    streakIncreased
+    streakIncreased,
   };
 };
 
@@ -408,7 +408,7 @@ export const checkAchievements = (
 } => {
   const unlockedIds = new Set(
     (stats.unlockedAchievements || []).map(
-      achievement =>
+      (achievement) =>
         achievement.achievementId
     )
   );
@@ -423,35 +423,35 @@ export const checkAchievements = (
     let unlocked = false;
 
     switch (achievement.condition.type) {
-      case 'itemsReported':
-        unlocked =
+    case "itemsReported":
+      unlocked =
           stats.itemsReported >=
           achievement.condition.threshold;
-        break;
+      break;
 
-      case 'itemsReturned':
-        unlocked =
+    case "itemsReturned":
+      unlocked =
           stats.itemsReturned >=
           achievement.condition.threshold;
-        break;
+      break;
 
-      case 'itemsClaimed':
-        unlocked =
+    case "itemsClaimed":
+      unlocked =
           stats.itemsClaimed >=
           achievement.condition.threshold;
-        break;
+      break;
 
-      case 'streak':
-        unlocked =
+    case "streak":
+      unlocked =
           (stats.streaks?.currentStreak || 0) >=
           achievement.condition.threshold;
-        break;
+      break;
 
-      case 'points':
-        unlocked =
+    case "points":
+      unlocked =
           stats.points >=
           achievement.condition.threshold;
-        break;
+      break;
     }
 
     if (unlocked) {
@@ -462,10 +462,10 @@ export const checkAchievements = (
   const unlockedAt = now.toISOString();
 
   const newUserAchievements: UserAchievement[] =
-    newAchievements.map(achievement => ({
+    newAchievements.map((achievement) => ({
       achievementId: achievement.id,
       unlockedAt,
-      progress: 100
+      progress: 100,
     }));
 
   const achievementBonus =
@@ -486,9 +486,9 @@ export const checkAchievements = (
 
       unlockedAchievements: [
         ...(stats.unlockedAchievements || []),
-        ...newUserAchievements
-      ]
-    }
+        ...newUserAchievements,
+      ],
+    },
   };
 };
 
@@ -498,7 +498,7 @@ export const checkAchievements = (
  * ============================================================
  */
 
-export type GamificationActivityType = 'report' | 'return' | 'claim';
+export type GamificationActivityType = "report" | "return" | "claim";
 
 export interface GamificationResult {
   stats: UserStats;
@@ -517,27 +517,27 @@ const normalizeUserStats = (data: Partial<UserStats>): UserStats => {
     itemsClaimed: 0,
     badges: [],
     streaks: getDefaultStreakInfo(),
-    unlockedAchievements: []
+    unlockedAchievements: [],
   };
 
   return {
     ...defaultStats,
     ...data,
-    points: typeof data.points === 'number' ? data.points : 0,
+    points: typeof data.points === "number" ? data.points : 0,
     itemsReturned:
-      typeof data.itemsReturned === 'number' ? data.itemsReturned : 0,
+      typeof data.itemsReturned === "number" ? data.itemsReturned : 0,
     itemsReported:
-      typeof data.itemsReported === 'number' ? data.itemsReported : 0,
+      typeof data.itemsReported === "number" ? data.itemsReported : 0,
     itemsClaimed:
-      typeof data.itemsClaimed === 'number' ? data.itemsClaimed : 0,
+      typeof data.itemsClaimed === "number" ? data.itemsClaimed : 0,
     badges: Array.isArray(data.badges) ? data.badges : [],
-    unlockedAchievements: Array.isArray(data.unlockedAchievements)
-      ? data.unlockedAchievements
-      : [],
+    unlockedAchievements: Array.isArray(data.unlockedAchievements) ?
+      data.unlockedAchievements :
+      [],
     streaks: {
       ...getDefaultStreakInfo(),
-      ...(data.streaks || {})
-    }
+      ...(data.streaks || {}),
+    },
   };
 };
 
@@ -548,12 +548,12 @@ export const processGamificationActivity = async (
   itemId: string
 ): Promise<GamificationResult> => {
   const now = new Date();
-  const userRef = db.collection('users').doc(uid);
-  const itemRef = db.collection('items').doc(itemId);
+  const userRef = db.collection("users").doc(uid);
+  const itemRef = db.collection("items").doc(itemId);
 
   // Deterministic ID prevents the same activity from being rewarded twice.
   const awardId = `${itemId}_${activityType}`;
-  const awardRef = userRef.collection('pointAwards').doc(awardId);
+  const awardRef = userRef.collection("pointAwards").doc(awardId);
 
   // Read all required documents through the transaction.
   const [userSnapshot, itemSnapshot, awardSnapshot] =
@@ -564,16 +564,16 @@ export const processGamificationActivity = async (
   // ------------------------------------------------------------
 
   if (awardSnapshot.exists) {
-    const existingStats = userSnapshot.exists
-        ? normalizeUserStats(userSnapshot.data() as Partial<UserStats>)
-        : getDefaultUserStats();
+    const existingStats = userSnapshot.exists ?
+      normalizeUserStats(userSnapshot.data() as Partial<UserStats>) :
+      getDefaultUserStats();
 
     return {
       stats: existingStats,
       newAchievements: [],
       pointsAwarded: 0,
       streakIncreased: false,
-      alreadyAwarded: true
+      alreadyAwarded: true,
     };
   }
 
@@ -583,22 +583,22 @@ export const processGamificationActivity = async (
 
   if (!userSnapshot.exists) {
     throw new HttpsError(
-      'not-found',
-      'User profile was not found.'
+      "not-found",
+      "User profile was not found."
     );
   }
 
-    const stats = normalizeUserStats(
+  const stats = normalizeUserStats(
         userSnapshot.data() as Partial<UserStats>
-    );
+  );
   // ------------------------------------------------------------
   // Item validation
   // ------------------------------------------------------------
 
   if (!itemSnapshot.exists) {
     throw new HttpsError(
-      'not-found',
-      'Item was not found.'
+      "not-found",
+      "Item was not found."
     );
   }
 
@@ -612,43 +612,43 @@ export const processGamificationActivity = async (
   // Validate the activity
   // ------------------------------------------------------------
 
-  if (activityType === 'report') {
-  if (item.reportedBy !== uid) {
-    throw new HttpsError(
-      'permission-denied',
-      'You can only receive report rewards for your own items.'
-    );
-  }
-}
-
-if (activityType === 'return') {
-  if (item.reportedBy !== uid) {
-    throw new HttpsError(
-      'permission-denied',
-      'You can only receive return rewards for an item you reported.'
-    );
+  if (activityType === "report") {
+    if (item.reportedBy !== uid) {
+      throw new HttpsError(
+        "permission-denied",
+        "You can only receive report rewards for your own items."
+      );
+    }
   }
 
-  const validReturnStatus =
-    (item.type === 'LOST' && item.status === 'CLAIMED') ||
-    (item.type === 'FOUND' && item.status === 'RETURNED');
+  if (activityType === "return") {
+    if (item.reportedBy !== uid) {
+      throw new HttpsError(
+        "permission-denied",
+        "You can only receive return rewards for an item you reported."
+      );
+    }
 
-  if (!validReturnStatus) {
-    throw new HttpsError(
-      'failed-precondition',
-      'The item has not been resolved.'
-    );
-  }
-}
+    const validReturnStatus =
+    (item.type === "LOST" && item.status === "CLAIMED") ||
+    (item.type === "FOUND" && item.status === "RETURNED");
 
-if (activityType === 'claim') {
-  if (item.reportedBy !== uid) {
-    throw new HttpsError(
-      'permission-denied',
-      'You are not allowed to claim this item.'
-    );
+    if (!validReturnStatus) {
+      throw new HttpsError(
+        "failed-precondition",
+        "The item has not been resolved."
+      );
+    }
   }
-}
+
+  if (activityType === "claim") {
+    if (item.reportedBy !== uid) {
+      throw new HttpsError(
+        "permission-denied",
+        "You are not allowed to claim this item."
+      );
+    }
+  }
 
   /*
    * IMPORTANT:
@@ -670,18 +670,18 @@ if (activityType === 'claim') {
     ...stats,
     points: stats.points + pointsAwarded,
     itemsReported:
-      activityType === 'report'
-        ? stats.itemsReported + 1
-        : stats.itemsReported,
+      activityType === "report" ?
+        stats.itemsReported + 1 :
+        stats.itemsReported,
     itemsReturned:
-      activityType === 'return'
-        ? stats.itemsReturned + 1
-        : stats.itemsReturned,
+      activityType === "return" ?
+        stats.itemsReturned + 1 :
+        stats.itemsReturned,
     itemsClaimed:
-      activityType === 'claim'
-        ? stats.itemsClaimed + 1
-        : stats.itemsClaimed,
-    lastActive: new Date().toISOString()
+      activityType === "claim" ?
+        stats.itemsClaimed + 1 :
+        stats.itemsClaimed,
+    lastActive: new Date().toISOString(),
   };
 
   // ------------------------------------------------------------
@@ -689,12 +689,12 @@ if (activityType === 'claim') {
   // ------------------------------------------------------------
 
   const streakResult =
-  activityType === 'report'
-    ? updateStreak(updatedStats, now)
-    : {
-        updatedStats,
-        streakIncreased: false
-      };
+  activityType === "report" ?
+    updateStreak(updatedStats, now) :
+    {
+      updatedStats,
+      streakIncreased: false,
+    };
 
   let finalStats = streakResult.updatedStats;
 
@@ -719,9 +719,9 @@ if (activityType === 'claim') {
       itemsClaimed: finalStats.itemsClaimed,
       streaks: finalStats.streaks,
       unlockedAchievements: finalStats.unlockedAchievements,
-      lastActive: finalStats.lastActive
+      lastActive: finalStats.lastActive,
     },
-    { merge: true }
+    {merge: true}
   );
 
   // ------------------------------------------------------------
@@ -732,7 +732,7 @@ if (activityType === 'claim') {
     activityType,
     itemId,
     pointsAwarded,
-    createdAt: Timestamp.now()
+    createdAt: Timestamp.now(),
   });
 
   return {
@@ -740,6 +740,6 @@ if (activityType === 'claim') {
     newAchievements: achievementResult.newAchievements,
     pointsAwarded,
     streakIncreased: streakResult.streakIncreased,
-    alreadyAwarded: false
+    alreadyAwarded: false,
   };
 };
