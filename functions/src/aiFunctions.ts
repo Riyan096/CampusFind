@@ -4,7 +4,7 @@ import {defineSecret} from "firebase-functions/params";
 
 const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 const firestore = () => getFirestore();
-const MODEL = "gemini-3-flash-preview";
+const MODEL = "gemini-3.8-flash";
 const GEMINI_URL =
   `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
@@ -438,6 +438,10 @@ export const analyzeItemImage = onCall(
 );
 
 export const findSmartMatches = onCall(
+  {
+    secrets: [GEMINI_API_KEY],
+    timeoutSeconds: 60,
+  },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError(
