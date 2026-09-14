@@ -71,6 +71,3 @@ export const findSmartMatches = async (
     return [];
   }
 };
-
-export const getRemainingRequests = (_key: string): number => 0;
-export const getRateLimitResetTime = (_key: string): number => 0;
