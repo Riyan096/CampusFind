@@ -10,7 +10,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@google/genai": "^1.41.0",
     "firebase": "^12.9.0",
     "firebase-admin": "^14.4.0",
     "leaflet": "^1.9.4",
