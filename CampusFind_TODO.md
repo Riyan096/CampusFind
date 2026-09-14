@@ -12,8 +12,8 @@
 
 ## 0. Definition of Done
 
-- [ ] Production build passes with no TypeScript errors
-- [ ] Critical item state transitions are atomic
+- [x] Production build passes with no TypeScript errors
+- [x] Critical item state transitions are atomic
 
 # PHASE 1 — SECURITY & BACKEND HARDENING
 
@@ -31,7 +31,7 @@
 
 ## 2. Make item status changes server-authoritative — P0
 
-Status changes are now routed through the trusted `resolveItem` callable. The client-side generic item update API explicitly excludes `status`, and Firestore rules reject direct client status changes. The repository audit found the UI status workflow using `resolveItem` rather than direct Firestore status writes.
+Status changes are now routed through the trusted `resolveItem` callable. The client-side generic item update API explicitly excludes `status`, and Firestore rules reject direct client status writes. The repository audit found the UI status workflow using `resolveItem` rather than direct Firestore status writes.
 
 - [x] Design the allowed item state transitions
 - [x] Decide who can perform each transition
@@ -117,14 +117,35 @@ Phase 3 chat security is verified with 22/22 passing Realtime Database emulator 
 
 ## 7. Move Gemini calls server-side — P0
 
-- [ ] Remove Gemini API key from client bundle
-- [ ] Move Gemini calls to Cloud Functions
-- [ ] Validate prompt inputs server-side
-- [ ] Add rate limiting
-- [ ] Add abuse protection
-- [ ] Add cost controls
-- [ ] Add logging
-- [ ] Add failure handling
+Phase 4 is complete and verified. Gemini credentials are no longer exposed to the client, AI requests run through Firebase callable Cloud Functions, and server-side validation/rate limiting protect the Gemini integration. The frontend no longer contains the Gemini SDK or import-map entry.
+
+- [x] Remove Gemini API key from client bundle
+- [x] Move Gemini calls to Cloud Functions
+- [x] Validate prompt inputs server-side
+- [x] Add rate limiting
+- [x] Add abuse protection
+- [x] Add cost controls
+- [x] Add logging
+- [x] Add failure handling
+
+Verification completed September 14, 2026:
+- Frontend production build passes with no TypeScript errors
+- `VITE_GEMINI_API_KEY` is absent from the repository
+- `@google/genai` is absent from the frontend and dependency/import-map configuration
+- `GEMINI_API_KEY` is configured as a Firebase Functions secret
+- AI input size, candidate count, candidate fields, image MIME type, and image payload limits are validated server-side
+- Gemini prompt inputs are treated as untrusted and prompt-injection instructions are explicitly ignored
+- AI responses are validated before being returned to the client
+- Server-side Firestore rate limiting is enforced per authenticated user
+- Gemini requests use the stable production model `gemini-3.8-flash`
+- Functions lint passes
+- Functions TypeScript build passes
+- Firestore rules regression suite passes 10/10 tests
+- `resolveItem` emulator suite passes 8/8 tests
+
+Note: Vite reports a non-blocking large-chunk warning for the main application bundle (~638 kB). Bundle optimization is tracked separately under Phase 7 — Performance.
+
+---
 
 # PHASE 5 — DATA ACCESS / PRIVACY
 
