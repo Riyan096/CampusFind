@@ -63,10 +63,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
       // Optimistically open the created chat before subscription refresh.
       setActiveChat({
-        id: chatId,
-        itemId,
-        itemTitle: safeTitle,
-        participants: {
+          id: chatId,
+          itemId,
+          itemTitle: safeTitle,
+          createdBy: user.uid,
+          participants: {
           [user.uid]: {
             name: user.displayName || 'Anonymous',
             joinedAt: Date.now(),
@@ -84,9 +85,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
       });
       
       // Chat will be added to list via subscription
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creating chat:', error);
-      alert(error?.message || 'Unable to create chat. Check Firebase Realtime Database rules.');
+      const message = error instanceof Error
+        ? error.message
+        : 'Unable to create chat. Check Firebase Realtime Database rules.';
+      alert(message);
     }
   }, [user, itemOwnerId]);
 
