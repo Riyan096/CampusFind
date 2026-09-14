@@ -15,8 +15,34 @@
         },
         "messages": {
           "$messageId": {
-            ".write": "auth != null && root.child('chats').child($chatId).child('participants').child(auth.uid).exists() && ((!data.exists() && newData.child('senderId').val() == auth.uid) || (data.exists() && newData.child('senderId').val() == data.child('senderId').val()))",
-            ".validate": "newData.hasChildren(['senderId','senderName','content','timestamp']) && newData.child('senderId').isString() && newData.child('senderName').isString() && newData.child('content').isString() && newData.child('content').val().length <= 4000 && (data.exists() ? (newData.child('senderId').val() == data.child('senderId').val() && newData.child('content').val() == data.child('content').val()) : newData.child('senderId').val() == auth.uid)"
+            ".write": "auth != null && root.child('chats').child($chatId).child('participants').child(auth.uid).exists() && ((!data.exists() && newData.child('senderId').val() == auth.uid) || (data.exists() && newData.exists() && newData.child('senderId').val() == data.child('senderId').val() && newData.child('senderName').val() == data.child('senderName').val() && newData.child('content').val() == data.child('content').val() && newData.child('timestamp').val() == data.child('timestamp').val() && newData.child('read').val() == true && newData.child('status').val() == 'read' && data.child('senderId').val() != auth.uid))",
+            ".validate": "newData.hasChildren(['senderId','senderName','content','timestamp','read']) && newData.child('senderId').isString() && newData.child('senderName').isString() && newData.child('content').isString() && newData.child('content').val().length <= 4000 && newData.child('timestamp').isNumber() && newData.child('read').isBoolean() && (!data.exists() ? newData.child('senderId').val() == auth.uid : newData.child('senderId').val() == data.child('senderId').val() && newData.child('senderName').val() == data.child('senderName').val() && newData.child('content').val() == data.child('content').val() && newData.child('timestamp').val() == data.child('timestamp').val())",
+            "senderId": {
+              ".validate": "newData.isString()"
+            },
+            "senderName": {
+              ".validate": "newData.isString() && newData.val().length <= 100"
+            },
+            "content": {
+              ".validate": "newData.isString() && newData.val().length <= 4000"
+            },
+            "timestamp": {
+              ".validate": "newData.isNumber()"
+            },
+            "read": {
+              ".validate": "newData.isBoolean()"
+            },
+            "status": {
+              ".validate": "newData.isString() && newData.val() in ['sending', 'sent', 'delivered', 'read']"
+            },
+            "readBy": {
+              "$userId": {
+                ".validate": "newData.isNumber() && (!data.exists() || newData.val() == data.val())"
+              }
+            },
+            "$other": {
+              ".validate": false
+            }
           }
         },
         "lastMessage": {
