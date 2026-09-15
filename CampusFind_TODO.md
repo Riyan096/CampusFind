@@ -176,18 +176,47 @@ Verification completed September 15, 2026:
 - `resolveItem` emulator suite passes 8/8 tests
 - Frontend production build passes
 
+Phase 5 implementation note:
+- User profile synchronization from `AuthContext` uses separate Firestore writes rather than a single client transaction. If a public-profile write temporarily fails, the authenticated startup synchronization can repair the projection on the next auth-state initialization.
+- The public profile rules intentionally validate projected statistics against the private authoritative user document, so the private user document must exist before a public profile can be created.
+
 ---
 
 # PHASE 6 — STORAGE SECURITY
 
 ## 9. Harden image uploads — P1
 
+Phase 6 starts with an audit of every Firebase Storage upload/read/delete path used by item reports and chat attachments. Frontend validation is not treated as a security boundary; Storage Rules and trusted server-side validation must enforce the final constraints.
+
+- [ ] Inventory every Storage reference, upload, download, list, and delete path
+- [ ] Document the expected Storage path/ownership model
 - [ ] Validate file type server-side
 - [ ] Validate file size server-side
+- [ ] Validate file metadata and reject forged/unsupported MIME types where practical
 - [ ] Restrict upload paths to authenticated users
-- [ ] Prevent arbitrary storage writes
+- [ ] Prevent arbitrary Storage writes outside approved user/item/chat paths
 - [ ] Verify ownership of uploaded files
-- [ ] Consider image processing pipeline
+- [ ] Restrict read access to the intended item/chat participants where applicable
+- [ ] Restrict delete access to the uploader/owner/admin as appropriate
+- [ ] Add Storage Emulator regression tests for unauthorized uploads
+- [ ] Add Storage Emulator tests for oversized/unsupported files where emulator coverage permits
+- [ ] Add tests for path traversal/arbitrary path attempts
+- [ ] Review orphaned-file cleanup and failed-upload behavior
+- [ ] Consider image processing/re-encoding pipeline for untrusted images
+- [ ] Re-run production build and all relevant Firebase emulator suites
+
+Security cases to explicitly test:
+- unauthenticated upload
+- authenticated upload to another user's path
+- authenticated upload with a forged item/chat path
+- unsupported MIME type
+- oversized payload
+- arbitrary filename/path manipulation
+- unauthorized read
+- unauthorized delete
+- valid owner/member upload and read
+
+---
 
 # PHASE 7 — PERFORMANCE
 
