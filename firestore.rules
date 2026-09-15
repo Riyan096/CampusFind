@@ -113,8 +113,8 @@ service cloud.firestore {
           request.resource.data.displayName is string &&
           request.resource.data.displayName.size() <= 100 &&
           (request.resource.data.photoURL == null || request.resource.data.photoURL is string) &&
-          (request.resource.data.profileStoragePath == null ||
-            request.resource.data.profileStoragePath is string) &&
+          (request.resource.data.get('profileStoragePath', null) == null ||
+            request.resource.data.get('profileStoragePath', null) is string) &&
           (request.resource.data.phone == null ||
             (request.resource.data.phone is string && request.resource.data.phone.size() <= 32)) &&
           (request.resource.data.bio == null ||
