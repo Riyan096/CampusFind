@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
+import { deleteUserImage, uploadUserImage } from '../services/firebaseStorageService';
 import { LIMITS, sanitizeEmailInput, sanitizePlainText } from '../utils/sanitize';
 
 interface User {
@@ -27,7 +28,8 @@ interface AuthContextType {
   signup: (email: string, password: string, displayName: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUserProfile: (displayName: string) => Promise<void>;
-  updateUserPhoto: (photoURL: string) => void;
+  updateUserPhoto: (file: File) => Promise<void>;
+  removeUserPhoto: () => Promise<void>;
   isAuthenticated: boolean;
   isAdmin: boolean;
 }
@@ -132,19 +134,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(prev => prev ? { ...prev, displayName: safeName } : null);
   };
 
-  const updateUserPhoto = (photoURL: string) => {
-    setUser(prev => prev ? { ...prev, photoURL } : null);
+  const updateUserPhoto = async (file: File) => {
+    if (!auth.currentUser) throw new Error('No user logged in');
 
-    if (auth.currentUser) {
-      const userRef = doc(db, 'users', auth.currentUser.uid);
-      const profileRef = doc(db, 'publicProfiles', auth.currentUser.uid);
-      void Promise.all([
-        setDoc(userRef, { photoURL }, { merge: true }),
-        setDoc(profileRef, { photoURL }, { merge: true }),
-      ]).catch(error => {
-        console.error('Failed to persist profile photo:', error);
-      });
+    const uid = auth.currentUser.uid;
+    const previousUserDoc = await getDoc(doc(db, 'users', uid));
+    const previousPath = previousUserDoc.data()?.profileStoragePath;
+    const uploaded = await uploadUserImage(uid, file, 'profile');
+
+    try {
+      await updateProfile(auth.currentUser, { photoURL: uploaded.downloadUrl });
+      await setDoc(doc(db, 'users', uid), {
+        photoURL: uploaded.downloadUrl,
+        profileStoragePath: uploaded.path,
+      }, { merge: true });
+      await setDoc(doc(db, 'publicProfiles', uid), {
+        photoURL: uploaded.downloadUrl,
+      }, { merge: true });
+
+      setUser(prev => prev ? { ...prev, photoURL: uploaded.downloadUrl } : null);
+
+      if (typeof previousPath === 'string' && previousPath !== uploaded.path) {
+        try {
+          await deleteUserImage(previousPath, uid);
+        } catch (cleanupError) {
+          console.warn('Failed to delete previous profile photo:', cleanupError);
+        }
+      }
+    } catch (error) {
+      try {
+        await deleteUserImage(uploaded.path, uid);
+      } catch (cleanupError) {
+        console.warn('Failed to clean up uploaded profile photo:', cleanupError);
+      }
+      throw error;
     }
+  };
+
+  const removeUserPhoto = async () => {
+    if (!auth.currentUser) throw new Error('No user logged in');
+
+    const uid = auth.currentUser.uid;
+    const userDoc = await getDoc(doc(db, 'users', uid));
+    const storagePath = userDoc.data()?.profileStoragePath;
+
+    if (typeof storagePath === 'string') {
+      try {
+        await deleteUserImage(storagePath, uid);
+      } catch (error) {
+        console.warn('Failed to delete profile photo from Storage:', error);
+      }
+    }
+
+    await updateProfile(auth.currentUser, { photoURL: null });
+    await setDoc(doc(db, 'users', uid), {
+      photoURL: null,
+      profileStoragePath: null,
+    }, { merge: true });
+    await setDoc(doc(db, 'publicProfiles', uid), { photoURL: null }, { merge: true });
+    setUser(prev => prev ? { ...prev, photoURL: null } : null);
   };
 
   return (
@@ -156,6 +204,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logout,
       updateUserProfile,
       updateUserPhoto,
+      removeUserPhoto,
       isAuthenticated: !!user,
       isAdmin: user?.isAdmin || false,
     }}>
