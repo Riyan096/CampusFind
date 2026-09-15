@@ -10,10 +10,8 @@ const { initializeTestEnvironment, assertFails, assertSucceeds } = require('@fir
 
 initializeApp();
 const adminDb = getFirestore();
-
 const projectId = process.env.GCLOUD_PROJECT || 'campusfind';
 const rules = readFileSync(join(__dirname, '../../firestore.rules'), 'utf8');
-
 let testEnv;
 
 const baseItem = {
@@ -44,6 +42,15 @@ async function clearUsers() {
   }
 }
 
+async function clearPublicProfiles() {
+  const snapshot = await adminDb.collection('publicProfiles').get();
+  if (!snapshot.empty) {
+    const batch = adminDb.batch();
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+  }
+}
+
 async function clearPointAwards() {
   const snapshot = await adminDb.collectionGroup('pointAwards').get();
   if (!snapshot.empty) {
@@ -54,10 +61,7 @@ async function clearPointAwards() {
 }
 
 async function seedItem(itemId, overrides = {}) {
-  await adminDb.collection('items').doc(itemId).set({
-    ...baseItem,
-    ...overrides
-  });
+  await adminDb.collection('items').doc(itemId).set({...baseItem, ...overrides});
 }
 
 async function seedUser(userId, overrides = {}) {
@@ -75,18 +79,29 @@ async function seedUser(userId, overrides = {}) {
   });
 }
 
-test.before(async () => {
-  testEnv = await initializeTestEnvironment({
-    projectId,
-    firestore: { rules }
+async function seedPublicProfile(userId, overrides = {}) {
+  await adminDb.collection('publicProfiles').doc(userId).set({
+    uid: userId,
+    displayName: 'Test User',
+    photoURL: null,
+    points: 100,
+    itemsReported: 3,
+    itemsReturned: 2,
+    itemsClaimed: 1,
+    ...overrides
   });
+}
+
+test.before(async () => {
+  testEnv = await initializeTestEnvironment({projectId, firestore: {rules}});
 });
 
 test.beforeEach(async () => {
-  await Promise.all([clearItems(), clearUsers(), clearPointAwards()]);
+  await Promise.all([clearItems(), clearUsers(), clearPublicProfiles(), clearPointAwards()]);
 });
+
 test.afterEach(async () => {
-  await Promise.all([clearItems(), clearUsers(), clearPointAwards()]);
+  await Promise.all([clearItems(), clearUsers(), clearPublicProfiles(), clearPointAwards()]);
 });
 
 test.after(async () => {
@@ -95,145 +110,117 @@ test.after(async () => {
 
 test('owner can update allowed item fields', async () => {
   await seedItem('allowed-update');
-
   const db = testEnv.authenticatedContext('reporter-1').firestore();
-  await assertSucceeds(
-    db.collection('items').doc('allowed-update').update({
-      title: 'Updated title',
-      description: 'Updated description',
-      location: 'Library'
-    })
-  );
+  await assertSucceeds(db.collection('items').doc('allowed-update').update({
+    title: 'Updated title', description: 'Updated description', location: 'Library'
+  }));
 });
 
 test('owner cannot change reportedBy', async () => {
   await seedItem('reported-by');
-
   const db = testEnv.authenticatedContext('reporter-1').firestore();
-  await assertFails(
-    db.collection('items').doc('reported-by').update({
-      reportedBy: 'attacker'
-    })
-  );
+  await assertFails(db.collection('items').doc('reported-by').update({reportedBy: 'attacker'}));
 });
 
 test('owner cannot change status directly', async () => {
   await seedItem('status-bypass');
-
   const db = testEnv.authenticatedContext('reporter-1').firestore();
-  await assertFails(
-    db.collection('items').doc('status-bypass').update({
-      status: 'RETURNED'
-    })
-  );
+  await assertFails(db.collection('items').doc('status-bypass').update({status: 'RETURNED'}));
 });
 
 test('owner cannot change item type', async () => {
   await seedItem('type-bypass');
-
   const db = testEnv.authenticatedContext('reporter-1').firestore();
-  await assertFails(
-    db.collection('items').doc('type-bypass').update({
-      type: 'LOST'
-    })
-  );
+  await assertFails(db.collection('items').doc('type-bypass').update({type: 'LOST'}));
 });
 
 test('owner cannot add arbitrary fields', async () => {
   await seedItem('field-bypass');
-
   const db = testEnv.authenticatedContext('reporter-1').firestore();
-  await assertFails(
-    db.collection('items').doc('field-bypass').update({
-      isAdmin: true,
-      moderationApproved: true,
-      arbitraryServerField: 'attacker-controlled'
-    })
-  );
+  await assertFails(db.collection('items').doc('field-bypass').update({
+    isAdmin: true, moderationApproved: true, arbitraryServerField: 'attacker-controlled'
+  }));
 });
 
 test('owner cannot modify protected server-managed fields', async () => {
-  await seedItem('protected-fields', {
-    createdAt: { seconds: 1, nanoseconds: 0 },
-    moderationStatus: 'pending'
-  });
-
+  await seedItem('protected-fields', {createdAt: {seconds: 1, nanoseconds: 0}, moderationStatus: 'pending'});
   const db = testEnv.authenticatedContext('reporter-1').firestore();
-  await assertFails(
-    db.collection('items').doc('protected-fields').update({
-      createdAt: { seconds: 999, nanoseconds: 0 }
-    })
-  );
-
-  await assertFails(
-    db.collection('items').doc('protected-fields').update({
-      moderationStatus: 'approved'
-    })
-  );
+  await assertFails(db.collection('items').doc('protected-fields').update({createdAt: {seconds: 999, nanoseconds: 0}}));
+  await assertFails(db.collection('items').doc('protected-fields').update({moderationStatus: 'approved'}));
 });
 
 test('different user cannot edit another reporter item', async () => {
   await seedItem('ownership-bypass');
-
   const db = testEnv.authenticatedContext('attacker').firestore();
-  await assertFails(
-    db.collection('items').doc('ownership-bypass').update({
-      title: 'Attacker edit'
-    })
-  );
+  await assertFails(db.collection('items').doc('ownership-bypass').update({title: 'Attacker edit'}));
 });
 
 test('normal user cannot modify protected user stats', async () => {
   await seedUser('reporter-1');
-
   const db = testEnv.authenticatedContext('reporter-1').firestore();
   const protectedFields = [
-    ['points', 9999],
-    ['itemsReturned', 999],
-    ['itemsReported', 999],
-    ['lastActive', '2099-01-01'],
-    ['itemsClaimed', 999],
-    ['badges', ['admin']]
+    ['points', 9999], ['itemsReturned', 999], ['itemsReported', 999],
+    ['lastActive', '2099-01-01'], ['itemsClaimed', 999], ['badges', ['admin']]
   ];
-
   for (const [field, value] of protectedFields) {
-    await assertFails(
-      db.collection('users').doc('reporter-1').update({ [field]: value })
-    );
+    await assertFails(db.collection('users').doc('reporter-1').update({[field]: value}));
   }
 });
 
 test('normal user can update allowed profile fields without changing stats', async () => {
   await seedUser('reporter-1');
-
   const db = testEnv.authenticatedContext('reporter-1').firestore();
-  await assertSucceeds(
-    db.collection('users').doc('reporter-1').update({
-      displayName: 'Updated User',
-      photoURL: 'https://example.com/avatar.png'
-    })
-  );
+  await assertSucceeds(db.collection('users').doc('reporter-1').update({
+    displayName: 'Updated User', photoURL: 'https://example.com/avatar.png'
+  }));
+});
+
+test('normal user cannot read another user private document', async () => {
+  await seedUser('user-a', {email: 'a@example.com'});
+  await seedUser('user-b', {email: 'b@example.com'});
+  const db = testEnv.authenticatedContext('user-a').firestore();
+  await assertFails(db.collection('users').doc('user-b').get());
+});
+
+test('normal user can read another user public profile', async () => {
+  await seedUser('user-b');
+  await seedPublicProfile('user-b');
+  const db = testEnv.authenticatedContext('user-a').firestore();
+  await assertSucceeds(db.collection('publicProfiles').doc('user-b').get());
+});
+
+test('normal user cannot create a public profile with forged stats', async () => {
+  await seedUser('user-a');
+  const db = testEnv.authenticatedContext('user-a').firestore();
+  await assertFails(db.collection('publicProfiles').doc('user-a').set({
+    uid: 'user-a', displayName: 'User A', photoURL: null,
+    points: 9999, itemsReported: 999, itemsReturned: 999, itemsClaimed: 999
+  }));
+});
+
+test('normal user cannot modify another user public profile', async () => {
+  await seedUser('user-a');
+  await seedUser('user-b');
+  await seedPublicProfile('user-b');
+  const db = testEnv.authenticatedContext('user-a').firestore();
+  await assertFails(db.collection('publicProfiles').doc('user-b').update({displayName: 'Attacker'}));
+});
+
+test('public profile update cannot change authoritative stats', async () => {
+  await seedUser('user-a');
+  await seedPublicProfile('user-a');
+  const db = testEnv.authenticatedContext('user-a').firestore();
+  await assertFails(db.collection('publicProfiles').doc('user-a').update({points: 9999}));
 });
 
 test('normal user cannot tamper with point awards', async () => {
   await seedUser('reporter-1');
   await adminDb.collection('users').doc('reporter-1').collection('pointAwards').doc('award-1').set({
-    points: 25,
-    reason: 'return',
-    createdAt: '2026-09-13'
+    points: 25, reason: 'return', createdAt: '2026-09-13'
   });
-
   const db = testEnv.authenticatedContext('reporter-1').firestore();
   const award = db.collection('users').doc('reporter-1').collection('pointAwards').doc('award-1');
-
-  await assertFails(award.set({
-    points: 9999,
-    reason: 'fake'
-  }));
-
-  await assertFails(award.update({
-    points: 9999
-  }));
-
+  await assertFails(award.set({points: 9999, reason: 'fake'}));
+  await assertFails(award.update({points: 9999}));
   await assertFails(award.delete());
 });
