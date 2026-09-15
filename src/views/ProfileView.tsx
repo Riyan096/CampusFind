@@ -20,7 +20,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onToastSuccess,
   onToastError,
 }) => {
-  const { user, updateUserProfile, updateUserPhoto } = useAuth();
+  const { user, updateUserProfile, updateUserPhoto, removeUserPhoto } = useAuth();
 
   const fallbackToast = useToast();
   const success = onToastSuccess ?? fallbackToast.success;
@@ -54,30 +54,29 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   // Load user data
 
   useEffect(() => {
-    if (user) {
-      setDisplayName(user.displayName || '');
-      setEmail(user.email || '');
-      loadUserProfile();
-      setStats(getUserStats());
-    }
-  }, [user]);
-
-  const loadUserProfile = async () => {
     if (!user) return;
-    
-    try {
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        setPhone(data.phone || '');
-        setBio(data.bio || '');
-        setPhotoURL(data.photoURL || '');
-      }
-    } catch (err) {
-      console.error('Error loading profile:', err);
-    }
-  };
 
+    setDisplayName(user.displayName || '');
+    setEmail(user.email || '');
+    setStats(getUserStats());
+
+    const loadUserProfile = async () => {
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          setPhone(data.phone || '');
+          setBio(data.bio || '');
+          setPhotoURL(data.photoURL || '');
+        }
+      } catch (err) {
+        console.error('Error loading profile:', err);
+      }
+    };
+
+    void loadUserProfile();
+  }, [user]);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,19 +115,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
   const handleRemovePhoto = async () => {
     if (!user) return;
-    
     if (!confirm('Remove your profile picture?')) return;
-    
+
     try {
       setUploadingPhoto(true);
+      await removeUserPhoto();
       setPhotoURL('');
-      
-      // Remove from Firestore
-      await updateDoc(doc(db, 'users', user.uid), {
-        photoURL: '',
-        updatedAt: new Date().toISOString(),
-      });
-      
       success('Profile picture removed');
     } catch (err) {
       console.error('Error removing photo:', err);
@@ -142,9 +134,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     const input = e.target;
+
     if (!file || !user) return;
 
     const validation = await validateImageFile(file, 'profile');
+
     if (!validation.ok) {
       input.value = '';
       error(validation.message);
@@ -152,74 +146,18 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     }
 
     setUploadingPhoto(true);
+
     try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64String = reader.result as string;
-        
-        // Compress image if too large
-        let compressedPhoto = base64String;
-        if (base64String.length > 500000) {
-          compressedPhoto = await compressImage(base64String);
-        }
-
-        setPhotoURL(compressedPhoto);
-        
-        // Update AuthContext immediately for sidebar update
-        updateUserPhoto(compressedPhoto);
-        
-        // Save to Firestore
-        await updateDoc(doc(db, 'users', user.uid), {
-          photoURL: compressedPhoto,
-          updatedAt: new Date().toISOString(),
-        });
-        
-        success('Profile picture updated!');
-
-        setUploadingPhoto(false);
-      };
-      reader.readAsDataURL(file);
+      const newPhotoURL = await updateUserPhoto(file);
+      setPhotoURL(newPhotoURL);
+      success('Profile picture updated!');
     } catch (err) {
       console.error('Error uploading photo:', err);
       error('Failed to upload photo');
+    } finally {
+      input.value = '';
       setUploadingPhoto(false);
     }
-  };
-
-  const compressImage = (base64String: string): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.src = base64String;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve(base64String);
-          return;
-        }
-
-        // Calculate new dimensions (max 300x300)
-        let width = img.width;
-        let height = img.height;
-        const maxSize = 300;
-
-        if (width > height && width > maxSize) {
-          height = (height * maxSize) / width;
-          width = maxSize;
-        } else if (height > maxSize) {
-          width = (width * maxSize) / height;
-          height = maxSize;
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        ctx.drawImage(img, 0, 0, width, height);
-
-        // Convert to JPEG with 0.8 quality
-        resolve(canvas.toDataURL('image/jpeg', 0.8));
-      };
-      img.onerror = () => resolve(base64String);
-    });
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -245,7 +183,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } catch (err) {
+    } catch {
       error('Failed to change password');
     } finally {
       setLoading(false);
@@ -379,7 +317,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 </h3>
                 <button
                   onClick={() => setIsEditing(!isEditing)}
-                  className="text-primary hover:text-primary-dark font-medium text-sm"
+                  className="text-primary hover:text-primary-dark font-medium text-sm hover:underline"
                 >
                   {isEditing ? 'Cancel' : 'Edit'}
                 </button>
