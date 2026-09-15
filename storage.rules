@@ -1,0 +1,66 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function validImageType() {
+      return request.resource.contentType in [
+        'image/jpeg',
+        'image/png',
+        'image/webp'
+      ];
+    }
+
+    function validProfileImageType() {
+      return request.resource.contentType in [
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/webp'
+      ];
+    }
+
+    function validImageSize() {
+      return request.resource.size <= 5 * 1024 * 1024;
+    }
+
+    // Report/item images are owned by the authenticated user who uploads them.
+    // The UID is part of the path, so a user cannot write into another user's
+    // namespace even if they know another user's item ID.
+    match /users/{userId}/items/{itemId}/{fileName} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && validImageType()
+        && validImageSize();
+      allow update: if signedIn()
+        && request.auth.uid == userId
+        && validImageType()
+        && validImageSize();
+      allow delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    // Profile photos are private to the owner for writes but readable by
+    // authenticated users so public profile images can be displayed.
+    match /users/{userId}/profile/{fileName} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && validProfileImageType()
+        && validImageSize();
+      allow update: if signedIn()
+        && request.auth.uid == userId
+        && validProfileImageType()
+        && validImageSize();
+      allow delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    // Deny all other paths by default.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
