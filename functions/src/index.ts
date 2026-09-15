@@ -15,7 +15,23 @@ import {
 import {analyzeItemImage, findSmartMatches} from "./aiFunctions";
 
 const db = getFirestore();
-const storageBucket = getStorage().bucket();
+
+const getConfiguredStorageBucket = (): string | undefined => {
+  const firebaseConfig = process.env.FIREBASE_CONFIG;
+  if (!firebaseConfig) return undefined;
+
+  try {
+    const parsed = JSON.parse(firebaseConfig);
+    return typeof parsed.storageBucket === "string" && parsed.storageBucket ?
+      parsed.storageBucket : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const configuredStorageBucket = getConfiguredStorageBucket();
+const storageBucket = configuredStorageBucket ?
+  getStorage().bucket(configuredStorageBucket) : getStorage().bucket();
 
 export {analyzeItemImage, findSmartMatches};
 
