@@ -46,9 +46,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           try {
             const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
             userData = userDoc.data();
+
+            if (userData) {
+              const publicProfileRef = doc(db, 'publicProfiles', firebaseUser.uid);
+              await setDoc(publicProfileRef, {
+                uid: firebaseUser.uid,
+                displayName: userData.displayName || firebaseUser.displayName || 'Anonymous',
+                photoURL: userData.photoURL || firebaseUser.photoURL || null,
+                points: userData.points || 0,
+                itemsReported: userData.itemsReported || 0,
+                itemsReturned: userData.itemsReturned || 0,
+                itemsClaimed: userData.itemsClaimed || 0,
+              }, { merge: true });
+            }
           } catch (firestoreError) {
             console.warn('Firestore not accessible:', firestoreError);
           }
+
           const isAdmin = userData?.isAdmin === true;
           setUser({
             uid: firebaseUser.uid,
@@ -84,12 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const userRef = doc(db, 'users', userCredential.user.uid);
     const publicProfileRef = doc(db, 'publicProfiles', userCredential.user.uid);
-    const initialStats = {
-      points: 0,
-      itemsReported: 0,
-      itemsReturned: 0,
-      itemsClaimed: 0,
-    };
+    const initialStats = { points: 0, itemsReported: 0, itemsReturned: 0, itemsClaimed: 0 };
 
     await setDoc(userRef, {
       uid: userCredential.user.uid,
