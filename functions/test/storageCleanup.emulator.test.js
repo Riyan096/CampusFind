@@ -5,24 +5,7 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getStorage } = require('firebase-admin/storage');
 
 const PROJECT_ID = 'campusfind-app';
-
-const getConfiguredStorageBucket = () => {
-  const firebaseConfig = process.env.FIREBASE_CONFIG;
-  if (firebaseConfig) {
-    try {
-      const parsedConfig = JSON.parse(firebaseConfig);
-      if (typeof parsedConfig.storageBucket === 'string' && parsedConfig.storageBucket) {
-        return parsedConfig.storageBucket;
-      }
-    } catch {
-      // Fall back to the legacy default bucket name below.
-    }
-  }
-
-  return `${PROJECT_ID}.appspot.com`;
-};
-
-const STORAGE_BUCKET = getConfiguredStorageBucket();
+const STORAGE_BUCKET = 'campusfind-app.firebasestorage.app';
 
 const app = initializeApp({
   projectId: PROJECT_ID,
