@@ -1,7 +1,6 @@
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {onDocumentDeleted, onDocumentUpdated} from "firebase-functions/v2/firestore";
 
-import {initializeApp} from "firebase-admin/app";
 import {getFirestore} from "firebase-admin/firestore";
 import {getStorage} from "firebase-admin/storage";
 
@@ -14,8 +13,6 @@ import {
   UserStats,
 } from "./gamification";
 import {analyzeItemImage, findSmartMatches} from "./aiFunctions";
-
-initializeApp();
 
 const db = getFirestore();
 const storageBucket = getStorage().bucket();
