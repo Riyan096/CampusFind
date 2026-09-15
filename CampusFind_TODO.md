@@ -140,7 +140,7 @@ Verification completed September 14, 2026:
 - Gemini requests use the stable production model `gemini-3.8-flash`
 - Functions lint passes
 - Functions TypeScript build passes
-- Firestore rules regression suite passes 10/10 tests
+- Firestore rules regression suite passes 15/15 tests
 - `resolveItem` emulator suite passes 8/8 tests
 
 Note: Vite reports a non-blocking large-chunk warning for the main application bundle (~638 kB). Bundle optimization is tracked separately under Phase 7 — Performance.
@@ -151,10 +151,32 @@ Note: Vite reports a non-blocking large-chunk warning for the main application b
 
 ## 8. Restrict `/users` reads — P1
 
-- [ ] Create public profile projection
-- [ ] Limit sensitive profile fields
-- [ ] Replace broad user reads
-- [ ] Audit all user queries
+Phase 5 is complete. Private user documents are restricted to the owning user and admins, while leaderboard/public-facing statistics are served from a dedicated `publicProfiles` projection. Public profile writes are constrained so users can only mirror their own authoritative private stats; gamification updates write the private stats and public projection together server-side.
+
+- [x] Create public profile projection
+- [x] Limit sensitive profile fields
+- [x] Replace broad user reads
+- [x] Audit all user queries
+- [x] Backfill public profiles for existing users on authenticated startup
+- [x] Create public profiles for new signups
+- [x] Keep profile display name synchronized
+- [x] Keep profile photo synchronized
+- [x] Prevent public-profile stat tampering
+- [x] Verify Firestore privacy regression coverage
+
+Verification completed September 15, 2026:
+- Private `/users/{uid}` reads are limited to the same user or an admin
+- Leaderboard/rank queries use `publicProfiles` instead of the private `users` collection
+- Existing users with a private profile are automatically synchronized to `publicProfiles` during authenticated startup
+- New signups create both the private user document and public profile
+- Profile display-name updates synchronize private and public profile documents
+- Profile photo updates now synchronize private and public profile documents
+- Public profile writes cannot forge points, report/return/claim counters, or change another user's profile
+- Firestore rules regression suite passes 15/15 tests
+- `resolveItem` emulator suite passes 8/8 tests
+- Frontend production build passes
+
+---
 
 # PHASE 6 — STORAGE SECURITY
 
