@@ -226,6 +226,9 @@ export const getCategoryColor = (category: Achievement['category']): string => {
   }
 };
 
+// Backwards-compatible name used by the achievements UI.
+export const getAchievementColor = getCategoryColor;
+
 export const getCategoryLabel = (category: Achievement['category']): string => {
   switch (category) {
     case 'bronze': return 'Bronze';
