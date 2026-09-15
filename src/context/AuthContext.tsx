@@ -1,13 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { 
-  onAuthStateChanged, 
+import {
+  onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
   updateProfile
 } from 'firebase/auth';
-
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import { LIMITS, sanitizeEmailInput, sanitizePlainText } from '../utils/sanitize';
@@ -21,8 +20,6 @@ interface User {
   emailVerified: boolean;
 }
 
-
-
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -35,9 +32,6 @@ interface AuthContextType {
   isAdmin: boolean;
 }
 
-
-
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -48,20 +42,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       try {
         if (firebaseUser) {
-          // Get additional user data from Firestore
           let userData = null;
           try {
             const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
             userData = userDoc.data();
           } catch (firestoreError) {
-            // Firestore not accessible, use Firebase Auth data only
             console.warn('Firestore not accessible:', firestoreError);
           }
-          
-// Check if user is admin (by email or admin flag in Firestore)
-          const isAdmin = userData?.isAdmin === true || 
-                         firebaseUser.email === 'admin@campusfind.com';
-          
+          const isAdmin = userData?.isAdmin === true;
           setUser({
             uid: firebaseUser.uid,
             email: firebaseUser.email,
@@ -70,7 +58,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             isAdmin,
             emailVerified: firebaseUser.emailVerified,
           });
-
         } else {
           setUser(null);
         }
@@ -81,10 +68,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
       }
     });
-
     return () => unsubscribe();
   }, []);
-
 
   const login = async (email: string, password: string) => {
     const safeEmail = sanitizeEmailInput(email);
@@ -95,26 +80,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const safeEmail = sanitizeEmailInput(email);
     const safeName = sanitizePlainText(displayName, LIMITS.displayName, { multiline: false });
     const userCredential = await createUserWithEmailAndPassword(auth, safeEmail, password);
-    
-    // Update profile with display name
     await updateProfile(userCredential.user, { displayName: safeName });
-    
-// Create user document in Firestore
-    // Check if this is the first user (make them admin) or specific admin email
-    const isAdmin = safeEmail === 'admin@campusfind.com';
-    
-    await setDoc(doc(db, 'users', userCredential.user.uid), {
-      uid: userCredential.user.uid,
-      email: safeEmail,
-      displayName: safeName,
-      isAdmin,
-      createdAt: new Date().toISOString(),
+
+    const userRef = doc(db, 'users', userCredential.user.uid);
+    const publicProfileRef = doc(db, 'publicProfiles', userCredential.user.uid);
+    const initialStats = {
+      points: 0,
       itemsReported: 0,
       itemsReturned: 0,
       itemsClaimed: 0,
-      points: 0,
+    };
+
+    await setDoc(userRef, {
+      uid: userCredential.user.uid,
+      email: safeEmail,
+      displayName: safeName,
+      isAdmin: false,
+      createdAt: new Date().toISOString(),
+      ...initialStats,
     });
 
+    await setDoc(publicProfileRef, {
+      uid: userCredential.user.uid,
+      displayName: safeName,
+      photoURL: null,
+      ...initialStats,
+    });
   };
 
   const logout = async () => {
@@ -125,12 +116,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!auth.currentUser) throw new Error('No user logged in');
     const safeName = sanitizePlainText(displayName, LIMITS.displayName, { multiline: false });
     await updateProfile(auth.currentUser, { displayName: safeName });
-    // Update local user state
+    const userRef = doc(db, 'users', auth.currentUser.uid);
+    const profileRef = doc(db, 'publicProfiles', auth.currentUser.uid);
+    await setDoc(userRef, { displayName: safeName }, { merge: true });
+    await setDoc(profileRef, { displayName: safeName }, { merge: true });
     setUser(prev => prev ? { ...prev, displayName: safeName } : null);
   };
 
   const updateUserPhoto = (photoURL: string) => {
-    // Update local user state immediately for UI responsiveness
     setUser(prev => prev ? { ...prev, photoURL } : null);
   };
 
@@ -146,9 +139,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isAuthenticated: !!user,
       isAdmin: user?.isAdmin || false,
     }}>
-
-
-
       {children}
     </AuthContext.Provider>
   );
@@ -156,8 +146,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
