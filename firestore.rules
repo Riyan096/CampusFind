@@ -112,15 +112,18 @@ service cloud.firestore {
           ]) &&
           request.resource.data.displayName is string &&
           request.resource.data.displayName.size() <= 100 &&
-          (request.resource.data.photoURL == null || request.resource.data.photoURL is string) &&
+          (request.resource.data.get('photoURL', null) == null ||
+            request.resource.data.get('photoURL', null) is string) &&
           (request.resource.data.get('profileStoragePath', null) == null ||
             request.resource.data.get('profileStoragePath', null) is string) &&
-          (request.resource.data.phone == null ||
-            (request.resource.data.phone is string && request.resource.data.phone.size() <= 32)) &&
-          (request.resource.data.bio == null ||
-            (request.resource.data.bio is string && request.resource.data.bio.size() <= 2000)) &&
-          (request.resource.data.updatedAt == null ||
-            request.resource.data.updatedAt is string)
+          (request.resource.data.get('phone', null) == null ||
+            (request.resource.data.get('phone', null) is string &&
+              request.resource.data.get('phone', null).size() <= 32)) &&
+          (request.resource.data.get('bio', null) == null ||
+            (request.resource.data.get('bio', null) is string &&
+              request.resource.data.get('bio', null).size() <= 2000)) &&
+          (request.resource.data.get('updatedAt', null) == null ||
+            request.resource.data.get('updatedAt', null) is string)
         ) ||
         (isAdmin() && request.auth.uid != userId)
       );
