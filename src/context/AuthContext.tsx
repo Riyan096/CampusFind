@@ -134,6 +134,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateUserPhoto = (photoURL: string) => {
     setUser(prev => prev ? { ...prev, photoURL } : null);
+
+    if (auth.currentUser) {
+      const userRef = doc(db, 'users', auth.currentUser.uid);
+      const profileRef = doc(db, 'publicProfiles', auth.currentUser.uid);
+      void Promise.all([
+        setDoc(userRef, { photoURL }, { merge: true }),
+        setDoc(profileRef, { photoURL }, { merge: true }),
+      ]).catch(error => {
+        console.error('Failed to persist profile photo:', error);
+      });
+    }
   };
 
   return (
