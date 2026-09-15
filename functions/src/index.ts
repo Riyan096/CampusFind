@@ -16,6 +16,14 @@ import {analyzeItemImage, findSmartMatches} from "./aiFunctions";
 
 const db = getFirestore();
 
+// The Functions emulator normally sets this automatically. Explicitly provide
+// it for local integration tests so cleanup can never silently target a live
+// bucket if the emulator environment is missing the variable.
+if (process.env.FUNCTIONS_EMULATOR === "true" &&
+    !process.env.FIREBASE_STORAGE_EMULATOR_HOST) {
+  process.env.FIREBASE_STORAGE_EMULATOR_HOST = "127.0.0.1:9199";
+}
+
 const getConfiguredStorageBucket = (): string | undefined => {
   const firebaseConfig = process.env.FIREBASE_CONFIG;
   if (!firebaseConfig) return undefined;
@@ -32,6 +40,13 @@ const getConfiguredStorageBucket = (): string | undefined => {
 const configuredStorageBucket = getConfiguredStorageBucket();
 const storageBucket = configuredStorageBucket ?
   getStorage().bucket(configuredStorageBucket) : getStorage().bucket();
+
+if (process.env.FUNCTIONS_EMULATOR === "true") {
+  console.log("Storage cleanup emulator configuration:", {
+    bucket: storageBucket.name,
+    emulatorHost: process.env.FIREBASE_STORAGE_EMULATOR_HOST,
+  });
+}
 
 export {analyzeItemImage, findSmartMatches};
 
@@ -69,6 +84,7 @@ const deleteStorageImageFromUrl = async (value: unknown): Promise<void> => {
     console.error("Failed to clean up item image from Storage:", {
       path,
       bucket: storageBucket.name,
+      emulatorHost: process.env.FIREBASE_STORAGE_EMULATOR_HOST,
       error,
     });
     throw error;
