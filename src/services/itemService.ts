@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './firebase';
+import { deleteUserImage, uploadUserImage } from './firebaseStorageService';
 import type { Item, ItemStatusType } from '../types';
 import { ItemType } from '../types';
 import {
@@ -48,6 +49,28 @@ function sanitizeItemWrite<T extends Record<string, unknown>>(data: T): T {
     out.imageUrl = sanitizeImageUrlField(out.imageUrl);
   }
   return out as T;
+}
+
+function isImageDataUrl(value: unknown): value is string {
+  return typeof value === 'string' && /^data:image\/(jpeg|png|webp);base64,/i.test(value);
+}
+
+async function dataUrlToImageFile(dataUrl: string): Promise<File> {
+  const response = await fetch(dataUrl);
+  if (!response.ok) {
+    throw new Error('Could not prepare the selected image for upload.');
+  }
+
+  const blob = await response.blob();
+  const extension = blob.type === 'image/png'
+    ? 'png'
+    : blob.type === 'image/webp'
+      ? 'webp'
+      : 'jpg';
+
+  return new File([blob], `report-image.${extension}`, {
+    type: blob.type,
+  });
 }
 
 // Convert Firestore timestamp to ISO string
@@ -98,12 +121,56 @@ export const getAllItems = async (): Promise<Item[]> => {
 // Add a new item
 export const addItemToFirestore = async (item: Omit<Item, 'id'>): Promise<string> => {
   const safe = sanitizeItemWrite({ ...item } as Record<string, unknown>) as Omit<Item, 'id'>;
+  const imageDataUrl = isImageDataUrl(safe.imageUrl) ? safe.imageUrl : null;
+
+  // Never persist a Base64/data URL in Firestore. The existing report UI still
+  // uses the data URL locally for preview/AI analysis; it is converted to a
+  // File and uploaded to Firebase Storage after the item gets its document ID.
+  if (imageDataUrl) {
+    delete (safe as Record<string, unknown>).imageUrl;
+  }
+
   const docRef = await addDoc(collection(db, ITEMS_COLLECTION), {
     ...safe,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
-  return docRef.id;
+
+  if (!imageDataUrl) {
+    return docRef.id;
+  }
+
+  let uploadedPath: string | null = null;
+  try {
+    const imageFile = await dataUrlToImageFile(imageDataUrl);
+    const uploaded = await uploadUserImage(item.reportedBy || '', imageFile, 'report', docRef.id);
+    uploadedPath = uploaded.path;
+
+    await updateDoc(docRef, {
+      imageUrl: uploaded.downloadUrl,
+      updatedAt: serverTimestamp(),
+    });
+
+    return docRef.id;
+  } catch (error) {
+    // Do not leave an item pointing at a failed upload. Clean up the Storage
+    // object when possible, then remove the newly-created Firestore document.
+    if (uploadedPath) {
+      try {
+        await deleteUserImage(uploadedPath, item.reportedBy || '');
+      } catch (cleanupError) {
+        console.error('Failed to clean up report image:', cleanupError);
+      }
+    }
+
+    try {
+      await deleteDoc(docRef);
+    } catch (cleanupError) {
+      console.error('Failed to clean up item after image upload failure:', cleanupError);
+    }
+
+    throw error;
+  }
 };
 
 // Update an item. Status is intentionally excluded: status changes must go
