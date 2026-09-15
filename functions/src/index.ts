@@ -1,7 +1,9 @@
 import {onCall, HttpsError} from "firebase-functions/v2/https";
+import {onDocumentDeleted, onDocumentUpdated} from "firebase-functions/v2/firestore";
 
 import {initializeApp} from "firebase-admin/app";
 import {getFirestore} from "firebase-admin/firestore";
+import {getStorage} from "firebase-admin/storage";
 
 import {
   processGamificationActivity,
@@ -16,8 +18,57 @@ import {analyzeItemImage, findSmartMatches} from "./aiFunctions";
 initializeApp();
 
 const db = getFirestore();
+const storageBucket = getStorage().bucket();
 
 export {analyzeItemImage, findSmartMatches};
+
+/**
+ * Extract a Firebase Storage object path from a Storage download URL.
+ * Returns null for non-Firebase URLs so legacy/external images are untouched.
+ */
+const storagePathFromDownloadUrl = (value: unknown): string | null => {
+  if (typeof value !== "string" || !value.includes("firebasestorage.googleapis.com")) {
+    return null;
+  }
+
+  const match = value.match(/\/o\/([^?]+)/);
+  if (!match) return null;
+
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Best-effort cleanup for report images that are no longer referenced by an item.
+ * Admin SDK cleanup is used so deleting an item also cleans up its Storage object
+ * when the delete is performed by an administrator.
+ */
+const deleteStorageImageFromUrl = async (value: unknown): Promise<void> => {
+  const path = storagePathFromDownloadUrl(value);
+  if (!path) return;
+
+  try {
+    await storageBucket.file(path).delete({ignoreNotFound: true});
+  } catch (error) {
+    console.error("Failed to clean up item image from Storage:", error);
+  }
+};
+
+export const cleanupDeletedItemImage = onDocumentDeleted("items/{itemId}", async (event) => {
+  const item = event.data?.data();
+  await deleteStorageImageFromUrl(item?.imageUrl);
+});
+
+export const cleanupReplacedItemImage = onDocumentUpdated("items/{itemId}", async (event) => {
+  const before = event.data?.before.data();
+  const after = event.data?.after.data();
+
+  if (before?.imageUrl === after?.imageUrl) return;
+  await deleteStorageImageFromUrl(before?.imageUrl);
+});
 
 export const awardPoints = onCall(async (request) => {
   if (!request.auth) {
