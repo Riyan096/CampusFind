@@ -28,7 +28,7 @@ interface AuthContextType {
   signup: (email: string, password: string, displayName: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUserProfile: (displayName: string) => Promise<void>;
-  updateUserPhoto: (file: File) => Promise<void>;
+  updateUserPhoto: (file: File) => Promise<string>;
   removeUserPhoto: () => Promise<void>;
   isAuthenticated: boolean;
   isAdmin: boolean;
@@ -134,7 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(prev => prev ? { ...prev, displayName: safeName } : null);
   };
 
-  const updateUserPhoto = async (file: File) => {
+  const updateUserPhoto = async (file: File): Promise<string> => {
     if (!auth.currentUser) throw new Error('No user logged in');
 
     const uid = auth.currentUser.uid;
@@ -161,6 +161,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.warn('Failed to delete previous profile photo:', cleanupError);
         }
       }
+
+      return uploaded.downloadUrl;
     } catch (error) {
       try {
         await deleteUserImage(uploaded.path, uid);
