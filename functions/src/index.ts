@@ -39,9 +39,9 @@ const storagePathFromDownloadUrl = (value: unknown): string | null => {
 };
 
 /**
- * Best-effort cleanup for report images that are no longer referenced by an item.
- * Admin SDK cleanup is used so deleting an item also cleans up its Storage object
- * when the delete is performed by an administrator.
+ * Clean up a report image that is no longer referenced by an item.
+ * Throwing on failure is intentional: Firestore-triggered functions can retry,
+ * preventing a transient Storage failure from permanently leaving an orphan.
  */
 const deleteStorageImageFromUrl = async (value: unknown): Promise<void> => {
   const path = storagePathFromDownloadUrl(value);
@@ -50,7 +50,12 @@ const deleteStorageImageFromUrl = async (value: unknown): Promise<void> => {
   try {
     await storageBucket.file(path).delete({ignoreNotFound: true});
   } catch (error) {
-    console.error("Failed to clean up item image from Storage:", error);
+    console.error("Failed to clean up item image from Storage:", {
+      path,
+      bucket: storageBucket.name,
+      error,
+    });
+    throw error;
   }
 };
 
