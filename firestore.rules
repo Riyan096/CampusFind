@@ -70,8 +70,20 @@ service cloud.firestore {
         d.read == false;
     }
 
+    function validPublicProfile() {
+      let d = request.resource.data;
+      let privateUser = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return d.uid == request.auth.uid &&
+        d.displayName is string && d.displayName.size() <= 100 &&
+        (d.photoURL == null || d.photoURL is string) &&
+        d.points == privateUser.points &&
+        d.itemsReported == privateUser.itemsReported &&
+        d.itemsReturned == privateUser.itemsReturned &&
+        d.itemsClaimed == privateUser.itemsClaimed;
+    }
+
     match /users/{userId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
 
       allow create: if isSignedIn() &&
         request.auth.uid == userId &&
@@ -100,6 +112,34 @@ service cloud.firestore {
         allow read: if isSignedIn() && request.auth.uid == userId;
         allow create, update, delete: if false;
       }
+    }
+
+    match /publicProfiles/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == userId &&
+        request.resource.data.keys().hasOnly([
+          'uid',
+          'displayName',
+          'photoURL',
+          'points',
+          'itemsReported',
+          'itemsReturned',
+          'itemsClaimed'
+        ]) &&
+        validPublicProfile();
+      allow update: if isSignedIn() && request.auth.uid == userId &&
+        request.resource.data.keys().hasOnly([
+          'uid',
+          'displayName',
+          'photoURL',
+          'points',
+          'itemsReported',
+          'itemsReturned',
+          'itemsClaimed'
+        ]) &&
+        request.resource.data.uid == resource.data.uid &&
+        validPublicProfile();
+      allow delete: if isAdmin();
     }
 
     match /items/{itemId} {
