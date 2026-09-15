@@ -55,11 +55,22 @@ export {analyzeItemImage, findSmartMatches};
  * Returns null for non-Firebase URLs so legacy/external images are untouched.
  */
 const storagePathFromDownloadUrl = (value: unknown): string | null => {
-  if (typeof value !== "string" || !value.includes("firebasestorage.googleapis.com")) {
+  if (typeof value !== "string") return null;
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(value);
+  } catch {
     return null;
   }
 
-  const match = value.match(/\/o\/([^?]+)/);
+  const isFirebaseStorageHost = parsedUrl.hostname === "firebasestorage.googleapis.com";
+  const isStorageEmulator =
+    (parsedUrl.hostname === "127.0.0.1" || parsedUrl.hostname === "localhost") &&
+    parsedUrl.port === "9199";
+  if (!isFirebaseStorageHost && !isStorageEmulator) return null;
+
+  const match = parsedUrl.pathname.match(/\/o\/(.+)$/);
   if (!match) return null;
 
   try {
@@ -76,6 +87,16 @@ const storagePathFromDownloadUrl = (value: unknown): string | null => {
  */
 const deleteStorageImageFromUrl = async (value: unknown): Promise<void> => {
   const path = storagePathFromDownloadUrl(value);
+
+  if (process.env.FUNCTIONS_EMULATOR === "true") {
+    console.log("Storage cleanup target:", {
+      url: value,
+      path,
+      bucket: storageBucket.name,
+      emulatorHost: process.env.FIREBASE_STORAGE_EMULATOR_HOST,
+    });
+  }
+
   if (!path) return;
 
   try {
@@ -239,10 +260,10 @@ export const resolveItem = onCall(async (request) => {
       "A valid item ID and status are required."
     );
   }
-  const itemRef = db.collection("items").doc(itemId);
-  const actorRef = db.collection("users").doc(uid);
   try {
     return await db.runTransaction(async (transaction) => {
+      const itemRef = db.collection("items").doc(itemId);
+      const actorRef = db.collection("users").doc(uid);
       const itemSnapshot = await transaction.get(itemRef);
       if (!itemSnapshot.exists) {
         throw new HttpsError("not-found", "Item not found.");
