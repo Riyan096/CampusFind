@@ -93,7 +93,14 @@ service cloud.firestore {
         (
           request.auth.uid == userId &&
           request.resource.data.isAdmin == resource.data.isAdmin &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL'])
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'displayName',
+            'photoURL',
+            'profileStoragePath'
+          ]) &&
+          (request.resource.data.photoURL == null || request.resource.data.photoURL is string) &&
+          (request.resource.data.profileStoragePath == null ||
+            request.resource.data.profileStoragePath is string)
         ) ||
         (isAdmin() && request.auth.uid != userId)
       );
