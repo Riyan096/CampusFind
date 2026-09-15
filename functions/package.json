@@ -9,7 +9,7 @@
     "test:storage-rules": "firebase emulators:exec --only storage \"node --test test/storageRules.emulator.test.js\"",
     "test:storage-cleanup": "npm run build && firebase emulators:exec --only functions,firestore,storage \"node --test test/storageCleanup.emulator.test.js\"",
     "serve": "npm run build && firebase emulators:start --only functions",
-    "shell": "npm run shell",
+    "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log"
