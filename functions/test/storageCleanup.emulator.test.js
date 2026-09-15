@@ -4,7 +4,7 @@ const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getStorage } = require('firebase-admin/storage');
 
-const PROJECT_ID = 'campusfind-storage-cleanup-test';
+const PROJECT_ID = 'campusfind-app';
 const STORAGE_BUCKET = `${PROJECT_ID}.appspot.com`;
 
 const app = initializeApp({
