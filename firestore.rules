@@ -26,6 +26,13 @@ service cloud.firestore {
         (t == 'FOUND' && s in ['AVAILABLE', 'PENDING_CLAIM', 'RETURNED', 'UNCLAIMED']);
     }
 
+    function validItemImageUrl(d) {
+      return !('imageUrl' in d) ||
+        (d.imageUrl is string &&
+          d.imageUrl.size() <= 2000 &&
+          !d.imageUrl.matches('data:.*'));
+    }
+
     function validItemCreate() {
       let d = request.resource.data;
       return d.reportedBy == request.auth.uid &&
@@ -33,7 +40,8 @@ service cloud.firestore {
         d.description is string && d.description.size() <= 8000 &&
         d.location is string && d.location.size() <= 300 &&
         validItemType(d.type) && validCategory(d.category) &&
-        validStatusForType(d.type, d.status);
+        validStatusForType(d.type, d.status) &&
+        validItemImageUrl(d);
     }
 
     function validItemUpdate() {
@@ -57,7 +65,8 @@ service cloud.firestore {
         d.description is string && d.description.size() <= 8000 &&
         d.location is string && d.location.size() <= 300 &&
         validItemType(d.type) && validCategory(d.category) &&
-        validStatusForType(d.type, d.status);
+        validStatusForType(d.type, d.status) &&
+        validItemImageUrl(d);
     }
 
     function validNotificationCreate() {
@@ -96,11 +105,22 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'displayName',
             'photoURL',
-            'profileStoragePath'
+            'profileStoragePath',
+            'phone',
+            'bio',
+            'updatedAt'
           ]) &&
+          request.resource.data.displayName is string &&
+          request.resource.data.displayName.size() <= 100 &&
           (request.resource.data.photoURL == null || request.resource.data.photoURL is string) &&
           (request.resource.data.profileStoragePath == null ||
-            request.resource.data.profileStoragePath is string)
+            request.resource.data.profileStoragePath is string) &&
+          (request.resource.data.phone == null ||
+            (request.resource.data.phone is string && request.resource.data.phone.size() <= 32)) &&
+          (request.resource.data.bio == null ||
+            (request.resource.data.bio is string && request.resource.data.bio.size() <= 2000)) &&
+          (request.resource.data.updatedAt == null ||
+            request.resource.data.updatedAt is string)
         ) ||
         (isAdmin() && request.auth.uid != userId)
       );
@@ -164,7 +184,7 @@ service cloud.firestore {
       allow create: if isSignedIn() && validNotificationCreate();
       allow update: if isSignedIn() && resource.data.userId == request.auth.uid &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
     }
 
     match /adminSettings/{document} {
