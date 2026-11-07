@@ -66,6 +66,10 @@ Suggested state model to document:
 
 - [x] Define which transitions are legal
 - [x] Reject impossible transitions server-side
+- [x] Require a non-reporter or admin to confirm reward-bearing final transitions
+- [x] Restrict direct `awardPoints` calls to report awards; return rewards are issued by `resolveItem`
+- [x] Update `resolveItem` emulator cases for independent final confirmation and self-award rejection
+- [ ] Run resolution emulator suite and production build after the authorization change
 
 ---
 
@@ -97,6 +101,16 @@ Suggested state model to document:
 - [x] Prevent client deletion of point awards
 - [x] Test award tampering through emulator
 
+## 5a. Harden document creation and client notifications — P0
+
+- [x] Restrict new item documents to an explicit field allowlist and valid initial LOST/FOUND statuses
+- [x] Require new user documents to start with zero points and counters and no extra client-controlled fields
+- [x] Move item-match and chat-message notifications to callables that verify item ownership or chat membership/message authorship
+- [x] Keep admin global announcements behind the admin rule
+- [x] Add Firestore rule cases for forged item states/fields, initial user stats, and cross-user notification attempts
+- [ ] Add callable coverage for valid and invalid item-match/chat notification requests
+- [ ] Run Firestore rules regression suite and build
+
 # PHASE 3 — REALTIME DATABASE CHAT SECURITY
 
 ## 6. Redesign RTDB chat rules — P0
@@ -111,7 +125,13 @@ Suggested state model to document:
 - [x] Restrict message deletion
 - [x] Add emulator tests
 
-Phase 3 chat security is verified with 22/22 passing Realtime Database emulator tests. Coverage includes conversation membership, sender identity, impersonation protection, immutable message metadata, participant membership changes, unauthorized conversation access, arbitrary-field rejection, and message deletion protection.
+The earlier chat rules passed 22/22 emulator cases for membership, sender identity, immutable message metadata, unauthorized access, and deletion protection. The current rules add a stricter create-time participant limit and route item-owner joins through a trusted callable; the previous result does not cover these changes.
+
+- [x] Restrict client-created chats to the authenticated creator as the only initial participant
+- [x] Route participant additions through `joinItemChat`, which verifies item ownership
+- [x] Add RTDB emulator case rejecting injected participants
+- [ ] Add callable coverage for server-authorized item-owner joins
+- [ ] Run current RTDB emulator suite and build
 
 # PHASE 4 — GEMINI / AI SECURITY
 
@@ -202,7 +222,9 @@ Phase 6 starts with an audit of every Firebase Storage upload/read/delete path u
 - [ ] Add Storage Emulator tests for oversized/unsupported files where emulator coverage permits
 - [ ] Add tests for path traversal/arbitrary path attempts
 - [ ] Review orphaned-file cleanup and failed-upload behavior
+- [x] Restrict item-image cleanup to the configured bucket and `users/{reporter}/items/{itemId}/{file}` path
 - [ ] Consider image processing/re-encoding pipeline for untrusted images
+- [x] Add cleanup regression cases for forged URLs, wrong buckets, and cross-owner paths
 - [ ] Re-run production build and all relevant Firebase emulator suites
 
 Security cases to explicitly test:
@@ -233,6 +255,8 @@ Security cases to explicitly test:
 
 ## 11. Prevent point farming — P1
 
+- [x] Require a different authenticated user or admin to perform reward-bearing final confirmation
+- [x] Add emulator cases for reporter self-confirmation rejection and third-party confirmation
 - [ ] Add daily report limits
 - [ ] Add duplicate-report detection
 - [ ] Add minimum report quality checks
@@ -301,10 +325,10 @@ Security cases to explicitly test:
 
 ## 17. Notification system — P1
 
-- [ ] Match notifications
+- [x] Match notifications through ownership-checked callable
 - [ ] Claim notifications
 - [ ] Return notifications
-- [ ] Chat notifications
+- [x] Chat message notifications through membership/message-checked callable
 - [ ] Notification preferences
 - [ ] Push notifications
 

@@ -3,6 +3,8 @@ const test = require('node:test');
 
 const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
+const firebase = require('firebase/compat/app');
+require('firebase/compat/firestore');
 const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 
@@ -116,6 +118,33 @@ test('owner can update allowed item fields', async () => {
   }));
 });
 
+test('item creation only allows initial states and approved fields', async () => {
+  const db = testEnv.authenticatedContext('new-reporter').firestore();
+  const initialItem = {
+    reportedBy: 'new-reporter',
+    type: 'FOUND',
+    status: 'AVAILABLE',
+    title: 'Test item',
+    description: 'A test item',
+    category: 'Other',
+    location: 'Student Center',
+    date: '2026-11-06T12:00:00.000Z',
+    reporterName: 'Reporter',
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+
+  await assertSucceeds(db.collection('items').doc('valid-create').set(initialItem));
+  await assertFails(db.collection('items').doc('resolved-create').set({
+    ...initialItem,
+    status: 'RETURNED'
+  }));
+  await assertFails(db.collection('items').doc('field-injection').set({
+    ...initialItem,
+    moderationApproved: true
+  }));
+});
+
 test('owner cannot change reportedBy', async () => {
   await seedItem('reported-by');
   const db = testEnv.authenticatedContext('reporter-1').firestore();
@@ -165,6 +194,41 @@ test('normal user cannot modify protected user stats', async () => {
   for (const [field, value] of protectedFields) {
     await assertFails(db.collection('users').doc('reporter-1').update({[field]: value}));
   }
+});
+
+test('new users can only initialize profile stats at zero', async () => {
+  const db = testEnv.authenticatedContext('new-user').firestore();
+  const userRef = db.collection('users').doc('new-user');
+  const baseUser = {
+    uid: 'new-user',
+    displayName: 'New User',
+    isAdmin: false,
+    createdAt: '2026-11-06T12:00:00.000Z',
+    points: 0,
+    itemsReturned: 0,
+    itemsReported: 0,
+    itemsClaimed: 0
+  };
+
+  await assertSucceeds(userRef.set(baseUser));
+  const forgedDb = testEnv.authenticatedContext('forged-user').firestore();
+  await assertFails(forgedDb.collection('users').doc('forged-user').set({
+    ...baseUser,
+    uid: 'forged-user',
+    points: 100000
+  }));
+});
+
+test('clients cannot create notifications for another user', async () => {
+  const db = testEnv.authenticatedContext('sender').firestore();
+  await assertFails(db.collection('notifications').doc('forged').set({
+    userId: 'victim',
+    title: 'Fake message',
+    message: 'Forged notification',
+    type: 'chat_message',
+    read: false,
+    createdAt: '2026-11-06T12:00:00.000Z'
+  }));
 });
 
 test('normal user can update allowed profile fields without changing stats', async () => {

@@ -2,6 +2,7 @@ import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {onDocumentDeleted, onDocumentUpdated} from "firebase-functions/v2/firestore";
 
 import {getFirestore} from "firebase-admin/firestore";
+import {getDatabase} from "firebase-admin/database";
 import {getStorage} from "firebase-admin/storage";
 
 import {
@@ -70,11 +71,11 @@ const storagePathFromDownloadUrl = (value: unknown): string | null => {
     parsedUrl.port === "9199";
   if (!isFirebaseStorageHost && !isStorageEmulator) return null;
 
-  const match = parsedUrl.pathname.match(/\/o\/(.+)$/);
-  if (!match) return null;
+  const match = parsedUrl.pathname.match(/^\/v0\/b\/([^/]+)\/o\/(.+)$/);
+  if (!match || match[1] !== storageBucket.name) return null;
 
   try {
-    return decodeURIComponent(match[1]);
+    return decodeURIComponent(match[2]);
   } catch {
     return null;
   }
@@ -85,19 +86,29 @@ const storagePathFromDownloadUrl = (value: unknown): string | null => {
  * Throwing on failure is intentional: Firestore-triggered functions can retry,
  * preventing a transient Storage failure from permanently leaving an orphan.
  */
-const deleteStorageImageFromUrl = async (value: unknown): Promise<void> => {
+const deleteStorageImageFromUrl = async (
+  value: unknown,
+  reporterId: unknown,
+  itemId: string,
+): Promise<void> => {
   const path = storagePathFromDownloadUrl(value);
+  const prefix = typeof reporterId === "string" ?
+    `users/${reporterId}/items/${itemId}/` : "";
+  const relativePath = path?.startsWith(prefix) ? path.slice(prefix.length) : "";
+  const isOwnedItemImage = prefix.length > 0 && relativePath.length > 0 &&
+    !relativePath.includes("/");
 
   if (process.env.FUNCTIONS_EMULATOR === "true") {
     console.log("Storage cleanup target:", {
       url: value,
       path,
+      isOwnedItemImage,
       bucket: storageBucket.name,
       emulatorHost: process.env.FIREBASE_STORAGE_EMULATOR_HOST,
     });
   }
 
-  if (!path) return;
+  if (!path || !isOwnedItemImage) return;
 
   try {
     await storageBucket.file(path).delete({ignoreNotFound: true});
@@ -114,7 +125,11 @@ const deleteStorageImageFromUrl = async (value: unknown): Promise<void> => {
 
 export const cleanupDeletedItemImage = onDocumentDeleted("items/{itemId}", async (event) => {
   const item = event.data?.data();
-  await deleteStorageImageFromUrl(item?.imageUrl);
+  await deleteStorageImageFromUrl(
+    item?.imageUrl,
+    item?.reportedBy,
+    event.params.itemId,
+  );
 });
 
 export const cleanupReplacedItemImage = onDocumentUpdated("items/{itemId}", async (event) => {
@@ -122,7 +137,11 @@ export const cleanupReplacedItemImage = onDocumentUpdated("items/{itemId}", asyn
   const after = event.data?.after.data();
 
   if (before?.imageUrl === after?.imageUrl) return;
-  await deleteStorageImageFromUrl(before?.imageUrl);
+  await deleteStorageImageFromUrl(
+    before?.imageUrl,
+    before?.reportedBy,
+    event.params.itemId,
+  );
 });
 
 export const awardPoints = onCall(async (request) => {
@@ -139,10 +158,10 @@ export const awardPoints = onCall(async (request) => {
   };
   const activityType = data.activityType;
   const itemId = data.itemId;
-  if (activityType !== "report" &&
-      activityType !== "return" &&
-      activityType !== "claim") {
-    throw new HttpsError("invalid-argument", "Invalid activity type.");
+  // Return awards are issued atomically by resolveItem after an independent
+  // confirmation. Claim counters have no client-authorized award path.
+  if (activityType !== "report") {
+    throw new HttpsError("invalid-argument", "Only report awards can be requested directly.");
   }
   if (typeof itemId !== "string" || itemId.trim().length === 0) {
     throw new HttpsError(
@@ -167,6 +186,142 @@ export const awardPoints = onCall(async (request) => {
       "Unable to process gamification activity."
     );
   }
+});
+
+const writeNotificationOnce = async (
+  id: string,
+  data: FirebaseFirestore.DocumentData,
+): Promise<void> => {
+  const ref = db.collection("notifications").doc(id);
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) transaction.create(ref, data);
+  });
+};
+
+/** Create a chat notification only for a real message in a shared chat. */
+export const notifyChatMessage = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be signed in.");
+  }
+  const {chatId, messageId, recipientId} = request.data || {};
+  const validKey = (value: unknown): value is string =>
+    typeof value === "string" && /^[-\w]{1,128}$/.test(value);
+  if (!validKey(chatId) || !validKey(messageId) || !validKey(recipientId)) {
+    throw new HttpsError("invalid-argument", "Invalid chat notification details.");
+  }
+
+  const chatSnapshot = await getDatabase().ref(`chats/${chatId}`).get();
+  const chat = chatSnapshot.val() as {
+    participants?: Record<string, unknown>;
+  } | null;
+  if (!chat?.participants?.[request.auth.uid] ||
+      !chat.participants[recipientId]) {
+    throw new HttpsError("permission-denied", "Both users must belong to the chat.");
+  }
+  const messageSnapshot = await getDatabase()
+    .ref(`chats/${chatId}/messages/${messageId}`).get();
+  const message = messageSnapshot.val() as {
+    senderId?: unknown;
+    content?: unknown;
+  } | null;
+  if (message?.senderId !== request.auth.uid ||
+      typeof message.content !== "string") {
+    throw new HttpsError("permission-denied", "Message was not sent by you.");
+  }
+
+  await writeNotificationOnce(`chat_${chatId}_${messageId}_${recipientId}`, {
+    userId: recipientId,
+    title: "New chat message",
+    message: message.content.slice(0, 100),
+    type: "chat_message",
+    read: false,
+    createdAt: new Date().toISOString(),
+    relatedChatId: chatId,
+    relatedItemId: typeof (chat as {itemId?: unknown}).itemId === "string" ?
+      (chat as {itemId: string}).itemId : "",
+  });
+  return {ok: true};
+});
+
+/** Notify an item's owner about a complementary item reported by the caller. */
+export const notifyPotentialMatch = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be signed in.");
+  }
+  const {sourceItemId, targetItemId} = request.data || {};
+  const validItemId = (value: unknown): value is string =>
+    typeof value === "string" && value.length > 0 && value.length <= 200 &&
+    !value.includes("/");
+  if (!validItemId(sourceItemId) || !validItemId(targetItemId)) {
+    throw new HttpsError("invalid-argument", "Invalid item details.");
+  }
+  const sourceRef = db.collection("items").doc(sourceItemId);
+  const targetRef = db.collection("items").doc(targetItemId);
+  const [sourceSnapshot, targetSnapshot] = await Promise.all([
+    sourceRef.get(),
+    targetRef.get(),
+  ]);
+  if (!sourceSnapshot.exists || !targetSnapshot.exists) {
+    throw new HttpsError("not-found", "An item was not found.");
+  }
+  const source = sourceSnapshot.data() || {};
+  const target = targetSnapshot.data() || {};
+  if (source.reportedBy !== request.auth.uid || source.type !== "FOUND" ||
+      !["AVAILABLE", "PENDING_CLAIM"].includes(source.status) ||
+      target.type !== "LOST" ||
+      !["STILL_LOST", "MATCH_FOUND"].includes(target.status) ||
+      typeof target.reportedBy !== "string" ||
+      target.reportedBy === request.auth.uid) {
+    throw new HttpsError("permission-denied", "These items cannot be matched by you.");
+  }
+  const foundTitle = typeof source.title === "string" ? source.title.slice(0, 200) : "a found item";
+  await writeNotificationOnce(`match_${sourceItemId}_${targetItemId}`, {
+    userId: target.reportedBy,
+    title: "Potential match found",
+    message: `Someone found an item that might match: "${foundTitle}".`,
+    type: "item_match",
+    read: false,
+    createdAt: new Date().toISOString(),
+    relatedItemId: targetItemId,
+  });
+  return {ok: true};
+});
+
+/** Let only the reported item's owner join its discussion chat. */
+export const joinItemChat = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "You must be signed in.");
+  }
+  const chatId = request.data?.chatId;
+  if (typeof chatId !== "string" || !/^[-\w]{1,128}$/.test(chatId)) {
+    throw new HttpsError("invalid-argument", "Invalid chat ID.");
+  }
+  const chatRef = getDatabase().ref(`chats/${chatId}`);
+  const chatSnapshot = await chatRef.get();
+  const chat = chatSnapshot.val() as {
+    itemId?: unknown;
+    createdBy?: unknown;
+    participants?: Record<string, unknown>;
+  } | null;
+  if (!chat || typeof chat.itemId !== "string") {
+    throw new HttpsError("not-found", "Chat not found.");
+  }
+  const itemSnapshot = await db.collection("items").doc(chat.itemId).get();
+  const item = itemSnapshot.data();
+  if (!itemSnapshot.exists || item?.reportedBy !== request.auth.uid ||
+      chat.createdBy === request.auth.uid) {
+    throw new HttpsError("permission-denied", "Only the item owner can join this chat.");
+  }
+  if (chat.participants?.[request.auth.uid]) return {ok: true};
+
+  const userSnapshot = await db.collection("users").doc(request.auth.uid).get();
+  const userName = userSnapshot.data()?.displayName;
+  await chatRef.child(`participants/${request.auth.uid}`).set({
+    name: typeof userName === "string" ? userName.slice(0, 100) : "Anonymous",
+    joinedAt: Date.now(),
+  });
+  return {ok: true};
 });
 
 interface ResolutionItem {
@@ -288,10 +443,22 @@ export const resolveItem = onCall(async (request) => {
           "Item has no valid reporter."
         );
       }
-      if (!isAdmin && reporterId !== uid) {
+      const isRewardedFinalTransition =
+        (item.type === "LOST" && item.status === "MATCH_FOUND" &&
+          newStatus === "CLAIMED") ||
+        (item.type === "FOUND" && item.status === "PENDING_CLAIM" &&
+          newStatus === "RETURNED");
+      const isAlreadyRewardedFinalStatus = newStatus === item.status &&
+        ((item.type === "LOST" && item.status === "CLAIMED") ||
+          (item.type === "FOUND" && item.status === "RETURNED"));
+      if (!isAdmin && (
+        (reporterId !== uid && !isRewardedFinalTransition &&
+          !isAlreadyRewardedFinalStatus) ||
+        (reporterId === uid && isRewardedFinalTransition)
+      )) {
         throw new HttpsError(
           "permission-denied",
-          "You can only change the status of items you reported."
+          "Final return confirmation must come from someone other than the reporter."
         );
       }
 

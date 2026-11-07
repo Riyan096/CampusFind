@@ -92,6 +92,23 @@ test('authenticated creator can create a chat with themselves as a participant',
   );
 });
 
+test('creator cannot inject other participants into the initial chat write', async () => {
+  const db = dbFor('creator-1');
+
+  await assertFails(
+    db.ref('chats/chat-injected').set({
+      createdBy: 'creator-1',
+      itemId: 'item-1',
+      itemTitle: 'Lost Keys',
+      participants: {
+        'creator-1': { name: 'Creator', joinedAt: 1000 },
+        'victim-1': { name: 'Victim', joinedAt: 1001 }
+      },
+      createdAt: 1000
+    })
+  );
+});
+
 test('authenticated user cannot create a chat claiming another user as creator', async () => {
   const db = dbFor('attacker');
 

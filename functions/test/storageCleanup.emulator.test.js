@@ -50,6 +50,8 @@ test.before(async () => {
     deleteIfExists('users/cleanup-test/items/deleted-item/image.jpg'),
     deleteIfExists('users/cleanup-test/items/replaced-item/old.jpg'),
     deleteIfExists('users/cleanup-test/items/replaced-item/new.jpg'),
+    deleteIfExists('users/victim/items/victim-item/keep.jpg'),
+    deleteIfExists('users/cleanup-test/items/wrong-bucket-item/keep.jpg'),
   ]);
 });
 
@@ -58,6 +60,8 @@ test.after(async () => {
     deleteIfExists('users/cleanup-test/items/deleted-item/image.jpg'),
     deleteIfExists('users/cleanup-test/items/replaced-item/old.jpg'),
     deleteIfExists('users/cleanup-test/items/replaced-item/new.jpg'),
+    deleteIfExists('users/victim/items/victim-item/keep.jpg'),
+    deleteIfExists('users/cleanup-test/items/wrong-bucket-item/keep.jpg'),
   ]);
   await db.terminate();
   await app.delete();
@@ -108,4 +112,38 @@ test('replacing an item image removes the old image and keeps the new image', as
   await waitForFile(newImagePath, true);
 
   await itemRef.delete();
+});
+
+test('deleting an item cannot remove another reporter item image', async () => {
+  const itemRef = db.collection('items').doc('attacker-item');
+  const victimImage = 'users/victim/items/victim-item/keep.jpg';
+  await uploadImage(victimImage);
+  await waitForFile(victimImage, true);
+
+  await itemRef.set({
+    reportedBy: 'attacker',
+    imageUrl: storageDownloadUrl(victimImage),
+    title: 'Forged image reference',
+  });
+  await itemRef.delete();
+
+  await waitForFile(victimImage, true);
+  await deleteIfExists(victimImage);
+});
+
+test('cleanup ignores a download URL for a different bucket', async () => {
+  const itemRef = db.collection('items').doc('wrong-bucket-item');
+  const imagePath = 'users/cleanup-test/items/wrong-bucket-item/keep.jpg';
+  await uploadImage(imagePath);
+  await waitForFile(imagePath, true);
+
+  await itemRef.set({
+    reportedBy: 'cleanup-test',
+    imageUrl: `https://firebasestorage.googleapis.com/v0/b/other-bucket/o/${encodeURIComponent(imagePath)}?alt=media&token=test-token`,
+    title: 'Wrong bucket reference',
+  });
+  await itemRef.delete();
+
+  await waitForFile(imagePath, true);
+  await deleteIfExists(imagePath);
 });

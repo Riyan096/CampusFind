@@ -232,6 +232,7 @@ export const AdminView: React.FC = () => {
         recipientCount: usersSnapshot.docs.length,
         sentBy: user?.uid,
         sentByName: safeSentByName,
+        isGlobal: true,
         createdAt: serverTimestamp()
       });
       

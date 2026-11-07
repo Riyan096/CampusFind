@@ -18,6 +18,8 @@ import {
 } from 'firebase/database';
 
 import { realtimeDb } from './firebase';
+import { functions } from './firebase';
+import { httpsCallable } from 'firebase/functions';
 import { emailService } from './emailService';
 import { LIMITS, sanitizeFirestoreDocId, sanitizePlainText } from '../utils/sanitize';
 
@@ -83,17 +85,12 @@ export const createChat = async (
 };
 
 // Join an existing chat
-export const joinChat = async (
-  chatId: string, 
-  userId: string, 
-  userName: string
-): Promise<void> => {
-  const safeUserName = sanitizePlainText(userName, LIMITS.displayName, { multiline: false });
-  const participantRef = ref(realtimeDb, `chats/${chatId}/participants/${userId}`);
-  await set(participantRef, {
-    name: safeUserName,
-    joinedAt: serverTimestamp(),
-  });
+export const joinChat = async (chatId: string): Promise<void> => {
+  const joinItemChatCallable = httpsCallable<{ chatId: string }, { ok: boolean }>(
+    functions,
+    'joinItemChat'
+  );
+  await joinItemChatCallable({ chatId });
 };
 
 // Send a message
@@ -102,7 +99,7 @@ export const sendMessage = async (
   senderId: string,
   senderName: string,
   content: string
-): Promise<void> => {
+): Promise<string> => {
   const safeName = sanitizePlainText(senderName, LIMITS.displayName, { multiline: false });
   const safeContent = sanitizePlainText(content, LIMITS.chatMessage, { multiline: true });
   const messageRef = push(ref(realtimeDb, `chats/${chatId}/messages`));
@@ -143,6 +140,8 @@ export const sendMessage = async (
       ).catch(err => console.error('Failed to send email notification:', err));
     }
   }
+
+  return messageRef.key!;
 };
 
 // Subscribe to messages in a chat

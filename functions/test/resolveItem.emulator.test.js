@@ -77,13 +77,19 @@ test.after(clear);
 
 test('legal found-item transitions are accepted', async () => {
   await seedUser('reporter-1');
+  await seedUser('claimer-1');
   await seedItem('transition-item');
 
   const pending = await callResolve('reporter-1', 'transition-item', 'PENDING_CLAIM');
   assert.equal(pending.item.status, 'PENDING_CLAIM');
   assert.equal(pending.pointsAwarded, 0);
 
-  const returned = await callResolve('reporter-1', 'transition-item', 'RETURNED');
+  await assert.rejects(
+    callResolve('reporter-1', 'transition-item', 'RETURNED'),
+    error => error.code === 'permission-denied'
+  );
+
+  const returned = await callResolve('claimer-1', 'transition-item', 'RETURNED');
   assert.equal(returned.item.status, 'RETURNED');
   assert.equal(returned.pointsAwarded, 50);
 });
@@ -103,10 +109,11 @@ test('illegal status transitions are rejected server-side', async () => {
 
 test('repeated resolution calls award points exactly once', async () => {
   await seedUser('reporter-1');
+  await seedUser('claimer-1');
   await seedItem('repeat-item', { status: 'PENDING_CLAIM' });
 
-  const first = await callResolve('reporter-1', 'repeat-item', 'RETURNED');
-  const second = await callResolve('reporter-1', 'repeat-item', 'RETURNED');
+  const first = await callResolve('claimer-1', 'repeat-item', 'RETURNED');
+  const second = await callResolve('claimer-1', 'repeat-item', 'RETURNED');
 
   assert.equal(first.pointsAwarded, 50);
   assert.equal(first.alreadyResolved, false);
@@ -128,11 +135,12 @@ test('repeated resolution calls award points exactly once', async () => {
 
 test('concurrent resolution attempts produce one reward', async () => {
   await seedUser('reporter-1');
+  await seedUser('claimer-1');
   await seedItem('concurrent-item', { status: 'PENDING_CLAIM' });
 
   const results = await Promise.allSettled([
-    callResolve('reporter-1', 'concurrent-item', 'RETURNED'),
-    callResolve('reporter-1', 'concurrent-item', 'RETURNED')
+    callResolve('claimer-1', 'concurrent-item', 'RETURNED'),
+    callResolve('claimer-1', 'concurrent-item', 'RETURNED')
   ]);
 
   const successful = results.filter(result => result.status === 'fulfilled');
@@ -159,7 +167,7 @@ test('unauthorized resolution is rejected and does not mutate data', async () =>
   await seedItem('private-item', { status: 'PENDING_CLAIM' });
 
   await assert.rejects(
-    callResolve('attacker', 'private-item', 'RETURNED'),
+    callResolve('attacker', 'private-item', 'UNCLAIMED'),
     error => error.code === 'permission-denied'
   );
 

@@ -33,14 +33,34 @@ service cloud.firestore {
           !d.imageUrl.matches('data:.*'));
     }
 
+    function validInitialItemStatus(t, s) {
+      return (t == 'LOST' && s == 'STILL_LOST') ||
+        (t == 'FOUND' && s == 'AVAILABLE');
+    }
+
+    function validItemTags(d) {
+      return !('aiTags' in d) ||
+        (d.aiTags is list && d.aiTags.size() <= 10);
+    }
+
     function validItemCreate() {
       let d = request.resource.data;
-      return d.reportedBy == request.auth.uid &&
+      return d.keys().hasOnly([
+          'reportedBy', 'type', 'status', 'title', 'description', 'category',
+          'location', 'date', 'latlng', 'imageUrl', 'aiTags', 'reporterName',
+          'createdAt', 'updatedAt'
+        ]) &&
+        d.reportedBy == request.auth.uid &&
         d.title is string && d.title.size() > 0 && d.title.size() <= 200 &&
         d.description is string && d.description.size() <= 8000 &&
         d.location is string && d.location.size() <= 300 &&
         validItemType(d.type) && validCategory(d.category) &&
-        validStatusForType(d.type, d.status) &&
+        validInitialItemStatus(d.type, d.status) &&
+        d.date is string && d.date.size() <= 64 &&
+        (!('reporterName' in d) ||
+          (d.reporterName is string && d.reporterName.size() <= 100)) &&
+        d.createdAt == request.time && d.updatedAt == request.time &&
+        validItemTags(d) &&
         validItemImageUrl(d);
     }
 
@@ -66,17 +86,11 @@ service cloud.firestore {
         d.location is string && d.location.size() <= 300 &&
         validItemType(d.type) && validCategory(d.category) &&
         validStatusForType(d.type, d.status) &&
+        (!('reporterName' in d) ||
+          (d.reporterName is string && d.reporterName.size() <= 100)) &&
+        (!d.diff(before).affectedKeys().hasAny(['updatedAt']) ||
+          d.updatedAt == request.time) && validItemTags(d) &&
         validItemImageUrl(d);
-    }
-
-    function validNotificationCreate() {
-      let d = request.resource.data;
-      return d.userId is string &&
-        exists(/databases/$(database)/documents/users/$(d.userId)) &&
-        d.title is string && d.title.size() > 0 && d.title.size() <= 200 &&
-        d.message is string && d.message.size() <= 4000 &&
-        d.type in ['item_match', 'chat_message', 'status_update', 'system'] &&
-        d.read == false;
     }
 
     function validPublicProfile() {
@@ -96,7 +110,22 @@ service cloud.firestore {
 
       allow create: if isSignedIn() &&
         request.auth.uid == userId &&
-        request.resource.data.isAdmin == false;
+        request.resource.data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'isAdmin', 'createdAt',
+          'points', 'itemsReturned', 'itemsReported', 'itemsClaimed'
+        ]) &&
+        request.resource.data.uid == userId &&
+        request.resource.data.isAdmin == false &&
+        request.resource.data.displayName is string &&
+        request.resource.data.displayName.size() <= 100 &&
+        request.resource.data.createdAt is string &&
+        request.resource.data.points == 0 &&
+        request.resource.data.itemsReturned == 0 &&
+        request.resource.data.itemsReported == 0 &&
+        request.resource.data.itemsClaimed == 0 &&
+        (!('email' in request.resource.data) ||
+          (request.resource.data.email is string &&
+            request.resource.data.email.size() <= 254));
 
       allow update: if isSignedIn() && (
         (
@@ -184,7 +213,25 @@ service cloud.firestore {
 
     match /notifications/{notificationId} {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && validNotificationCreate();
+      // Notifications are written by trusted Functions after verifying the
+      // originating item/chat event. Clients may only mark their own as read.
+      allow create: if isAdmin() &&
+        request.resource.data.keys().hasOnly([
+          'title', 'message', 'type', 'recipientCount', 'sentBy',
+          'sentByName', 'createdAt', 'isGlobal'
+        ]) &&
+        request.resource.data.isGlobal == true &&
+        request.resource.data.sentBy == request.auth.uid &&
+        request.resource.data.title is string &&
+        request.resource.data.title.size() <= 200 &&
+        request.resource.data.message is string &&
+        request.resource.data.message.size() <= 4000 &&
+        request.resource.data.type in ['info', 'success', 'warning'] &&
+        request.resource.data.recipientCount is int &&
+        request.resource.data.recipientCount >= 0 &&
+        request.resource.data.sentByName is string &&
+        request.resource.data.sentByName.size() <= 100 &&
+        request.resource.data.createdAt == request.time;
       allow update: if isSignedIn() && resource.data.userId == request.auth.uid &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
       allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;

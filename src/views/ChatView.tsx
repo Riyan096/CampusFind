@@ -11,7 +11,7 @@ import {
   type Chat,
   type Message
 } from '../services/chatService';
-import { createNotification } from '../services/notificationService';
+import { notifyChatMessage } from '../services/notificationService';
 import { Button, Input } from '../components/UI';
 import { LIMITS, sanitizeFirestoreDocId, sanitizePlainText } from '../utils/sanitize';
 
@@ -58,7 +58,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       
       // If there's an item owner, add them as a participant too
       if (itemOwnerId && itemOwnerId !== user.uid) {
-        await joinChat(chatId, itemOwnerId, 'Item Owner');
+        await joinChat(chatId);
       }
 
       // Optimistically open the created chat before subscription refresh.
@@ -172,7 +172,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     
     setLoading(true);
     try {
-      await sendMessage(
+      const messageId = await sendMessage(
         activeChat.id!,
         user.uid,
         user.displayName || 'Anonymous',
@@ -181,20 +181,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
       
       // Notify other participants
       const participantIds = Object.keys(activeChat.participants);
-      const senderLabel = sanitizePlainText(user.displayName || 'Anonymous', LIMITS.displayName, {
-        multiline: false,
-      });
       for (const participantId of participantIds) {
         if (participantId !== user.uid) {
           try {
-            await createNotification({
-              userId: participantId,
-              title: `New message from ${senderLabel}`,
-              message: safeContent.substring(0, 100),
-              type: 'chat_message',
-              relatedChatId: activeChat.id,
-              relatedItemId: activeChat.itemId,
-            });
+            await notifyChatMessage(activeChat.id!, messageId, participantId);
           } catch (notifError) {
             console.error('Failed to create notification:', notifError);
           }

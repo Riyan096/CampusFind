@@ -402,10 +402,16 @@ export const BrowseView: React.FC<BrowseViewProps> = React.memo(
           return false;
         }
 
-        return (
-          isAdmin ||
-          item.reportedBy === user.uid
-        );
+        const reporterCanManage = item.reportedBy === user.uid;
+        const awaitingReturnConfirmation =
+          (item.type === ItemType.LOST &&
+            item.status === LostItemStatus.MATCH_FOUND) ||
+          (item.type === ItemType.FOUND &&
+            item.status === FoundItemStatus.PENDING_CLAIM);
+        const nonReporterCanConfirm =
+          item.reportedBy !== user.uid && awaitingReturnConfirmation;
+
+        return isAdmin || reporterCanManage || nonReporterCanConfirm;
       },
       [user, isAdmin]
     );

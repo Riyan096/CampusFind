@@ -18,7 +18,7 @@ import { checkForMatchesAndNotify, type MatchResult } from '../services/matching
 
 import { useAuth } from '../context/AuthContext';
 import { addPoints } from '../services/StorageService';
-import { createNotification } from '../services/notificationService';
+import { notifyPotentialMatch } from '../services/notificationService';
 import { LIMITS, sanitizePlainText } from '../utils/sanitize';
 import { IMAGE_FILE_ACCEPT_REPORT, validateImageFile } from '../utils/imageUploadValidation';
 
@@ -61,6 +61,7 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
   const [showMatches, setShowMatches] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [matchSourceItemId, setMatchSourceItemId] = useState<string | null>(null);
 
   // Memoized category options
   const categoryOptions = useMemo(() => 
@@ -116,6 +117,7 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
   // Memoized callbacks
   const handleTypeChange = useCallback((newType: ItemType) => {
     setType(newType);
+    setMatchSourceItemId(null);
     // Clear matches when switching types
     setPotentialMatches([]);
     setShowMatches(false);
@@ -205,16 +207,11 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
   }, []);
 
   const handleNotifyOwner = useCallback(async (match: PotentialMatch) => {
-    if (!user || !match.item.reportedBy) return;
+    const sourceItemId = matchSourceItemId;
+    if (!user || !match.item.reportedBy || !sourceItemId) return;
     
     try {
-      await createNotification({
-        userId: match.item.reportedBy,
-        title: 'Potential Match Found!',
-        message: `Someone found an item that might be yours: "${title}". Check the Reports page for details.`,
-        type: 'item_match',
-        relatedItemId: match.item.id,
-      });
+      await notifyPotentialMatch(sourceItemId, match.item.id);
 
       
       alert(`Notification sent to the owner of "${match.item.title}"!`);
@@ -222,7 +219,7 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
       console.error('Error sending notification:', err);
       alert('Failed to send notification. Please try again.');
     }
-  }, [user, title]);
+  }, [user, matchSourceItemId]);
 
   const handleSubmit = useCallback(async () => {
     if (!user) {
@@ -231,6 +228,7 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
     }
     
     try {
+      setMatchSourceItemId(null);
       const newItem: any = {
         type,
         title,
@@ -253,7 +251,8 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
 
       
       
-      await addItemToFirestore(newItem);
+      const newItemId = await addItemToFirestore(newItem);
+      setMatchSourceItemId(newItemId);
       
       // Award points for reporting an item (includes streaks + achievements)
       const { newAchievements } = await addPoints(10, 'report');
@@ -262,7 +261,7 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
       // Check for matches after reporting
       if (type === ItemType.FOUND) {
         // For found items, check against lost items
-        const tempItem = { ...newItem, id: 'temp' };
+        const tempItem = { ...newItem, id: newItemId };
         await checkForMatchesAndNotify(tempItem, handleMatchesFound);
       }
       
@@ -447,6 +446,7 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
                     variant="primary"
                     size="sm"
                     onClick={() => handleNotifyOwner(match)}
+                    disabled={!matchSourceItemId}
                     className="flex-shrink-0 text-xs"
                   >
                     Notify Owner

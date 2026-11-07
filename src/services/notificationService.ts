@@ -1,6 +1,5 @@
 import { 
   collection, 
-  addDoc, 
   query, 
   where, 
   orderBy, 
@@ -9,12 +8,11 @@ import {
   doc,
   getDocs,
   deleteDoc,
-  writeBatch,
-  Timestamp 
+  writeBatch
 } from 'firebase/firestore';
 
-import { db } from './firebase';
-import { LIMITS, sanitizePlainText } from '../utils/sanitize';
+import { db, functions } from './firebase';
+import { httpsCallable } from 'firebase/functions';
 
 export interface Notification {
   id?: string;
@@ -28,19 +26,29 @@ export interface Notification {
   relatedChatId?: string;
 }
 
-// Create a new notification
-export const createNotification = async (notification: Omit<Notification, 'id' | 'createdAt' | 'read'>): Promise<string> => {
-  const safe = {
-    ...notification,
-    title: sanitizePlainText(notification.title, LIMITS.notificationTitle, { multiline: false }),
-    message: sanitizePlainText(notification.message, LIMITS.notificationMessage, { multiline: true }),
-  };
-  const docRef = await addDoc(collection(db, 'notifications'), {
-    ...safe,
-    read: false,
-    createdAt: new Date().toISOString(),
-  });
-  return docRef.id;
+const notifyChatMessageCallable = httpsCallable<
+  { chatId: string; messageId: string; recipientId: string },
+  { ok: boolean }
+>(functions, 'notifyChatMessage');
+
+const notifyPotentialMatchCallable = httpsCallable<
+  { sourceItemId: string; targetItemId: string },
+  { ok: boolean }
+>(functions, 'notifyPotentialMatch');
+
+export const notifyChatMessage = async (
+  chatId: string,
+  messageId: string,
+  recipientId: string
+): Promise<void> => {
+  await notifyChatMessageCallable({ chatId, messageId, recipientId });
+};
+
+export const notifyPotentialMatch = async (
+  sourceItemId: string,
+  targetItemId: string
+): Promise<void> => {
+  await notifyPotentialMatchCallable({ sourceItemId, targetItemId });
 };
 
 // Get real-time notifications for a user
