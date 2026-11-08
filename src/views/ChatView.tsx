@@ -43,6 +43,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [newChatItemTitle, setNewChatItemTitle] = useState('');
   const [leavingChatIds, setLeavingChatIds] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatMenuRootRef = useRef<HTMLDivElement>(null);
   // Prevent chat-list snapshots from repeatedly overriding the user's manual selection.
   const lastAutoOpenedItemIdRef = useRef<string | null>(null);
   
@@ -69,6 +70,27 @@ export const ChatView: React.FC<ChatViewProps> = ({
       alert(message);
     }
   }, [user]);
+
+  // Close the chat options menu when clicking anywhere outside it or pressing Escape.
+  useEffect(() => {
+    if (!openChatMenuId) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!chatMenuRootRef.current?.contains(event.target as Node)) {
+        setOpenChatMenuId(null);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpenChatMenuId(null);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [openChatMenuId]);
 
   // Load user's chats
   useEffect(() => {
@@ -403,6 +425,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   <div className="flex items-center gap-2">
                     <h3 className={`font-medium truncate ${isUnread ? 'text-gray-900' : 'text-gray-800'}`}>{chat.itemTitle}</h3>
                     {isUnread && <span className="w-2.5 h-2.5 rounded-full bg-sky-600 ring-4 ring-sky-100 flex-shrink-0" title="Unread message" aria-label="Unread message" />}
+                    {chatSettings.pinned && <span className="material-icons text-amber-600 text-base flex-shrink-0" title="Pinned chat" aria-label="Pinned chat">push_pin</span>}
+                    {chatSettings.muted && <span className="material-icons text-indigo-600 text-base flex-shrink-0" title="Muted chat" aria-label="Muted chat">notifications_off</span>}
                   </div>
                   <p className="text-sm text-gray-500 truncate mt-1">
                     {chat.lastMessage?.content || 'No messages yet'}
@@ -414,7 +438,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     }
                   </p>
                 </button>
-                <div className="relative mt-2 flex justify-end">
+                <div ref={chatMenuRootRef} data-chat-menu-root className="relative mt-2 flex justify-end">
                   <button
                     type="button"
                     onClick={(e) => {
