@@ -237,6 +237,103 @@ service cloud.firestore {
       allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
     }
 
+
+    // Firestore chat: users can discover only chats whose participantIds include them.
+    match /chats/{chatId} {
+      function isChatParticipant() {
+        return isSignedIn() && request.auth.uid in resource.data.participantIds;
+      }
+
+      function validChatCreate() {
+        let itemPath = /databases/$(database)/documents/items/$(request.resource.data.itemId);
+        return isSignedIn() &&
+          request.resource.data.keys().hasOnly([
+            'itemId', 'itemTitle', 'createdBy', 'participantIds',
+            'participants', 'createdAt'
+          ]) &&
+          request.resource.data.createdBy == request.auth.uid &&
+          request.resource.data.itemId is string &&
+          request.resource.data.itemTitle is string &&
+          request.resource.data.itemTitle.size() > 0 &&
+          request.resource.data.itemTitle.size() <= 200 &&
+          exists(itemPath) &&
+          get(itemPath).data.reportedBy is string &&
+          get(itemPath).data.reportedBy != request.auth.uid &&
+          request.resource.data.participantIds is list &&
+          request.resource.data.participantIds.size() == 2 &&
+          request.resource.data.participantIds.hasAll([
+            request.auth.uid, get(itemPath).data.reportedBy
+          ]) &&
+          request.resource.data.participants.keys().hasAll([
+            request.auth.uid, get(itemPath).data.reportedBy
+          ]) &&
+          request.resource.data.participants.keys().hasOnly([
+            request.auth.uid, get(itemPath).data.reportedBy
+          ]) &&
+          request.resource.data.createdAt == request.time;
+      }
+
+      allow read: if isChatParticipant();
+      allow create: if validChatCreate();
+      allow update: if isChatParticipant() && (
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage']) &&
+          request.resource.data.lastMessage.keys().hasOnly(['content', 'timestamp', 'senderId']) &&
+          request.resource.data.lastMessage.senderId == request.auth.uid &&
+          request.resource.data.lastMessage.content is string &&
+          request.resource.data.lastMessage.content.size() <= 100 &&
+          request.resource.data.lastMessage.timestamp == request.time
+        ) ||
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'participantIds', 'participants'
+          ]) &&
+          resource.data.participantIds.hasAll(request.resource.data.participantIds) &&
+          request.resource.data.participantIds.size() == resource.data.participantIds.size() - 1 &&
+          !(request.auth.uid in request.resource.data.participantIds) &&
+          request.resource.data.participants.diff(resource.data.participants)
+            .removedKeys().hasOnly([request.auth.uid])
+        )
+      );
+      allow delete: if isChatParticipant() && resource.data.createdBy == request.auth.uid;
+
+      match /messages/{messageId} {
+        function parentChat() {
+          return get(/databases/$(database)/documents/chats/$(chatId)).data;
+        }
+
+        function isParentParticipant() {
+          return isSignedIn() && request.auth.uid in parentChat().participantIds;
+        }
+
+        allow read: if isParentParticipant();
+        allow create: if isParentParticipant() &&
+          request.resource.data.keys().hasOnly([
+            'senderId', 'senderName', 'content', 'timestamp',
+            'read', 'status', 'readBy'
+          ]) &&
+          request.resource.data.senderId == request.auth.uid &&
+          request.resource.data.senderName is string &&
+          request.resource.data.senderName.size() <= 100 &&
+          request.resource.data.content is string &&
+          request.resource.data.content.size() > 0 &&
+          request.resource.data.content.size() <= 4000 &&
+          request.resource.data.timestamp == request.time &&
+          request.resource.data.read == false &&
+          request.resource.data.status == 'sent';
+        allow update: if isParentParticipant() &&
+          resource.data.senderId != request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'read', 'status', 'readBy'
+          ]) &&
+          request.resource.data.read == true &&
+          request.resource.data.status == 'read' &&
+          request.resource.data.readBy.diff(resource.data.readBy)
+            .addedKeys().hasOnly([request.auth.uid]);
+        allow delete: if false;
+      }
+    }
+
     match /adminSettings/{document} {
       allow read, write: if isAdmin();
     }
