@@ -228,7 +228,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
     if (!safeItemId || !safeTitle) return;
     
     try {
-      await createChat(safeItemId, safeTitle, user.uid, user.displayName || 'Anonymous');
+      const createdChatId = await createChat(
+        safeItemId,
+        safeTitle,
+        user.uid,
+        user.displayName || 'Anonymous'
+      );
+      // The callable verifies the item's real owner and adds only that user.
+      await joinChat(createdChatId);
       setNewChatItemId('');
       setNewChatItemTitle('');
       setShowNewChat(false);
