@@ -13,6 +13,7 @@ import {
 } from '../services/chatService';
 import { Button, Input } from '../components/UI';
 import { LIMITS, sanitizeFirestoreDocId, sanitizePlainText } from '../utils/sanitize';
+import { markChatNotificationsAsRead } from '../services/notificationService';
 
 interface ChatViewProps {
   itemId?: string;
@@ -135,6 +136,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
       markMessagesAsRead(activeChat.id!, user.uid);
       markChatAsRead(activeChat.id!, user.uid).catch((error) =>
         console.error('Unable to update chat read status:', error)
+      );
+      markChatNotificationsAsRead(user.uid, activeChat.id!).catch((error) =>
+        console.error('Unable to mark chat notifications as read:', error)
       );
     });
     
