@@ -56,6 +56,7 @@ export interface Chat {
     senderId: string;
   };
   lastReadAt?: { [userId: string]: number };
+  userSettings?: { [userId: string]: { pinned?: boolean; muted?: boolean; archived?: boolean } };
 }
 
 type FirestoreTimestamp = { toMillis?: () => number; seconds?: number } | number | null | undefined;
@@ -100,6 +101,7 @@ const normalizeChat = (id: string, data: Record<string, any>): Chat => {
     createdAt: toMillis(data.createdAt),
     ...(lastMessage ? { lastMessage } : {}),
     lastReadAt,
+    userSettings: data.userSettings || {},
   };
 };
 
@@ -285,7 +287,8 @@ export const sendMessage = async (
 
   // Notification delivery is best-effort and must never make a successfully
   // sent chat message appear to have failed.
-  if (recipientId && typeof chatData.itemId === 'string') {
+  const recipientSettings = recipientId ? chatData.userSettings?.[recipientId] || {} : {};
+  if (recipientId && typeof chatData.itemId === 'string' && recipientSettings.muted !== true) {
     try {
       const notificationRef = doc(collection(db, 'notifications'));
       await setDoc(notificationRef, {
@@ -343,4 +346,26 @@ export const leaveChat = async (chatId: string, userId: string): Promise<void> =
 /** Delete a conversation. Firestore rules restrict this to its creator. */
 export const deleteChat = async (chatId: string): Promise<void> => {
   await deleteDoc(doc(db, 'chats', chatId));
+};
+
+
+/** Update only the current user's private conversation preferences. */
+export const updateChatUserSettings = async (
+  chatId: string,
+  userId: string,
+  settings: Partial<{ pinned: boolean; muted: boolean; archived: boolean }>
+): Promise<void> => {
+  const allowedKeys = ['pinned', 'muted', 'archived'] as const;
+  const entries = Object.entries(settings);
+  if (!entries.length || entries.some(([key, value]) =>
+    !allowedKeys.includes(key as typeof allowedKeys[number]) || typeof value !== 'boolean'
+  )) {
+    throw new Error('Invalid chat preference update.');
+  }
+
+  const updates: Record<string, boolean> = {};
+  entries.forEach(([key, value]) => {
+    updates[`userSettings.${userId}.${key}`] = value as boolean;
+  });
+  await updateDoc(doc(db, 'chats', chatId), updates);
 };
