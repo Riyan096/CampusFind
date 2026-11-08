@@ -191,7 +191,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
   };
 
   const handleSelectAllNotifications = () => {
-    const ids = notifications.flatMap((notification) => notification.id ? [notification.id] : []);
+    const ids = visibleNotifications.flatMap((notification) => notification.id ? [notification.id] : []);
     setSelectedNotificationIds((current) =>
       current.size === ids.length ? new Set() : new Set(ids)
     );
