@@ -43,6 +43,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAllNotifications, setShowAllNotifications] = useState(false);
   const [selectedNotificationIds, setSelectedNotificationIds] = useState<Set<string>>(new Set());
+  const [notificationFilter, setNotificationFilter] = useState<'all' | 'unread' | 'read'>('all');
   const [notifications, setNotifications] = useState<Notification[]>([]);
   // Sound is on by default; remember the user's choice on this device.
   const [audioEnabled, setAudioEnabled] = useState(() => {
@@ -148,6 +149,10 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
   }, [user, audioEnabled, playNotificationSound]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadChatCount = notifications.filter(n => n.type === 'chat_message' && !n.read).length;
+  const visibleNotifications = notifications.filter((notification) =>
+    notificationFilter === 'all' || (notificationFilter === 'unread' ? !notification.read : notification.read)
+  );
 
   const handleNotificationClick = async (notification: Notification) => {
     if (notification.id && !notification.read) {
@@ -264,9 +269,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
         {/* Navigation Menu */}
         <nav className="flex-1 px-4 py-6 space-y-2">
           {navItems.map(item => {
-            const hasUnreadChat = item.id === 'chat' && notifications.some(
-              notification => notification.type === 'chat_message' && !notification.read
-            );
+            const hasUnreadChat = item.id === 'chat' && unreadChatCount > 0 && activeTab !== 'chat';
             return (
               <button
                 key={item.id}
@@ -465,6 +468,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
                         setShowNotifications(false);
                         setShowAllNotifications(true);
                         setSelectedNotificationIds(new Set());
+                        setNotificationFilter('all');
                       }}
                       className="text-xs text-primary hover:text-primary-dark font-medium transition-colors"
                     >
@@ -497,9 +501,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
 
           {navItems.map((item) => {
             const isActive = activeTab === item.id;
-            const hasUnreadChat = item.id === 'chat' && notifications.some(
-              notification => notification.type === 'chat_message' && !notification.read
-            );
+            const hasUnreadChat = item.id === 'chat' && unreadChatCount > 0 && activeTab !== 'chat';
             return (
               <button
                 key={item.id}
@@ -531,8 +533,15 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
             </div>
 
             <div className="p-3 sm:px-5 border-b border-gray-100 flex flex-wrap items-center gap-2">
-              <button onClick={handleSelectAllNotifications} disabled={notifications.length === 0} className="px-3 py-2 rounded-lg text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40">
-                {selectedNotificationIds.size === notifications.length && notifications.length > 0 ? 'Deselect all' : 'Select all'}
+              <div className="flex rounded-lg bg-gray-100 p-1 mr-auto" role="group" aria-label="Filter notifications">
+                {(['all', 'unread', 'read'] as const).map((filter) => (
+                  <button key={filter} onClick={() => { setNotificationFilter(filter); setSelectedNotificationIds(new Set()); }} className={`px-3 py-1.5 rounded-md text-sm capitalize ${notificationFilter === filter ? 'bg-white text-primary shadow-sm font-semibold' : 'text-gray-600 hover:text-gray-900'}`}>
+                    {filter}
+                  </button>
+                ))}
+              </div>
+              <button onClick={handleSelectAllNotifications} disabled={visibleNotifications.length === 0} className="px-3 py-2 rounded-lg text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40">
+                {selectedNotificationIds.size === visibleNotifications.length && visibleNotifications.length > 0 ? 'Deselect all' : 'Select all'}
               </button>
               <button onClick={handleMarkSelectedNotificationsRead} disabled={selectedNotificationIds.size === 0} className="px-3 py-2 rounded-lg text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-40">
                 Mark selected read
@@ -549,12 +558,12 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
             </div>
 
             <div className="flex-1 overflow-y-auto">
-              {notifications.length === 0 ? (
+              {visibleNotifications.length === 0 ? (
                 <div className="p-12 text-center text-gray-500">
                   <span className="material-icons text-4xl mb-2">notifications_none</span>
-                  <p>No notifications yet</p>
+                  <p>{notifications.length === 0 ? 'No notifications yet' : `No ${notificationFilter} notifications`}</p>
                 </div>
-              ) : notifications.map((notification) => (
+              ) : visibleNotifications.map((notification) => (
                 <div key={notification.id} className={`flex items-start gap-3 p-4 border-b border-gray-100 hover:bg-gray-50 ${!notification.read ? 'bg-blue-50/50' : ''}`}>
                   <input
                     type="checkbox"
