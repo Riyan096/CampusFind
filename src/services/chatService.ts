@@ -177,6 +177,10 @@ export const subscribeToUserChats = (
 ) => {
   // A trusted Cloud Function maintains this private per-user index.
   const userChatsRef = ref(realtimeDb, `userChats/${userId}`);
+  // Populate indexes for conversations created before this feature shipped.
+  httpsCallable(functions, 'rebuildUserChatIndex')({})
+    .catch((error) => console.error('Unable to initialize chat index:', error));
+
   onValue(userChatsRef, (snapshot) => {
     const chats: Chat[] = [];
     snapshot.forEach((childSnapshot) => {
