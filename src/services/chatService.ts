@@ -16,6 +16,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
   writeBatch,
@@ -273,24 +274,29 @@ export const sendMessage = async (
     },
   });
 
-  // Notify the other participant in the same atomic write. Firestore rules
-  // verify that this notification corresponds to the message created above.
+  await batch.commit();
+
+  // Notification delivery is best-effort and must never make a successfully
+  // sent chat message appear to have failed.
   if (recipientId && typeof chatData.itemId === 'string') {
-    const notificationRef = doc(collection(db, 'notifications'));
-    batch.set(notificationRef, {
-      userId: recipientId,
-      title: `New message from ${safeName || 'Anonymous'}`,
-      message: safeContent.substring(0, 120),
-      type: 'chat_message',
-      read: false,
-      createdAt: serverTimestamp(),
-      relatedItemId: chatData.itemId,
-      relatedChatId: chatId,
-      relatedMessageId: messageRef.id,
-    });
+    try {
+      const notificationRef = doc(collection(db, 'notifications'));
+      await setDoc(notificationRef, {
+        userId: recipientId,
+        title: `New message from ${safeName || 'Anonymous'}`,
+        message: safeContent.substring(0, 120),
+        type: 'chat_message',
+        read: false,
+        createdAt: serverTimestamp(),
+        relatedItemId: chatData.itemId,
+        relatedChatId: chatId,
+        relatedMessageId: messageRef.id,
+      });
+    } catch (notificationError) {
+      console.error('Message sent, but notification creation failed:', notificationError);
+    }
   }
 
-  await batch.commit();
   return messageRef.id;
 };
 
