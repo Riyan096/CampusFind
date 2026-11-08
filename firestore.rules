@@ -215,7 +215,36 @@ service cloud.firestore {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
       // Notifications are written by trusted Functions after verifying the
       // originating item/chat event. Clients may only mark their own as read.
-      allow create: if isAdmin() &&
+      function validChatMessageNotification() {
+        let d = request.resource.data;
+        let chatPath = /databases/$(database)/documents/chats/$(d.relatedChatId);
+        let messagePath = /databases/$(database)/documents/chats/$(d.relatedChatId)/messages/$(d.relatedMessageId);
+        return d.keys().hasOnly([
+            'userId', 'title', 'message', 'type', 'read', 'createdAt',
+            'relatedItemId', 'relatedChatId', 'relatedMessageId'
+          ]) &&
+          d.userId is string &&
+          d.userId != request.auth.uid &&
+          d.title is string && d.title.size() > 0 && d.title.size() <= 200 &&
+          d.message is string && d.message.size() <= 120 &&
+          d.type == 'chat_message' &&
+          d.read == false &&
+          d.createdAt == request.time &&
+          d.relatedChatId is string &&
+          d.relatedMessageId is string &&
+          d.relatedItemId is string &&
+          exists(chatPath) &&
+          request.auth.uid in get(chatPath).data.participantIds &&
+          d.userId in get(chatPath).data.participantIds &&
+          get(chatPath).data.itemId == d.relatedItemId &&
+          existsAfter(messagePath) &&
+          getAfter(messagePath).data.senderId == request.auth.uid &&
+          getAfter(messagePath).data.content.size() >= d.message.size() &&
+          getAfter(messagePath).data.content.substring(0, d.message.size()) == d.message;
+      }
+
+      allow create: if (
+        isAdmin() &&
         request.resource.data.keys().hasOnly([
           'title', 'message', 'type', 'recipientCount', 'sentBy',
           'sentByName', 'createdAt', 'isGlobal'
@@ -231,7 +260,10 @@ service cloud.firestore {
         request.resource.data.recipientCount >= 0 &&
         request.resource.data.sentByName is string &&
         request.resource.data.sentByName.size() <= 100 &&
-        request.resource.data.createdAt == request.time;
+        request.resource.data.createdAt == request.time
+      ) || (
+        isSignedIn() && validChatMessageNotification()
+      );
       allow update: if isSignedIn() && resource.data.userId == request.auth.uid &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
       allow delete: if isSignedIn() && request.auth.uid == resource.data.userId;
