@@ -50,6 +50,12 @@
           ".validate": "newData.hasChildren(['content','timestamp','senderId']) && newData.child('content').isString() && newData.child('content').val().length <= 100 && newData.child('senderId').isString() && newData.child('senderId').val() == auth.uid"
         }
       }
+    },
+    "userChats": {
+      "$userId": {
+        ".read": "auth != null && auth.uid == $userId",
+        ".write": false
+      }
     }
   }
 }
