@@ -43,7 +43,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [newChatItemTitle, setNewChatItemTitle] = useState('');
   const [leavingChatIds, setLeavingChatIds] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const chatMenuRootRef = useRef<HTMLDivElement>(null);
   // Prevent chat-list snapshots from repeatedly overriding the user's manual selection.
   const lastAutoOpenedItemIdRef = useRef<string | null>(null);
   
@@ -76,7 +75,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
     if (!openChatMenuId) return;
 
     const handlePointerDown = (event: PointerEvent) => {
-      if (!chatMenuRootRef.current?.contains(event.target as Node)) {
+      const target = event.target;
+      // Each chat row has its own menu root. A single React ref inside the
+      // mapped list points only to the last row, which can close other rows'
+      // menus before their action button receives its click.
+      if (!(target instanceof Element) || !target.closest('[data-chat-menu-root]')) {
         setOpenChatMenuId(null);
       }
     };
@@ -443,7 +446,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     }
                   </p>
                 </button>
-                <div ref={chatMenuRootRef} data-chat-menu-root className="relative mt-2 flex justify-end">
+                <div data-chat-menu-root className="relative mt-2 flex justify-end">
                   <button
                     type="button"
                     onClick={(e) => {
