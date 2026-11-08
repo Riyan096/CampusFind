@@ -237,10 +237,10 @@ service cloud.firestore {
           request.auth.uid in get(chatPath).data.participantIds &&
           d.userId in get(chatPath).data.participantIds &&
           get(chatPath).data.itemId == d.relatedItemId &&
-          existsAfter(messagePath) &&
-          getAfter(messagePath).data.senderId == request.auth.uid &&
-          getAfter(messagePath).data.content.size() >= d.message.size() &&
-          getAfter(messagePath).data.content.substring(0, d.message.size()) == d.message;
+          exists(messagePath) &&
+          get(messagePath).data.senderId == request.auth.uid &&
+          get(messagePath).data.content.size() >= d.message.size() &&
+          get(messagePath).data.content.substring(0, d.message.size()) == d.message;
       }
 
       allow create: if (
