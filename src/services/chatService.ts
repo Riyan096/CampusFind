@@ -199,7 +199,11 @@ export const subscribeToUserChats = (
   return onSnapshot(
     chatsQuery,
     (snapshot) => {
-      const chats = snapshot.docs.map((entry) => normalizeChat(entry.id, entry.data()));
+      // Estimate pending server timestamps locally so a newly sent message
+      // doesn't temporarily sort its conversation to the bottom of the list.
+      const chats = snapshot.docs.map((entry) =>
+        normalizeChat(entry.id, entry.data({ serverTimestamps: 'estimate' }))
+      );
       chats.sort((a, b) =>
         (b.lastMessage?.timestamp || b.createdAt) - (a.lastMessage?.timestamp || a.createdAt)
       );
