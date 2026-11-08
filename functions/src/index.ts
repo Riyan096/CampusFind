@@ -332,6 +332,42 @@ export const notifyPotentialMatch = onCall(async (request) => {
  * this immediately after creating the chat; the owner may also join directly.
  * The target participant is derived from Firestore, never supplied by client.
  */
+/**
+ * One-time backfill for chats created before the private user index existed.
+ * The caller receives no other users' chat data; only their own index is built.
+ */
+export const rebuildUserChatIndex = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "You must be signed in.");
+  const uid = request.auth.uid;
+  const userIndexRef = getDatabase().ref(`userChats/${uid}`);
+  const existing = await userIndexRef.child("_initialized").get();
+  if (existing.val() === true) return {ok: true, alreadyInitialized: true};
+
+  const chatsSnapshot = await getDatabase().ref("chats").get();
+  const index: Record<string, unknown> = {_initialized: true};
+  chatsSnapshot.forEach((child) => {
+    const chat = child.val() as {
+      itemId?: unknown; itemTitle?: unknown; createdBy?: unknown;
+      participants?: Record<string, unknown>; createdAt?: unknown; lastMessage?: unknown;
+    } | null;
+    if (!chat?.participants?.[uid]) return;
+    const summary: Record<string, unknown> = {
+      id: child.key,
+      itemId: typeof chat.itemId === "string" ? chat.itemId : "",
+      itemTitle: typeof chat.itemTitle === "string" ? chat.itemTitle : "Untitled item",
+      createdBy: typeof chat.createdBy === "string" ? chat.createdBy : "",
+      participants: chat.participants,
+      createdAt: typeof chat.createdAt === "number" ? chat.createdAt : 0,
+    };
+    if (chat.lastMessage && typeof chat.lastMessage === "object") {
+      summary.lastMessage = chat.lastMessage;
+    }
+    index[child.key!] = summary;
+  });
+  await userIndexRef.set(index);
+  return {ok: true, chatCount: Object.keys(index).length - 1};
+});
+
 export const joinItemChat = onCall(async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "You must be signed in.");
   const chatId = request.data?.chatId;
