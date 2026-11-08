@@ -253,6 +253,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
     if (!user || !chat.id) return;
     try {
       await updateChatUserSettings(chat.id, user.uid, { [setting]: value });
+      // An unarchived conversation no longer belongs in the Archived filter.
+      // Switch back to Active so the user can immediately see the restored chat.
+      if (setting === 'archived' && value === false) {
+        setShowArchivedChats(false);
+      }
     } catch (error) {
       console.error(`Unable to update chat ${setting} setting:`, error);
       alert(`Unable to update this chat. Please try again.`);
