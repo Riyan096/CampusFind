@@ -175,26 +175,22 @@ export const subscribeToUserChats = (
   userId: string,
   callback: (chats: Chat[]) => void
 ) => {
-  const chatsRef = ref(realtimeDb, 'chats');
-  
-  onValue(chatsRef, (snapshot) => {
+  // A trusted Cloud Function maintains this private per-user index.
+  const userChatsRef = ref(realtimeDb, `userChats/${userId}`);
+  onValue(userChatsRef, (snapshot) => {
     const chats: Chat[] = [];
     snapshot.forEach((childSnapshot) => {
       const chat = childSnapshot.val();
-      // Only include chats where user is a participant
-      if (chat.participants && chat.participants[userId]) {
-        chats.push({
-          id: childSnapshot.key!,
-          ...chat,
-        });
+      if (chat?.participants?.[userId]) {
+        chats.push({id: childSnapshot.key!, ...chat});
       }
     });
-    // Sort by last message timestamp descending
-    chats.sort((a, b) => (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0));
+    chats.sort((a, b) =>
+      (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0)
+    );
     callback(chats);
   });
-  
-  return () => off(chatsRef);
+  return () => off(userChatsRef);
 };
 
 // Get a single chat by ID
