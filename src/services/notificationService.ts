@@ -24,6 +24,7 @@ export interface Notification {
   createdAt: string;
   relatedItemId?: string;
   relatedChatId?: string;
+  relatedMessageId?: string;
 }
 
 const notifyChatMessageCallable = httpsCallable<
@@ -64,10 +65,17 @@ export const subscribeToNotifications = (
 
   return onSnapshot(q, (snapshot) => {
     const notifications: Notification[] = [];
-    snapshot.forEach((doc) => {
+    snapshot.forEach((document) => {
+      const data = document.data();
+      const createdAt = data.createdAt?.toDate
+        ? data.createdAt.toDate().toISOString()
+        : typeof data.createdAt === 'string'
+          ? data.createdAt
+          : new Date().toISOString();
       notifications.push({
-        id: doc.id,
-        ...doc.data(),
+        id: document.id,
+        ...data,
+        createdAt,
       } as Notification);
     });
     callback(notifications);
