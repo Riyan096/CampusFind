@@ -99,7 +99,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       // A notification target takes priority and is selected when its chat appears.
       if (chatId) {
         const targetChat = userChats.find(c => c.id === chatId);
-        if (targetChat && !currentLeavingIds.has(targetChat.id!)) {
+        if (targetChat && !currentLeavingIds.has(targetChat.id!) && activeChat?.id !== targetChat.id) {
           setActiveChat(targetChat);
         }
       }
