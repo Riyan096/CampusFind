@@ -38,6 +38,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [loading, setLoading] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [showArchivedChats, setShowArchivedChats] = useState(false);
+  const [openChatMenuId, setOpenChatMenuId] = useState<string | null>(null);
   const [newChatItemId, setNewChatItemId] = useState('');
   const [newChatItemTitle, setNewChatItemTitle] = useState('');
   const [leavingChatIds, setLeavingChatIds] = useState<Set<string>>(new Set());
@@ -413,28 +414,62 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     }
                   </p>
                 </button>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
+                <div className="relative mt-2 flex justify-end">
                   <button
-                    onClick={(e) => void handleChatSettingToggle(chat, 'pinned', !chatSettings.pinned, e)}
-                    className={`text-xs flex items-center gap-1 ${chatSettings.pinned ? 'text-amber-600' : 'text-gray-400 hover:text-amber-600'}`}
-                    title={chatSettings.pinned ? 'Unpin chat' : 'Pin chat'}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenChatMenuId((current) => current === chat.id ? null : chat.id!);
+                    }}
+                    className="p-1.5 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    title="Chat options"
+                    aria-label={`Options for ${chat.itemTitle}`}
+                    aria-haspopup="menu"
+                    aria-expanded={openChatMenuId === chat.id}
                   >
-                    <span className="material-icons text-sm">push_pin</span>{chatSettings.pinned ? 'Pinned' : 'Pin'}
+                    <span className="material-icons text-xl">more_horiz</span>
                   </button>
-                  <button
-                    onClick={(e) => void handleChatSettingToggle(chat, 'muted', !chatSettings.muted, e)}
-                    className={`text-xs flex items-center gap-1 ${chatSettings.muted ? 'text-indigo-600' : 'text-gray-400 hover:text-indigo-600'}`}
-                    title={chatSettings.muted ? 'Unmute chat' : 'Mute chat'}
-                  >
-                    <span className="material-icons text-sm">{chatSettings.muted ? 'notifications_off' : 'notifications'}</span>{chatSettings.muted ? 'Muted' : 'Mute'}
-                  </button>
-                  <button
-                    onClick={(e) => void handleChatSettingToggle(chat, 'archived', !chatSettings.archived, e)}
-                    className="text-xs flex items-center gap-1 text-gray-400 hover:text-primary"
-                    title={chatSettings.archived ? 'Unarchive chat' : 'Archive chat'}
-                  >
-                    <span className="material-icons text-sm">{chatSettings.archived ? 'unarchive' : 'archive'}</span>{chatSettings.archived ? 'Unarchive' : 'Archive'}
-                  </button>
+                  {openChatMenuId === chat.id && (
+                    <div
+                      role="menu"
+                      className="absolute right-0 top-9 z-30 w-44 rounded-xl border border-gray-200 bg-white py-1 shadow-lg"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        role="menuitem"
+                        onClick={(e) => {
+                          void handleChatSettingToggle(chat, 'pinned', !chatSettings.pinned, e);
+                          setOpenChatMenuId(null);
+                        }}
+                        className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                      >
+                        <span className="material-icons text-base text-amber-600">push_pin</span>
+                        {chatSettings.pinned ? 'Unpin chat' : 'Pin chat'}
+                      </button>
+                      <button
+                        role="menuitem"
+                        onClick={(e) => {
+                          void handleChatSettingToggle(chat, 'muted', !chatSettings.muted, e);
+                          setOpenChatMenuId(null);
+                        }}
+                        className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                      >
+                        <span className="material-icons text-base text-indigo-600">{chatSettings.muted ? 'notifications' : 'notifications_off'}</span>
+                        {chatSettings.muted ? 'Unmute chat' : 'Mute chat'}
+                      </button>
+                      <button
+                        role="menuitem"
+                        onClick={(e) => {
+                          void handleChatSettingToggle(chat, 'archived', !chatSettings.archived, e);
+                          setOpenChatMenuId(null);
+                        }}
+                        className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                      >
+                        <span className="material-icons text-base"> {chatSettings.archived ? 'unarchive' : 'archive'} </span>
+                        {chatSettings.archived ? 'Unarchive chat' : 'Archive chat'}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={(e) => handleLeaveChat(chat.id!, e)}
