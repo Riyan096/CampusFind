@@ -63,7 +63,7 @@ AI suggestions are treated as assistance rather than an authoritative decision, 
 
 The chat system uses Firebase Realtime Database for low-latency communication. Conversations contain participant information, messages, timestamps, delivery/read state, and recent-message metadata.
 
-The real-time chat security model is actively being hardened to ensure users can only access and modify conversations they are authorized to participate in.
+The active chat implementation uses Cloud Firestore for Spark-plan compatibility, with participant-based access rules, per-user read state, and per-user conversation settings. Existing Realtime Database chat data is preserved; see [CHAT_ROADMAP.md](./CHAT_ROADMAP.md) for the implementation log and detailed feature plan.
 
 ### Gamification
 
@@ -137,7 +137,7 @@ CampusFind follows a service-oriented frontend architecture backed by Firebase.
 | Styling | Tailwind CSS, Sass |
 | Authentication | Firebase Authentication |
 | Primary database | Cloud Firestore |
-| Real-time messaging | Firebase Realtime Database |
+| Real-time messaging | Cloud Firestore |
 | Server-side logic | Firebase Cloud Functions |
 | File storage | Firebase Storage |
 | AI | Google Gemini API |
@@ -326,12 +326,19 @@ The longer-term goals include:
 - [x] Firestore rules hardening
 - [x] Protected point-award workflow
 - [x] Emulator coverage for critical Firestore security rules
-- [ ] Realtime Database chat security hardening
+- [x] Chat workflow moved to Firestore for Firebase Spark compatibility
+- [x] Chat participant rules, unread state, and per-user conversation settings
+- [x] Chat notification center and conversation management controls
+- [ ] Continue chat security review and add regression tests
 
 ### Planned
 
+- [ ] Chat photo attachments, emoji reactions, stickers, GIF search, and video attachments
+- [ ] Report user and block user workflows
 - [ ] Stronger privacy controls
 - [ ] Storage security hardening
+- [ ] Chat media and interaction features (photos, emoji reactions, stickers, GIF search, video)
+- [ ] User safety tools (report and block)
 - [ ] Improved chat UX and moderation
 - [ ] More advanced item matching
 - [ ] Better campus search and filtering
@@ -340,6 +347,12 @@ The longer-term goals include:
 - [ ] Performance and caching improvements
 - [ ] Expanded admin and moderation tooling
 - [ ] Accessibility and UX polish
+
+---
+
+## Chat Development Notes
+
+See **[CHAT_ROADMAP.md](./CHAT_ROADMAP.md)** for a detailed record of completed chat work, Firebase Spark constraints, known limitations, and the implementation plan for photo/video attachments, emoji reactions, stickers, GIF search, reporting, and blocking.
 
 ---
 

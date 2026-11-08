@@ -24,6 +24,7 @@ export interface Notification {
   createdAt: string;
   relatedItemId?: string;
   relatedChatId?: string;
+  relatedMessageId?: string;
 }
 
 const notifyChatMessageCallable = httpsCallable<
@@ -64,10 +65,17 @@ export const subscribeToNotifications = (
 
   return onSnapshot(q, (snapshot) => {
     const notifications: Notification[] = [];
-    snapshot.forEach((doc) => {
+    snapshot.forEach((document) => {
+      const data = document.data();
+      const createdAt = data.createdAt?.toDate
+        ? data.createdAt.toDate().toISOString()
+        : typeof data.createdAt === 'string'
+          ? data.createdAt
+          : new Date().toISOString();
       notifications.push({
-        id: doc.id,
-        ...doc.data(),
+        id: document.id,
+        ...data,
+        createdAt,
       } as Notification);
     });
     callback(notifications);
@@ -98,6 +106,35 @@ export const markAllNotificationsAsRead = async (userId: string): Promise<void> 
   });
   
   await Promise.all(batch);
+};
+
+
+// Mark every message notification for a conversation as read when that chat is opened.
+export const markChatNotificationsAsRead = async (
+  userId: string,
+  chatId: string
+): Promise<void> => {
+  // Query only by owner to avoid requiring a new composite Firestore index.
+  const q = query(
+    collection(db, 'notifications'),
+    where('userId', '==', userId)
+  );
+  const snapshot = await getDocs(q);
+  const matching = snapshot.docs.filter((notification) =>
+    notification.data().relatedChatId === chatId &&
+    notification.data().type === 'chat_message' &&
+    notification.data().read === false
+  );
+  await Promise.all(matching.map((notification) =>
+    updateDoc(notification.ref, { read: true })
+  ));
+};
+
+// Delete only the selected notification documents. Firestore rules enforce ownership.
+export const deleteNotifications = async (notificationIds: string[]): Promise<void> => {
+  await Promise.all(notificationIds.map((notificationId) =>
+    deleteDoc(doc(db, 'notifications', notificationId))
+  ));
 };
 
 // Get unread count

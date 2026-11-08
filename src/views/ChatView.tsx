@@ -5,15 +5,16 @@ import {
   subscribeToMessages, 
   sendMessage, 
   createChat, 
-  joinChat,
   markMessagesAsRead,
+  markChatAsRead,
   leaveChat,
+  updateChatUserSettings,
   type Chat,
   type Message
 } from '../services/chatService';
-import { notifyChatMessage } from '../services/notificationService';
 import { Button, Input } from '../components/UI';
 import { LIMITS, sanitizeFirestoreDocId, sanitizePlainText } from '../utils/sanitize';
+import { markChatNotificationsAsRead } from '../services/notificationService';
 
 interface ChatViewProps {
   itemId?: string;
@@ -26,7 +27,6 @@ interface ChatViewProps {
 export const ChatView: React.FC<ChatViewProps> = ({ 
   itemId, 
   itemTitle, 
-  itemOwnerId,
   chatId,
   onClose 
 }) => {
@@ -37,10 +37,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
+  const [showArchivedChats, setShowArchivedChats] = useState(false);
+  const [openChatMenuId, setOpenChatMenuId] = useState<string | null>(null);
   const [newChatItemId, setNewChatItemId] = useState('');
   const [newChatItemTitle, setNewChatItemTitle] = useState('');
   const [leavingChatIds, setLeavingChatIds] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Prevent chat-list snapshots from repeatedly overriding the user's manual selection.
+  const lastAutoOpenedItemIdRef = useRef<string | null>(null);
   
   // Use ref for leaving set to ensure subscription callback always has latest
   const leavingChatIdsRef = useRef<Set<string>>(new Set());
@@ -49,40 +53,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const lastLeaveTimeRef = useRef<number>(0);
 
   // Define handleCreateChat before useEffect that calls it
-  const handleCreateChat = useCallback(async (itemId: string, itemTitle: string) => {
+  const handleCreateChat = useCallback(async (itemId: string) => {
     if (!user) return;
     
     try {
-      const chatId = await createChat(itemId, itemTitle, user.uid, user.displayName || 'Anonymous');
-      const safeTitle = sanitizePlainText(itemTitle, LIMITS.title, { multiline: false });
-      
-      // If there's an item owner, add them as a participant too
-      if (itemOwnerId && itemOwnerId !== user.uid) {
-        await joinChat(chatId);
-      }
-
-      // Optimistically open the created chat before subscription refresh.
-      setActiveChat({
-          id: chatId,
-          itemId,
-          itemTitle: safeTitle,
-          createdBy: user.uid,
-          participants: {
-          [user.uid]: {
-            name: user.displayName || 'Anonymous',
-            joinedAt: Date.now(),
-          },
-          ...(itemOwnerId && itemOwnerId !== user.uid
-            ? {
-                [itemOwnerId]: {
-                  name: 'Item Owner',
-                  joinedAt: Date.now(),
-                },
-              }
-            : {}),
-        },
-        createdAt: Date.now(),
-      });
+      const createdChat = await createChat(itemId, user.uid, user.displayName || 'Anonymous');
+      setActiveChat(createdChat);
       
       // Chat will be added to list via subscription
     } catch (error: unknown) {
@@ -92,7 +68,32 @@ export const ChatView: React.FC<ChatViewProps> = ({
         : 'Unable to create chat. Check Firebase Realtime Database rules.';
       alert(message);
     }
-  }, [user, itemOwnerId]);
+  }, [user]);
+
+  // Close the chat options menu when clicking anywhere outside it or pressing Escape.
+  useEffect(() => {
+    if (!openChatMenuId) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      // Each chat row has its own menu root. A single React ref inside the
+      // mapped list points only to the last row, which can close other rows'
+      // menus before their action button receives its click.
+      if (!(target instanceof Element) || !target.closest('[data-chat-menu-root]')) {
+        setOpenChatMenuId(null);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpenChatMenuId(null);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [openChatMenuId]);
 
   // Load user's chats
   useEffect(() => {
@@ -124,26 +125,34 @@ export const ChatView: React.FC<ChatViewProps> = ({
         console.log('Ignoring subscription update during leave operation');
       }
       
-      // If chatId is provided (from notification), select that chat
+      // A notification target takes priority and is selected when its chat appears.
       if (chatId) {
         const targetChat = userChats.find(c => c.id === chatId);
-        if (targetChat && !currentLeavingIds.has(targetChat.id!)) {
+        if (targetChat && !currentLeavingIds.has(targetChat.id!) && activeChat?.id !== targetChat.id) {
           setActiveChat(targetChat);
         }
       }
-      // If itemId is provided, find or create chat for this item
-      else if (itemId && itemTitle && currentLeavingIds.size === 0) {
+      // Auto-open an item conversation only once per item. Later chat-list
+      // snapshots (for example after sending a message) must not override
+      // a conversation the user has manually selected.
+      else if (
+        itemId &&
+        itemTitle &&
+        currentLeavingIds.size === 0 &&
+        lastAutoOpenedItemIdRef.current !== itemId
+      ) {
+        lastAutoOpenedItemIdRef.current = itemId;
         const existingChat = userChats.find(c => c.itemId === itemId);
         if (existingChat && !currentLeavingIds.has(existingChat.id!)) {
           setActiveChat(existingChat);
-        } else if (currentLeavingIds.size === 0) {
-          handleCreateChat(itemId, itemTitle);
+        } else {
+          handleCreateChat(itemId);
         }
       }
     });
     
     return () => unsubscribe();
-  }, [user, itemId, itemTitle, chatId, handleCreateChat, chats.length]);
+  }, [user, itemId, itemTitle, chatId, handleCreateChat, chats.length, activeChat?.id]);
 
   // Load messages for active chat
   useEffect(() => {
@@ -153,6 +162,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
       setMessages(chatMessages);
       // Mark messages as read
       markMessagesAsRead(activeChat.id!, user.uid);
+      markChatAsRead(activeChat.id!, user.uid).catch((error) =>
+        console.error('Unable to update chat read status:', error)
+      );
+      markChatNotificationsAsRead(user.uid, activeChat.id!).catch((error) =>
+        console.error('Unable to mark chat notifications as read:', error)
+      );
     });
     
     return () => unsubscribe();
@@ -172,24 +187,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
     
     setLoading(true);
     try {
-      const messageId = await sendMessage(
+      await sendMessage(
         activeChat.id!,
         user.uid,
         user.displayName || 'Anonymous',
         safeContent
       );
-      
-      // Notify other participants
-      const participantIds = Object.keys(activeChat.participants);
-      for (const participantId of participantIds) {
-        if (participantId !== user.uid) {
-          try {
-            await notifyChatMessage(activeChat.id!, messageId, participantId);
-          } catch (notifError) {
-            console.error('Failed to create notification:', notifError);
-          }
-        }
-      }
       
       setNewMessage('');
     } catch (error) {
@@ -228,20 +231,39 @@ export const ChatView: React.FC<ChatViewProps> = ({
     if (!safeItemId || !safeTitle) return;
     
     try {
-      const createdChatId = await createChat(
+      const createdChat = await createChat(
         safeItemId,
-        safeTitle,
         user.uid,
         user.displayName || 'Anonymous'
       );
-      // The callable verifies the item's real owner and adds only that user.
-      await joinChat(createdChatId);
+      setActiveChat(createdChat);
       setNewChatItemId('');
       setNewChatItemTitle('');
       setShowNewChat(false);
       // The new chat will appear in the list via subscription
     } catch (err) {
       console.error('Error creating chat:', err);
+    }
+  };
+
+  const handleChatSettingToggle = async (
+    chat: Chat,
+    setting: 'pinned' | 'muted' | 'archived',
+    value: boolean,
+    e: React.MouseEvent
+  ) => {
+    e.stopPropagation();
+    if (!user || !chat.id) return;
+    try {
+      await updateChatUserSettings(chat.id, user.uid, { [setting]: value });
+      // An unarchived conversation no longer belongs in the Archived filter.
+      // Switch back to Active so the user can immediately see the restored chat.
+      if (setting === 'archived' && value === false) {
+        setShowArchivedChats(false);
+      }
+    } catch (error) {
+      console.error(`Unable to update chat ${setting} setting:`, error);
+      alert(`Unable to update this chat. Please try again.`);
     }
   };
 
@@ -314,6 +336,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
             Messages
           </h2>
 
+          <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowArchivedChats((current) => !current)}
+            className={`px-2 py-1 rounded-lg text-xs font-medium transition-colors ${showArchivedChats ? 'bg-primary text-white' : 'text-gray-500 hover:bg-gray-200'}`}
+            title={showArchivedChats ? 'Show active chats' : 'Show archived chats'}
+          >
+            {showArchivedChats ? 'Active' : 'Archived'}
+          </button>
           <button
             onClick={() => setShowNewChat(!showNewChat)}
             className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors"
@@ -321,6 +351,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           >
             <span className="material-icons">add</span>
           </button>
+          </div>
         </div>
 
         {/* New Chat Form */}
@@ -372,23 +403,39 @@ export const ChatView: React.FC<ChatViewProps> = ({
         )}
 
         <div className="flex-1 overflow-y-auto">
-          {chats.length === 0 ? (
+          {chats.filter((chat) => (chat.userSettings?.[user.uid]?.archived === true) === showArchivedChats).length === 0 ? (
             <div className="p-4 text-center text-gray-500 text-sm">
-              No conversations yet
+              {showArchivedChats ? 'No archived conversations' : 'No conversations yet'}
             </div>
           ) : (
-            chats.map((chat) => (
+            chats.filter((chat) => (chat.userSettings?.[user.uid]?.archived === true) === showArchivedChats).sort((a, b) => Number(b.userSettings?.[user.uid]?.pinned === true) - Number(a.userSettings?.[user.uid]?.pinned === true)).map((chat) => {
+              const chatSettings = chat.userSettings?.[user.uid] || {};
+              const isUnread = Boolean(
+                chat.lastMessage &&
+                chat.lastMessage.senderId !== user.uid &&
+                chat.lastMessage.timestamp > (chat.lastReadAt?.[user.uid] || 0)
+              );
+              return (
               <div
                 key={chat.id}
-                className={`group w-full p-4 text-left border-b border-gray-100 hover:bg-gray-50 transition-colors ${
-                  activeChat?.id === chat.id ? 'bg-blue-50 border-l-4 border-l-primary' : ''
+                className={`group w-full p-4 text-left border-b border-gray-100 transition-colors ${
+                  isUnread
+                    ? 'bg-sky-50 border-l-4 border-l-sky-500 hover:bg-sky-100'
+                    : activeChat?.id === chat.id
+                      ? 'bg-blue-50 border-l-4 border-l-primary'
+                      : 'hover:bg-gray-50'
                 }`}
               >
                 <button
                   onClick={() => setActiveChat(chat)}
                   className="w-full text-left"
                 >
-                  <h3 className="font-medium text-gray-800 truncate">{chat.itemTitle}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className={`font-medium truncate ${isUnread ? 'text-gray-900' : 'text-gray-800'}`}>{chat.itemTitle}</h3>
+                    {isUnread && <span className="w-2.5 h-2.5 rounded-full bg-sky-600 ring-4 ring-sky-100 flex-shrink-0" title="Unread message" aria-label="Unread message" />}
+                    {chatSettings.pinned && <span className="material-icons text-amber-600 text-base flex-shrink-0" title="Pinned chat" aria-label="Pinned chat">push_pin</span>}
+                    {chatSettings.muted && <span className="material-icons text-indigo-600 text-base flex-shrink-0" title="Muted chat" aria-label="Muted chat">notifications_off</span>}
+                  </div>
                   <p className="text-sm text-gray-500 truncate mt-1">
                     {chat.lastMessage?.content || 'No messages yet'}
                   </p>
@@ -399,6 +446,63 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     }
                   </p>
                 </button>
+                <div data-chat-menu-root className="relative mt-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenChatMenuId((current) => current === chat.id ? null : chat.id!);
+                    }}
+                    className="p-1.5 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    title="Chat options"
+                    aria-label={`Options for ${chat.itemTitle}`}
+                    aria-haspopup="menu"
+                    aria-expanded={openChatMenuId === chat.id}
+                  >
+                    <span className="material-icons text-xl">more_horiz</span>
+                  </button>
+                  {openChatMenuId === chat.id && (
+                    <div
+                      role="menu"
+                      className="absolute right-0 top-9 z-30 w-44 rounded-xl border border-gray-200 bg-white py-1 shadow-lg"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        role="menuitem"
+                        onClick={(e) => {
+                          void handleChatSettingToggle(chat, 'pinned', !chatSettings.pinned, e);
+                          setOpenChatMenuId(null);
+                        }}
+                        className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                      >
+                        <span className="material-icons text-base text-amber-600">push_pin</span>
+                        {chatSettings.pinned ? 'Unpin chat' : 'Pin chat'}
+                      </button>
+                      <button
+                        role="menuitem"
+                        onClick={(e) => {
+                          void handleChatSettingToggle(chat, 'muted', !chatSettings.muted, e);
+                          setOpenChatMenuId(null);
+                        }}
+                        className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                      >
+                        <span className="material-icons text-base text-indigo-600">{chatSettings.muted ? 'notifications' : 'notifications_off'}</span>
+                        {chatSettings.muted ? 'Unmute chat' : 'Mute chat'}
+                      </button>
+                      <button
+                        role="menuitem"
+                        onClick={(e) => {
+                          void handleChatSettingToggle(chat, 'archived', !chatSettings.archived, e);
+                          setOpenChatMenuId(null);
+                        }}
+                        className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                      >
+                        <span className="material-icons text-base"> {chatSettings.archived ? 'unarchive' : 'archive'} </span>
+                        {chatSettings.archived ? 'Unarchive chat' : 'Archive chat'}
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <button
                   onClick={(e) => handleLeaveChat(chat.id!, e)}
                   disabled={leavingChatIds.has(chat.id!)}
@@ -415,7 +519,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   {leavingChatIds.has(chat.id!) ? 'Leaving...' : 'Leave'}
                 </button>
               </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
