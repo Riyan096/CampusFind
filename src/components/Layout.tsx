@@ -41,39 +41,49 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [audioEnabled, setAudioEnabled] = useState(false);
+  // Sound is on by default; remember the user's choice on this device.
+  const [audioEnabled, setAudioEnabled] = useState(() => {
+    try {
+      return window.localStorage.getItem('campusfind-notification-sound') !== 'off';
+    } catch {
+      return true;
+    }
+  });
   const notificationRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const prevUnreadCountRef = useRef(0);
 
 
-  // Function to play notification beep using Web Audio API
+  // A quiet two-note chime designed to feel softer than a standard alert.
   const playNotificationSound = useCallback(() => {
     if (!audioEnabled) return;
-    
+
     try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContext) return;
-      
-      const ctx = new AudioContext();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      
-      osc.frequency.value = 800;
-      osc.type = 'sine';
-      
-      gain.gain.setValueAtTime(0.3, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-      
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + 0.5);
-      
-      console.log('Played notification beep');
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+
+      const ctx = new AudioContextClass();
+      const playTone = (frequency: number, startAt: number, duration: number) => {
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(frequency, startAt);
+        gain.gain.setValueAtTime(0.0001, startAt);
+        gain.gain.exponentialRampToValueAtTime(0.055, startAt + 0.035);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+        oscillator.connect(gain);
+        gain.connect(ctx.destination);
+        oscillator.start(startAt);
+        oscillator.stop(startAt + duration);
+      };
+
+      void ctx.resume().then(() => {
+        playTone(659.25, ctx.currentTime, 0.42);
+        playTone(783.99, ctx.currentTime + 0.13, 0.5);
+        window.setTimeout(() => void ctx.close(), 800);
+      }).catch((err) => console.error('Unable to start notification audio:', err));
     } catch (err) {
-      console.error('Failed to play sound:', err);
+      console.error('Failed to play notification sound:', err);
     }
   }, [audioEnabled]);
 
@@ -88,6 +98,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
     ...(user?.isAdmin ? [{ id: 'admin', label: 'Admin', icon: 'admin_panel_settings' }] : []),
   ];
 
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('campusfind-notification-sound', audioEnabled ? 'on' : 'off');
+    } catch {
+      // Keep the in-memory preference if browser storage is unavailable.
+    }
+  }, [audioEnabled]);
 
   // Subscribe to real-time notifications
   useEffect(() => {
@@ -209,22 +227,30 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
         
         {/* Navigation Menu */}
         <nav className="flex-1 px-4 py-6 space-y-2">
-          {navItems.map(item => (
-            <button
-              key={item.id}
-              onClick={() => onTabChange(item.id)}
-              className={`w-full flex items-center px-4 py-3 rounded-lg group transition-colors text-left ${
-                activeTab === item.id 
-                  ? 'bg-primary-dark/50 border border-secondary/20 text-secondary' 
-                  : 'text-white/80 hover:bg-white/10 hover:text-secondary'
-              }`}
-            >
-              <span className={`material-icons mr-3 ${activeTab === item.id ? 'text-secondary' : 'group-hover:text-secondary'}`}>
-                {item.icon}
-              </span>
-              <span className="font-medium">{item.label}</span>
-            </button>
-          ))}
+          {navItems.map(item => {
+            const hasUnreadChat = item.id === 'chat' && notifications.some(
+              notification => notification.type === 'chat_message' && !notification.read
+            );
+            return (
+              <button
+                key={item.id}
+                onClick={() => onTabChange(item.id)}
+                className={`w-full flex items-center px-4 py-3 rounded-lg group transition-colors text-left ${
+                  hasUnreadChat
+                    ? 'bg-secondary/20 ring-1 ring-secondary/40 text-white'
+                    : activeTab === item.id
+                      ? 'bg-primary-dark/50 border border-secondary/20 text-secondary'
+                      : 'text-white/80 hover:bg-white/10 hover:text-secondary'
+                }`}
+              >
+                <span className={`material-icons mr-3 ${activeTab === item.id || hasUnreadChat ? 'text-secondary' : 'group-hover:text-secondary'}`}>
+                  {item.icon}
+                </span>
+                <span className="font-medium">{item.label}</span>
+                {hasUnreadChat && <span className="ml-auto w-2.5 h-2.5 rounded-full bg-secondary shadow-[0_0_8px_rgba(255,255,255,0.45)]" aria-label="Unread chat messages" />}
+              </button>
+            );
+          })}
         </nav>
         
         {/* User Profile Section */}
@@ -428,17 +454,20 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
 
           {navItems.map((item) => {
             const isActive = activeTab === item.id;
+            const hasUnreadChat = item.id === 'chat' && notifications.some(
+              notification => notification.type === 'chat_message' && !notification.read
+            );
             return (
               <button
                 key={item.id}
                 onClick={() => onTabChange(item.id)}
-                className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
-                  isActive ? 'text-primary' : 'text-gray-400 hover:text-gray-600'
+                className={`relative flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
+                  hasUnreadChat ? 'bg-secondary/20 text-primary ring-1 ring-secondary/40' : isActive ? 'text-primary' : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
-
                 <span className="material-icons">{item.icon}</span>
                 <span className="text-[10px] font-medium">{item.label}</span>
+                {hasUnreadChat && <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-primary" aria-label="Unread chat messages" />}
               </button>
             );
           })}
