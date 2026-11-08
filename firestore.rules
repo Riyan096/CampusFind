@@ -259,6 +259,7 @@ service cloud.firestore {
           exists(itemPath) &&
           get(itemPath).data.reportedBy is string &&
           get(itemPath).data.reportedBy != request.auth.uid &&
+          request.resource.data.itemTitle == get(itemPath).data.title &&
           request.resource.data.participantIds is list &&
           request.resource.data.participantIds.size() == 2 &&
           request.resource.data.participantIds.hasAll([
@@ -328,6 +329,8 @@ service cloud.firestore {
           ]) &&
           request.resource.data.read == true &&
           request.resource.data.status == 'read' &&
+          request.resource.data.readBy.diff(resource.data.readBy)
+            .affectedKeys().hasOnly([request.auth.uid]) &&
           request.resource.data.readBy.diff(resource.data.readBy)
             .addedKeys().hasOnly([request.auth.uid]);
         allow delete: if false;
