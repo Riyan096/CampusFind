@@ -6,6 +6,7 @@ import {
   sendMessage, 
   createChat, 
   markMessagesAsRead,
+  markChatAsRead,
   leaveChat,
   type Chat,
   type Message
@@ -132,6 +133,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
       setMessages(chatMessages);
       // Mark messages as read
       markMessagesAsRead(activeChat.id!, user.uid);
+      markChatAsRead(activeChat.id!, user.uid).catch((error) =>
+        console.error('Unable to update chat read status:', error)
+      );
     });
     
     return () => unsubscribe();
@@ -342,7 +346,13 @@ export const ChatView: React.FC<ChatViewProps> = ({
               No conversations yet
             </div>
           ) : (
-            chats.map((chat) => (
+            chats.map((chat) => {
+              const isUnread = Boolean(
+                chat.lastMessage &&
+                chat.lastMessage.senderId !== user.uid &&
+                chat.lastMessage.timestamp > (chat.lastReadAt?.[user.uid] || 0)
+              );
+              return (
               <div
                 key={chat.id}
                 className={`group w-full p-4 text-left border-b border-gray-100 hover:bg-gray-50 transition-colors ${
@@ -353,7 +363,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   onClick={() => setActiveChat(chat)}
                   className="w-full text-left"
                 >
-                  <h3 className="font-medium text-gray-800 truncate">{chat.itemTitle}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className={`font-medium truncate ${isUnread ? 'text-gray-900' : 'text-gray-800'}`}>{chat.itemTitle}</h3>
+                    {isUnread && <span className="w-2.5 h-2.5 rounded-full bg-primary flex-shrink-0" title="Unread message" aria-label="Unread message" />}
+                  </div>
                   <p className="text-sm text-gray-500 truncate mt-1">
                     {chat.lastMessage?.content || 'No messages yet'}
                   </p>
