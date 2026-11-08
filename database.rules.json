@@ -5,12 +5,12 @@
     "chats": {
       "$chatId": {
         ".read": "auth != null && data.child('participants').child(auth.uid).exists()",
-        ".write": "auth != null && !data.exists() && newData.child('createdBy').val() == auth.uid && newData.child('participants').child(auth.uid).exists() && newData.child('participants').numChildren() == 1",
-        ".validate": "newData.hasChildren(['createdBy','itemId','itemTitle','participants','createdAt']) && newData.child('createdBy').isString() && newData.child('itemId').isString() && newData.child('itemTitle').isString() && newData.child('itemTitle').val().length <= 200 && newData.child('createdAt').isNumber() && newData.child('participants').hasChildren() && (!data.exists() ? (newData.child('createdBy').val() == auth.uid && newData.child('participants').child(auth.uid).exists() && newData.child('participants').numChildren() == 1) : newData.child('createdBy').val() == data.child('createdBy').val() && newData.child('itemId').val() == data.child('itemId').val() && newData.child('itemTitle').val() == data.child('itemTitle').val() && newData.child('createdAt').val() == data.child('createdAt').val())",
+        ".write": "auth != null && !data.exists() && newData.child('createdBy').val() == auth.uid && newData.child('participants').child(auth.uid).exists()",
+        ".validate": "newData.hasChildren(['createdBy','itemId','itemTitle','participants','createdAt']) && newData.child('createdBy').isString() && newData.child('itemId').isString() && newData.child('itemTitle').isString() && newData.child('itemTitle').val().length <= 200 && newData.child('createdAt').isNumber() && newData.child('participants').hasChildren() && (!data.exists() ? (newData.child('createdBy').val() == auth.uid && newData.child('participants').child(auth.uid).exists()) : newData.child('createdBy').val() == data.child('createdBy').val() && newData.child('itemId').val() == data.child('itemId').val() && newData.child('itemTitle').val() == data.child('itemTitle').val() && newData.child('createdAt').val() == data.child('createdAt').val())",
         "participants": {
           "$userId": {
             ".write": "auth != null && data.exists() && !newData.exists() && auth.uid == $userId",
-            ".validate": "newData.hasChildren(['name','joinedAt']) && newData.child('name').isString() && newData.child('joinedAt').exists()"
+            ".validate": "$userId == auth.uid && newData.hasChildren(['name','joinedAt']) && newData.child('name').isString() && newData.child('joinedAt').exists()"
           }
         },
         "messages": {
