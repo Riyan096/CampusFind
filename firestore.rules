@@ -239,8 +239,8 @@ service cloud.firestore {
           get(chatPath).data.itemId == d.relatedItemId &&
           exists(messagePath) &&
           get(messagePath).data.senderId == request.auth.uid &&
-          get(messagePath).data.content.size() >= d.message.size() &&
-          get(messagePath).data.content.substring(0, d.message.size()) == d.message;
+          get(messagePath).data.content is string &&
+          get(messagePath).data.content.size() > 0;
       }
 
       allow create: if (
@@ -309,6 +309,13 @@ service cloud.firestore {
       allow read: if isChatParticipant();
       allow create: if validChatCreate();
       allow update: if isChatParticipant() && (
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastReadAt']) &&
+          request.resource.data.lastReadAt is map &&
+          request.resource.data.lastReadAt.diff(resource.data.get('lastReadAt', {}))
+            .affectedKeys().hasOnly([request.auth.uid]) &&
+          request.resource.data.lastReadAt[request.auth.uid] == request.time
+        ) ||
         (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage']) &&
           request.resource.data.lastMessage.keys().hasOnly(['content', 'timestamp', 'senderId']) &&
