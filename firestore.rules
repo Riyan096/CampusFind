@@ -308,7 +308,23 @@ service cloud.firestore {
 
       allow read: if isChatParticipant();
       allow create: if validChatCreate();
+      function validChatUserSettingsUpdate() {
+        let changedUsers = request.resource.data.userSettings
+          .diff(resource.data.get('userSettings', {})).affectedKeys();
+        let settings = request.resource.data.userSettings[request.auth.uid];
+        return changedUsers.hasOnly([request.auth.uid]) &&
+          settings is map &&
+          settings.keys().hasOnly(['pinned', 'muted', 'archived']) &&
+          (!('pinned' in settings) || settings.pinned is bool) &&
+          (!('muted' in settings) || settings.muted is bool) &&
+          (!('archived' in settings) || settings.archived is bool);
+      }
+
       allow update: if isChatParticipant() && (
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['userSettings']) &&
+          validChatUserSettingsUpdate()
+        ) ||
         (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastReadAt']) &&
           request.resource.data.lastReadAt is map &&
