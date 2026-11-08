@@ -1,26 +1,27 @@
 /**
- * Chat Service
- * Handles real-time messaging between users
+ * Firestore-backed chat service.
+ * This keeps chat available on Firebase Spark without Cloud Functions.
  */
 
-import { 
-  ref, 
-  push, 
-  set, 
-  onValue, 
-  off,
-  update,
-  serverTimestamp,
+import {
+  addDoc,
+  arrayRemove,
+  collection,
+  deleteDoc,
+  deleteField,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  orderBy,
   query,
-  orderByChild,
-  get,
-  remove
-} from 'firebase/database';
+  serverTimestamp,
+  updateDoc,
+  where,
+  writeBatch,
+} from 'firebase/firestore';
 
-import { realtimeDb } from './firebase';
-import { functions } from './firebase';
-import { httpsCallable } from 'firebase/functions';
-import { emailService } from './emailService';
+import { db } from './firebase';
 import { LIMITS, sanitizeFirestoreDocId, sanitizePlainText } from '../utils/sanitize';
 
 export interface Message {
@@ -35,12 +36,12 @@ export interface Message {
   readBy?: { [userId: string]: number };
 }
 
-
 export interface Chat {
   id?: string;
   itemId: string;
   itemTitle: string;
   createdBy: string;
+  participantIds: string[];
   participants: {
     [userId: string]: {
       name: string;
@@ -55,45 +56,179 @@ export interface Chat {
   };
 }
 
-// Create a new chat for an item
+type FirestoreTimestamp = { toMillis?: () => number; seconds?: number } | number | null | undefined;
+
+const toMillis = (value: FirestoreTimestamp): number => {
+  if (typeof value === 'number') return value;
+  if (value && typeof value.toMillis === 'function') return value.toMillis();
+  if (value && typeof value.seconds === 'number') return value.seconds * 1000;
+  return 0;
+};
+
+const normalizeChat = (id: string, data: Record<string, any>): Chat => {
+  const participants: Chat['participants'] = {};
+  Object.entries(data.participants || {}).forEach(([uid, participant]) => {
+    const value = participant as Record<string, any>;
+    participants[uid] = {
+      name: typeof value.name === 'string' ? value.name : 'Anonymous',
+      joinedAt: toMillis(value.joinedAt),
+    };
+  });
+
+  const lastMessage = data.lastMessage
+    ? {
+        content: typeof data.lastMessage.content === 'string' ? data.lastMessage.content : '',
+        timestamp: toMillis(data.lastMessage.timestamp),
+        senderId: typeof data.lastMessage.senderId === 'string' ? data.lastMessage.senderId : '',
+      }
+    : undefined;
+
+  return {
+    id,
+    itemId: data.itemId,
+    itemTitle: data.itemTitle,
+    createdBy: data.createdBy,
+    participantIds: Array.isArray(data.participantIds) ? data.participantIds : [],
+    participants,
+    createdAt: toMillis(data.createdAt),
+    ...(lastMessage ? { lastMessage } : {}),
+  };
+};
+
+const normalizeMessage = (id: string, chatId: string, data: Record<string, any>): Message => {
+  const readBy: Record<string, number> = {};
+  Object.entries(data.readBy || {}).forEach(([uid, timestamp]) => {
+    readBy[uid] = toMillis(timestamp as FirestoreTimestamp);
+  });
+
+  return {
+    id,
+    chatId,
+    senderId: data.senderId,
+    senderName: data.senderName,
+    content: data.content,
+    timestamp: toMillis(data.timestamp),
+    read: data.read === true,
+    status: data.status,
+    readBy,
+  };
+};
+
+/**
+ * Create or return the signed-in user's conversation for an item.
+ * The actual item owner is read from Firestore; security rules independently
+ * verify that owner when accepting the chat document.
+ */
 export const createChat = async (
-  itemId: string, 
-  itemTitle: string, 
-  userId: string, 
+  itemId: string,
+  userId: string,
   userName: string
-): Promise<string> => {
+): Promise<Chat> => {
   const safeItemId = sanitizeFirestoreDocId(itemId);
-  const safeTitle = sanitizePlainText(itemTitle, LIMITS.title, { multiline: false });
+  if (!safeItemId) throw new Error('A valid item ID is required.');
+
+  const itemSnapshot = await getDoc(doc(db, 'items', safeItemId));
+  if (!itemSnapshot.exists()) throw new Error('That item could not be found.');
+
+  const item = itemSnapshot.data();
+  const ownerId = item.reportedBy;
+  if (typeof ownerId !== 'string' || !ownerId) {
+    throw new Error('This item does not have a valid owner.');
+  }
+  if (ownerId === userId) {
+    throw new Error('You cannot start a conversation about your own item.');
+  }
+
+  const existingQuery = query(
+    collection(db, 'chats'),
+    where('participantIds', 'array-contains', userId)
+  );
+  const existingSnapshot = await getDocs(existingQuery);
+  const existing = existingSnapshot.docs.find((entry) => entry.data().itemId === safeItemId);
+  if (existing) return normalizeChat(existing.id, existing.data());
+
+  const ownerProfile = await getDoc(doc(db, 'publicProfiles', ownerId));
+  const ownerName = ownerProfile.exists() && typeof ownerProfile.data().displayName === 'string'
+    ? ownerProfile.data().displayName
+    : 'Item owner';
   const safeUserName = sanitizePlainText(userName, LIMITS.displayName, { multiline: false });
-  const chatRef = push(ref(realtimeDb, 'chats'));
-  const chatId = chatRef.key!;
-  
-  await set(chatRef, {
-    createdBy: userId,
+  const safeOwnerName = sanitizePlainText(ownerName, LIMITS.displayName, { multiline: false });
+  const safeTitle = sanitizePlainText(
+    typeof item.title === 'string' ? item.title : 'Untitled item',
+    LIMITS.title,
+    { multiline: false }
+  );
+
+  const chatRef = await addDoc(collection(db, 'chats'), {
     itemId: safeItemId,
     itemTitle: safeTitle,
+    createdBy: userId,
+    participantIds: [userId, ownerId],
     participants: {
-      [userId]: {
-        name: safeUserName,
-        joinedAt: serverTimestamp(),
-      },
+      [userId]: { name: safeUserName || 'Anonymous', joinedAt: serverTimestamp() },
+      [ownerId]: { name: safeOwnerName || 'Item owner', joinedAt: serverTimestamp() },
     },
     createdAt: serverTimestamp(),
   });
-  
-  return chatId;
+
+  const now = Date.now();
+  return {
+    id: chatRef.id,
+    itemId: safeItemId,
+    itemTitle: safeTitle,
+    createdBy: userId,
+    participantIds: [userId, ownerId],
+    participants: {
+      [userId]: { name: safeUserName || 'Anonymous', joinedAt: now },
+      [ownerId]: { name: safeOwnerName || 'Item owner', joinedAt: now },
+    },
+    createdAt: now,
+  };
 };
 
-// Join an existing chat
-export const joinChat = async (chatId: string): Promise<void> => {
-  const joinItemChatCallable = httpsCallable<{ chatId: string }, { ok: boolean }>(
-    functions,
-    'joinItemChat'
+/** Subscribe to every conversation in which this user is a participant. */
+export const subscribeToUserChats = (
+  userId: string,
+  callback: (chats: Chat[]) => void
+) => {
+  const chatsQuery = query(
+    collection(db, 'chats'),
+    where('participantIds', 'array-contains', userId)
   );
-  await joinItemChatCallable({ chatId });
+
+  return onSnapshot(
+    chatsQuery,
+    (snapshot) => {
+      const chats = snapshot.docs.map((entry) => normalizeChat(entry.id, entry.data()));
+      chats.sort((a, b) =>
+        (b.lastMessage?.timestamp || b.createdAt) - (a.lastMessage?.timestamp || a.createdAt)
+      );
+      callback(chats);
+    },
+    (error) => console.error('Unable to load conversations:', error)
+  );
 };
 
-// Send a message
+/** Subscribe to real-time messages in a conversation. */
+export const subscribeToMessages = (
+  chatId: string,
+  callback: (messages: Message[]) => void
+) => {
+  const messagesQuery = query(
+    collection(db, 'chats', chatId, 'messages'),
+    orderBy('timestamp', 'asc')
+  );
+
+  return onSnapshot(
+    messagesQuery,
+    (snapshot) => callback(
+      snapshot.docs.map((entry) => normalizeMessage(entry.id, chatId, entry.data()))
+    ),
+    (error) => console.error('Unable to load chat messages:', error)
+  );
+};
+
+/** Add a message and update the conversation preview atomically. */
 export const sendMessage = async (
   chatId: string,
   senderId: string,
@@ -102,157 +237,60 @@ export const sendMessage = async (
 ): Promise<string> => {
   const safeName = sanitizePlainText(senderName, LIMITS.displayName, { multiline: false });
   const safeContent = sanitizePlainText(content, LIMITS.chatMessage, { multiline: true });
-  const messageRef = push(ref(realtimeDb, `chats/${chatId}/messages`));
-  
-  const messageData = {
+  if (!safeContent) throw new Error('Message cannot be empty.');
+
+  const chatRef = doc(db, 'chats', chatId);
+  const messageRef = doc(collection(chatRef, 'messages'));
+  const batch = writeBatch(db);
+
+  batch.set(messageRef, {
     senderId,
-    senderName: safeName,
+    senderName: safeName || 'Anonymous',
     content: safeContent,
     timestamp: serverTimestamp(),
     read: false,
     status: 'sent',
     readBy: {},
-  };
-
-  
-  await set(messageRef, messageData);
-  
-  // Update last message in chat
-  const chatRef = ref(realtimeDb, `chats/${chatId}/lastMessage`);
-  await set(chatRef, {
-    content: safeContent.substring(0, 100), // Truncate long messages
-    timestamp: serverTimestamp(),
-    senderId,
+  });
+  batch.update(chatRef, {
+    lastMessage: {
+      content: safeContent.substring(0, 100),
+      timestamp: serverTimestamp(),
+      senderId,
+    },
   });
 
-  // Send email notification to other participants
-  const chat = await getChat(chatId);
-  if (chat) {
-    const participantIds = Object.keys(chat.participants).filter(id => id !== senderId);
-    
-    // Send email notification to each participant (async, don't wait)
-    for (const participantId of participantIds) {
-      emailService.sendNewMessageNotification(
-        participantId,
-        safeName,
-        safeContent,
-        chatId
-      ).catch(err => console.error('Failed to send email notification:', err));
-    }
-  }
-
-  return messageRef.key!;
+  await batch.commit();
+  return messageRef.id;
 };
 
-// Subscribe to messages in a chat
-export const subscribeToMessages = (
-  chatId: string,
-  callback: (messages: Message[]) => void
-) => {
-  const messagesRef = ref(realtimeDb, `chats/${chatId}/messages`);
-  const messagesQuery = query(messagesRef, orderByChild('timestamp'));
-  
-  onValue(messagesQuery, (snapshot) => {
-    const messages: Message[] = [];
-    snapshot.forEach((childSnapshot) => {
-      messages.push({
-        id: childSnapshot.key!,
-        chatId,
-        ...childSnapshot.val(),
-      });
-    });
-    // Sort by timestamp ascending
-    messages.sort((a, b) => a.timestamp - b.timestamp);
-    callback(messages);
-  });
-  
-  // Return unsubscribe function
-  return () => off(messagesRef);
-};
-
-// Subscribe to user's chats
-export const subscribeToUserChats = (
-  userId: string,
-  callback: (chats: Chat[]) => void
-) => {
-  const userChatsRef = ref(realtimeDb, `userChats/${userId}`);
-  let cancelled = false;
-  let listenerAttached = false;
-
-  const attachListener = () => {
-    if (cancelled || listenerAttached) return;
-    listenerAttached = true;
-    onValue(userChatsRef, (snapshot) => {
-      const chats: Chat[] = [];
-      snapshot.forEach((childSnapshot) => {
-        const chat = childSnapshot.val();
-        if (chat?.participants?.[userId]) {
-          chats.push({id: childSnapshot.key!, ...chat});
-        }
-      });
-      chats.sort((a, b) =>
-        (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0)
-      );
-      callback(chats);
-    });
-  };
-
-  // Complete the one-time migration before emitting an empty list; otherwise
-  // ChatView could mistake an uninitialized index for "no existing chats".
-  httpsCallable(functions, 'rebuildUserChatIndex')({})
-    .then(attachListener)
-    .catch((error) => {
-      console.error('Unable to initialize chat index:', error);
-    });
-
-  return () => {
-    cancelled = true;
-    if (listenerAttached) off(userChatsRef);
-  };
-};
-
-// Get a single chat by ID
-export const getChat = async (chatId: string): Promise<Chat | null> => {
-  const chatRef = ref(realtimeDb, `chats/${chatId}`);
-  const snapshot = await get(chatRef);
-  if (snapshot.exists()) {
-    return {
-      id: chatId,
-      ...snapshot.val(),
-    };
-  }
-  return null;
-};
-
-// Mark messages as read
+/** Mark messages from other participants as read by the current user. */
 export const markMessagesAsRead = async (chatId: string, userId: string): Promise<void> => {
-  const messagesRef = ref(realtimeDb, `chats/${chatId}/messages`);
-  const snapshot = await get(messagesRef);
-  
-  const updates: { [key: string]: any } = {};
-  snapshot.forEach((childSnapshot) => {
-    const message = childSnapshot.val();
-    if (message.senderId !== userId && !message.readBy?.[userId]) {
-      updates[`${childSnapshot.key}/read`] = true;
-      updates[`${childSnapshot.key}/status`] = 'read';
-      updates[`${childSnapshot.key}/readBy/${userId}`] = serverTimestamp();
-    }
-  });
-  
-  if (Object.keys(updates).length > 0) {
-    await update(messagesRef, updates);
-  }
+  const snapshot = await getDocs(collection(db, 'chats', chatId, 'messages'));
+  const updates = snapshot.docs
+    .filter((entry) => {
+      const message = entry.data();
+      return message.senderId !== userId && !message.readBy?.[userId];
+    })
+    .map((entry) => updateDoc(entry.ref, {
+      read: true,
+      status: 'read',
+      [`readBy.${userId}`]: serverTimestamp(),
+    }));
+
+  await Promise.all(updates);
 };
 
-
-// Delete a chat (completely remove for all participants)
-export const deleteChat = async (chatId: string): Promise<void> => {
-  const chatRef = ref(realtimeDb, `chats/${chatId}`);
-  await remove(chatRef);
-};
-
-// Leave a chat (remove current user from participants only)
+/** Leave a conversation without deleting it for the other participant. */
 export const leaveChat = async (chatId: string, userId: string): Promise<void> => {
-  const participantRef = ref(realtimeDb, `chats/${chatId}/participants/${userId}`);
-  await remove(participantRef);
+  const chatRef = doc(db, 'chats', chatId);
+  await updateDoc(chatRef, {
+    participantIds: arrayRemove(userId),
+    [`participants.${userId}`]: deleteField(),
+  });
+};
+
+/** Delete a conversation. Firestore rules restrict this to its creator. */
+export const deleteChat = async (chatId: string): Promise<void> => {
+  await deleteDoc(doc(db, 'chats', chatId));
 };
