@@ -321,7 +321,9 @@ service cloud.firestore {
           request.resource.data.content.size() <= 4000 &&
           request.resource.data.timestamp == request.time &&
           request.resource.data.read == false &&
-          request.resource.data.status == 'sent';
+          request.resource.data.status == 'sent' &&
+          request.resource.data.readBy is map &&
+          request.resource.data.readBy.keys().size() == 0;
         allow update: if isParentParticipant() &&
           resource.data.senderId != request.auth.uid &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -332,7 +334,10 @@ service cloud.firestore {
           request.resource.data.readBy.diff(resource.data.readBy)
             .affectedKeys().hasOnly([request.auth.uid]) &&
           request.resource.data.readBy.diff(resource.data.readBy)
-            .addedKeys().hasOnly([request.auth.uid]);
+            .affectedKeys().hasOnly([request.auth.uid]) &&
+          request.resource.data.readBy.diff(resource.data.readBy)
+            .addedKeys().hasOnly([request.auth.uid]) &&
+          request.resource.data.readBy[request.auth.uid] == request.time;
         allow delete: if false;
       }
     }
