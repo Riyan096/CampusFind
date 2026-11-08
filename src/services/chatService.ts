@@ -244,6 +244,15 @@ export const sendMessage = async (
   if (!safeContent) throw new Error('Message cannot be empty.');
 
   const chatRef = doc(db, 'chats', chatId);
+  const chatSnapshot = await getDoc(chatRef);
+  if (!chatSnapshot.exists()) throw new Error('This conversation no longer exists.');
+
+  const chatData = chatSnapshot.data();
+  if (!Array.isArray(chatData.participantIds) || !chatData.participantIds.includes(senderId)) {
+    throw new Error('You are no longer a participant in this conversation.');
+  }
+
+  const recipientId = chatData.participantIds.find((participantId: string) => participantId !== senderId);
   const messageRef = doc(collection(chatRef, 'messages'));
   const batch = writeBatch(db);
 
@@ -263,6 +272,23 @@ export const sendMessage = async (
       senderId,
     },
   });
+
+  // Notify the other participant in the same atomic write. Firestore rules
+  // verify that this notification corresponds to the message created above.
+  if (recipientId && typeof chatData.itemId === 'string') {
+    const notificationRef = doc(collection(db, 'notifications'));
+    batch.set(notificationRef, {
+      userId: recipientId,
+      title: `New message from ${safeName || 'Anonymous'}`,
+      message: safeContent.substring(0, 120),
+      type: 'chat_message',
+      read: false,
+      createdAt: serverTimestamp(),
+      relatedItemId: chatData.itemId,
+      relatedChatId: chatId,
+      relatedMessageId: messageRef.id,
+    });
+  }
 
   await batch.commit();
   return messageRef.id;
