@@ -123,7 +123,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     });
     
     return () => unsubscribe();
-  }, [user, itemId, itemTitle, chatId, handleCreateChat, chats.length]);
+  }, [user, itemId, itemTitle, chatId, handleCreateChat, chats.length, activeChat?.id]);
 
   // Load messages for active chat
   useEffect(() => {
