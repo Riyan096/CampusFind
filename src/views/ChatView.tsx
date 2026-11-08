@@ -8,6 +8,7 @@ import {
   markMessagesAsRead,
   markChatAsRead,
   leaveChat,
+  updateChatUserSettings,
   type Chat,
   type Message
 } from '../services/chatService';
@@ -36,6 +37,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
+  const [showArchivedChats, setShowArchivedChats] = useState(false);
   const [newChatItemId, setNewChatItemId] = useState('');
   const [newChatItemTitle, setNewChatItemTitle] = useState('');
   const [leavingChatIds, setLeavingChatIds] = useState<Set<string>>(new Set());
@@ -218,6 +220,22 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
+  const handleChatSettingToggle = async (
+    chat: Chat,
+    setting: 'pinned' | 'muted' | 'archived',
+    value: boolean,
+    e: React.MouseEvent
+  ) => {
+    e.stopPropagation();
+    if (!user || !chat.id) return;
+    try {
+      await updateChatUserSettings(chat.id, user.uid, { [setting]: value });
+    } catch (error) {
+      console.error(`Unable to update chat ${setting} setting:`, error);
+      alert(`Unable to update this chat. Please try again.`);
+    }
+  };
+
   const handleLeaveChat = async (chatId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!user || leavingChatIdsRef.current.has(chatId)) return;
@@ -287,6 +305,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
             Messages
           </h2>
 
+          <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowArchivedChats((current) => !current)}
+            className={`px-2 py-1 rounded-lg text-xs font-medium transition-colors ${showArchivedChats ? 'bg-primary text-white' : 'text-gray-500 hover:bg-gray-200'}`}
+            title={showArchivedChats ? 'Show active chats' : 'Show archived chats'}
+          >
+            {showArchivedChats ? 'Active' : 'Archived'}
+          </button>
           <button
             onClick={() => setShowNewChat(!showNewChat)}
             className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors"
@@ -294,6 +320,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           >
             <span className="material-icons">add</span>
           </button>
+          </div>
         </div>
 
         {/* New Chat Form */}
@@ -345,12 +372,13 @@ export const ChatView: React.FC<ChatViewProps> = ({
         )}
 
         <div className="flex-1 overflow-y-auto">
-          {chats.length === 0 ? (
+          {chats.filter((chat) => (chat.userSettings?.[user.uid]?.archived === true) === showArchivedChats).length === 0 ? (
             <div className="p-4 text-center text-gray-500 text-sm">
-              No conversations yet
+              {showArchivedChats ? 'No archived conversations' : 'No conversations yet'}
             </div>
           ) : (
-            chats.map((chat) => {
+            chats.filter((chat) => (chat.userSettings?.[user.uid]?.archived === true) === showArchivedChats).map((chat) => {
+              const chatSettings = chat.userSettings?.[user.uid] || {};
               const isUnread = Boolean(
                 chat.lastMessage &&
                 chat.lastMessage.senderId !== user.uid &&
@@ -385,6 +413,29 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     }
                   </p>
                 </button>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={(e) => void handleChatSettingToggle(chat, 'pinned', !chatSettings.pinned, e)}
+                    className={`text-xs flex items-center gap-1 ${chatSettings.pinned ? 'text-amber-600' : 'text-gray-400 hover:text-amber-600'}`}
+                    title={chatSettings.pinned ? 'Unpin chat' : 'Pin chat'}
+                  >
+                    <span className="material-icons text-sm">push_pin</span>{chatSettings.pinned ? 'Pinned' : 'Pin'}
+                  </button>
+                  <button
+                    onClick={(e) => void handleChatSettingToggle(chat, 'muted', !chatSettings.muted, e)}
+                    className={`text-xs flex items-center gap-1 ${chatSettings.muted ? 'text-indigo-600' : 'text-gray-400 hover:text-indigo-600'}`}
+                    title={chatSettings.muted ? 'Unmute chat' : 'Mute chat'}
+                  >
+                    <span className="material-icons text-sm">{chatSettings.muted ? 'notifications_off' : 'notifications'}</span>{chatSettings.muted ? 'Muted' : 'Mute'}
+                  </button>
+                  <button
+                    onClick={(e) => void handleChatSettingToggle(chat, 'archived', !chatSettings.archived, e)}
+                    className="text-xs flex items-center gap-1 text-gray-400 hover:text-primary"
+                    title={chatSettings.archived ? 'Unarchive chat' : 'Archive chat'}
+                  >
+                    <span className="material-icons text-sm">{chatSettings.archived ? 'unarchive' : 'archive'}</span>{chatSettings.archived ? 'Unarchive' : 'Archive'}
+                  </button>
+                </div>
                 <button
                   onClick={(e) => handleLeaveChat(chat.id!, e)}
                   disabled={leavingChatIds.has(chat.id!)}
