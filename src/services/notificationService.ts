@@ -114,14 +114,18 @@ export const markChatNotificationsAsRead = async (
   userId: string,
   chatId: string
 ): Promise<void> => {
+  // Query only by owner to avoid requiring a new composite Firestore index.
   const q = query(
     collection(db, 'notifications'),
-    where('userId', '==', userId),
-    where('relatedChatId', '==', chatId),
-    where('read', '==', false)
+    where('userId', '==', userId)
   );
   const snapshot = await getDocs(q);
-  await Promise.all(snapshot.docs.map((notification) =>
+  const matching = snapshot.docs.filter((notification) =>
+    notification.data().relatedChatId === chatId &&
+    notification.data().type === 'chat_message' &&
+    notification.data().read === false
+  );
+  await Promise.all(matching.map((notification) =>
     updateDoc(notification.ref, { read: true })
   ));
 };
