@@ -52,6 +52,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
   const notificationRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const prevUnreadCountRef = useRef(0);
+  const hasReceivedInitialNotificationsRef = useRef(false);
 
 
   // A quiet two-note chime designed to feel softer than a standard alert.
@@ -126,11 +127,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
       
       console.log('Current unread:', currentUnread, 'Previous unread:', prevUnread, 'Audio enabled:', audioEnabled);
       
-      if (currentUnread > prevUnread && audioEnabled) {
+      // Treat the first snapshot as the baseline so old unread notifications
+      // do not unexpectedly chime when the user opens or refreshes the app.
+      if (hasReceivedInitialNotificationsRef.current && currentUnread > prevUnread && audioEnabled) {
         console.log('Playing notification sound');
         playNotificationSound();
       }
-      
+
+      hasReceivedInitialNotificationsRef.current = true;
       prevUnreadCountRef.current = currentUnread;
     });
     
