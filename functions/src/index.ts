@@ -1,5 +1,6 @@
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {onDocumentDeleted, onDocumentUpdated} from "firebase-functions/v2/firestore";
+import {onValueWritten} from "firebase-functions/v2/database";
 
 import {getFirestore} from "firebase-admin/firestore";
 import {getDatabase} from "firebase-admin/database";
@@ -50,6 +51,44 @@ if (process.env.FUNCTIONS_EMULATOR === "true") {
 }
 
 export {analyzeItemImage, findSmartMatches};
+
+/**
+ * Maintain a private per-user chat index. Clients read only their own index,
+ * never the global /chats collection. The index mirrors chat-list metadata.
+ */
+export const syncUserChatIndexes = onValueWritten("chats/{chatId}", async (event) => {
+  const before = event.data.before.val() as {participants?: Record<string, unknown>} | null;
+  const after = event.data.after.val() as {
+    itemId?: unknown; itemTitle?: unknown; createdBy?: unknown;
+    participants?: Record<string, unknown>; createdAt?: unknown; lastMessage?: unknown;
+  } | null;
+  const chatId = event.params.chatId;
+  const previousIds = Object.keys(before?.participants || {});
+  const participants = after?.participants || {};
+  const updates: Record<string, unknown> = {};
+
+  for (const uid of previousIds) {
+    if (!participants[uid]) updates[`userChats/${uid}/${chatId}`] = null;
+  }
+  if (after) {
+    const summary: Record<string, unknown> = {
+      id: chatId,
+      itemId: typeof after.itemId === "string" ? after.itemId : "",
+      itemTitle: typeof after.itemTitle === "string" ? after.itemTitle : "Untitled item",
+      createdBy: typeof after.createdBy === "string" ? after.createdBy : "",
+      participants,
+      createdAt: typeof after.createdAt === "number" ? after.createdAt : 0,
+    };
+    if (after.lastMessage && typeof after.lastMessage === "object") {
+      summary.lastMessage = after.lastMessage;
+    }
+    for (const uid of Object.keys(participants)) {
+      updates[`userChats/${uid}/${chatId}`] = summary;
+    }
+  }
+  if (Object.keys(updates).length) await getDatabase().ref().update(updates);
+});
+
 
 /**
  * Extract a Firebase Storage object path from a Storage download URL.
@@ -288,11 +327,13 @@ export const notifyPotentialMatch = onCall(async (request) => {
   return {ok: true};
 });
 
-/** Let only the reported item's owner join its discussion chat. */
+/**
+ * Add the verified item owner to a discussion. The chat creator may request
+ * this immediately after creating the chat; the owner may also join directly.
+ * The target participant is derived from Firestore, never supplied by client.
+ */
 export const joinItemChat = onCall(async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "You must be signed in.");
-  }
+  if (!request.auth) throw new HttpsError("unauthenticated", "You must be signed in.");
   const chatId = request.data?.chatId;
   if (typeof chatId !== "string" || !/^[-\w]{1,128}$/.test(chatId)) {
     throw new HttpsError("invalid-argument", "Invalid chat ID.");
@@ -300,29 +341,32 @@ export const joinItemChat = onCall(async (request) => {
   const chatRef = getDatabase().ref(`chats/${chatId}`);
   const chatSnapshot = await chatRef.get();
   const chat = chatSnapshot.val() as {
-    itemId?: unknown;
-    createdBy?: unknown;
-    participants?: Record<string, unknown>;
+    itemId?: unknown; createdBy?: unknown; participants?: Record<string, unknown>;
   } | null;
-  if (!chat || typeof chat.itemId !== "string") {
+  if (!chat || typeof chat.itemId !== "string" || typeof chat.createdBy !== "string") {
     throw new HttpsError("not-found", "Chat not found.");
   }
   const itemSnapshot = await db.collection("items").doc(chat.itemId).get();
-  const item = itemSnapshot.data();
-  if (!itemSnapshot.exists || item?.reportedBy !== request.auth.uid ||
-      chat.createdBy === request.auth.uid) {
-    throw new HttpsError("permission-denied", "Only the item owner can join this chat.");
+  const ownerId = itemSnapshot.data()?.reportedBy;
+  if (!itemSnapshot.exists || typeof ownerId !== "string" || !ownerId) {
+    throw new HttpsError("failed-precondition", "The chat's item has no valid owner.");
   }
-  if (chat.participants?.[request.auth.uid]) return {ok: true};
-
-  const userSnapshot = await db.collection("users").doc(request.auth.uid).get();
+  const callerIsCreator = chat.createdBy === request.auth.uid;
+  const callerIsOwner = ownerId === request.auth.uid;
+  if (!callerIsCreator && !callerIsOwner) {
+    throw new HttpsError("permission-denied", "Only the chat creator or item owner can join.");
+  }
+  const participantId = callerIsCreator ? ownerId : request.auth.uid;
+  if (chat.participants?.[participantId]) return {ok: true};
+  const userSnapshot = await db.collection("users").doc(participantId).get();
   const userName = userSnapshot.data()?.displayName;
-  await chatRef.child(`participants/${request.auth.uid}`).set({
+  await chatRef.child(`participants/${participantId}`).set({
     name: typeof userName === "string" ? userName.slice(0, 100) : "Anonymous",
     joinedAt: Date.now(),
   });
   return {ok: true};
 });
+
 
 interface ResolutionItem {
   reportedBy?: string;
