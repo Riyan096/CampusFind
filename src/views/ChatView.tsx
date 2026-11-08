@@ -24,7 +24,6 @@ interface ChatViewProps {
 export const ChatView: React.FC<ChatViewProps> = ({ 
   itemId, 
   itemTitle, 
-  itemOwnerId: _itemOwnerId,
   chatId,
   onClose 
 }) => {
@@ -47,7 +46,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const lastLeaveTimeRef = useRef<number>(0);
 
   // Define handleCreateChat before useEffect that calls it
-  const handleCreateChat = useCallback(async (itemId: string, itemTitle: string) => {
+  const handleCreateChat = useCallback(async (itemId: string) => {
     if (!user) return;
     
     try {
@@ -62,7 +61,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         : 'Unable to create chat. Check Firebase Realtime Database rules.';
       alert(message);
     }
-  }, [user, itemOwnerId]);
+  }, [user]);
 
   // Load user's chats
   useEffect(() => {
@@ -107,7 +106,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         if (existingChat && !currentLeavingIds.has(existingChat.id!)) {
           setActiveChat(existingChat);
         } else if (currentLeavingIds.size === 0) {
-          handleCreateChat(itemId, itemTitle);
+          handleCreateChat(itemId);
         }
       }
     });
