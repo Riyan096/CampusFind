@@ -393,7 +393,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   {leavingChatIds.has(chat.id!) ? 'Leaving...' : 'Leave'}
                 </button>
               </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
