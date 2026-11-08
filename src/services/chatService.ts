@@ -175,26 +175,40 @@ export const subscribeToUserChats = (
   userId: string,
   callback: (chats: Chat[]) => void
 ) => {
-  // A trusted Cloud Function maintains this private per-user index.
   const userChatsRef = ref(realtimeDb, `userChats/${userId}`);
-  // Populate indexes for conversations created before this feature shipped.
-  httpsCallable(functions, 'rebuildUserChatIndex')({})
-    .catch((error) => console.error('Unable to initialize chat index:', error));
+  let cancelled = false;
+  let listenerAttached = false;
 
-  onValue(userChatsRef, (snapshot) => {
-    const chats: Chat[] = [];
-    snapshot.forEach((childSnapshot) => {
-      const chat = childSnapshot.val();
-      if (chat?.participants?.[userId]) {
-        chats.push({id: childSnapshot.key!, ...chat});
-      }
+  const attachListener = () => {
+    if (cancelled || listenerAttached) return;
+    listenerAttached = true;
+    onValue(userChatsRef, (snapshot) => {
+      const chats: Chat[] = [];
+      snapshot.forEach((childSnapshot) => {
+        const chat = childSnapshot.val();
+        if (chat?.participants?.[userId]) {
+          chats.push({id: childSnapshot.key!, ...chat});
+        }
+      });
+      chats.sort((a, b) =>
+        (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0)
+      );
+      callback(chats);
     });
-    chats.sort((a, b) =>
-      (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0)
-    );
-    callback(chats);
-  });
-  return () => off(userChatsRef);
+  };
+
+  // Complete the one-time migration before emitting an empty list; otherwise
+  // ChatView could mistake an uninitialized index for "no existing chats".
+  httpsCallable(functions, 'rebuildUserChatIndex')({})
+    .then(attachListener)
+    .catch((error) => {
+      console.error('Unable to initialize chat index:', error);
+    });
+
+  return () => {
+    cancelled = true;
+    if (listenerAttached) off(userChatsRef);
+  };
 };
 
 // Get a single chat by ID
