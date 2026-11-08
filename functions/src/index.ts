@@ -93,6 +93,9 @@ export const syncUserChatIndexes = onValueWritten("chats/{chatId}", async (event
 /**
  * Extract a Firebase Storage object path from a Storage download URL.
  * Returns null for non-Firebase URLs so legacy/external images are untouched.
+ *
+ * @param {unknown} value The candidate Storage download URL.
+ * @return {?string} The decoded Storage object path, or null when unrecognized.
  */
 const storagePathFromDownloadUrl = (value: unknown): string | null => {
   if (typeof value !== "string") return null;
@@ -124,6 +127,11 @@ const storagePathFromDownloadUrl = (value: unknown): string | null => {
  * Clean up a report image that is no longer referenced by an item.
  * Throwing on failure is intentional: Firestore-triggered functions can retry,
  * preventing a transient Storage failure from permanently leaving an orphan.
+ *
+ * @param {unknown} value The old image URL.
+ * @param {unknown} reporterId The item's reporting user's ID.
+ * @param {string} itemId The item's document ID.
+ * @return {Promise<void>} Resolves after any owned Storage object is deleted.
  */
 const deleteStorageImageFromUrl = async (
   value: unknown,
@@ -362,7 +370,7 @@ export const rebuildUserChatIndex = onCall(async (request) => {
     if (chat.lastMessage && typeof chat.lastMessage === "object") {
       summary.lastMessage = chat.lastMessage;
     }
-    index[child.key!] = summary;
+    if (child.key) index[child.key] = summary;
   });
   await userIndexRef.set(index);
   return {ok: true, chatCount: Object.keys(index).length - 1};
