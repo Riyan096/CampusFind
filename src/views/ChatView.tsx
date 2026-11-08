@@ -38,6 +38,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [newChatItemTitle, setNewChatItemTitle] = useState('');
   const [leavingChatIds, setLeavingChatIds] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Prevent chat-list snapshots from repeatedly overriding the user's manual selection.
+  const lastAutoOpenedItemIdRef = useRef<string | null>(null);
   
   // Use ref for leaving set to ensure subscription callback always has latest
   const leavingChatIdsRef = useRef<Set<string>>(new Set());
@@ -93,19 +95,27 @@ export const ChatView: React.FC<ChatViewProps> = ({
         console.log('Ignoring subscription update during leave operation');
       }
       
-      // If chatId is provided (from notification), select that chat
+      // A notification target takes priority and is selected when its chat appears.
       if (chatId) {
         const targetChat = userChats.find(c => c.id === chatId);
         if (targetChat && !currentLeavingIds.has(targetChat.id!)) {
           setActiveChat(targetChat);
         }
       }
-      // If itemId is provided, find or create chat for this item
-      else if (itemId && itemTitle && currentLeavingIds.size === 0) {
+      // Auto-open an item conversation only once per item. Later chat-list
+      // snapshots (for example after sending a message) must not override
+      // a conversation the user has manually selected.
+      else if (
+        itemId &&
+        itemTitle &&
+        currentLeavingIds.size === 0 &&
+        lastAutoOpenedItemIdRef.current !== itemId
+      ) {
+        lastAutoOpenedItemIdRef.current = itemId;
         const existingChat = userChats.find(c => c.itemId === itemId);
         if (existingChat && !currentLeavingIds.has(existingChat.id!)) {
           setActiveChat(existingChat);
-        } else if (currentLeavingIds.size === 0) {
+        } else {
           handleCreateChat(itemId);
         }
       }
