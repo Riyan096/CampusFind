@@ -5,13 +5,11 @@ import {
   subscribeToMessages, 
   sendMessage, 
   createChat, 
-  joinChat,
   markMessagesAsRead,
   leaveChat,
   type Chat,
   type Message
 } from '../services/chatService';
-import { notifyChatMessage } from '../services/notificationService';
 import { Button, Input } from '../components/UI';
 import { LIMITS, sanitizeFirestoreDocId, sanitizePlainText } from '../utils/sanitize';
 
@@ -26,7 +24,7 @@ interface ChatViewProps {
 export const ChatView: React.FC<ChatViewProps> = ({ 
   itemId, 
   itemTitle, 
-  itemOwnerId,
+  itemOwnerId: _itemOwnerId,
   chatId,
   onClose 
 }) => {
@@ -53,36 +51,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
     if (!user) return;
     
     try {
-      const chatId = await createChat(itemId, itemTitle, user.uid, user.displayName || 'Anonymous');
-      const safeTitle = sanitizePlainText(itemTitle, LIMITS.title, { multiline: false });
-      
-      // If there's an item owner, add them as a participant too
-      if (itemOwnerId && itemOwnerId !== user.uid) {
-        await joinChat(chatId);
-      }
-
-      // Optimistically open the created chat before subscription refresh.
-      setActiveChat({
-          id: chatId,
-          itemId,
-          itemTitle: safeTitle,
-          createdBy: user.uid,
-          participants: {
-          [user.uid]: {
-            name: user.displayName || 'Anonymous',
-            joinedAt: Date.now(),
-          },
-          ...(itemOwnerId && itemOwnerId !== user.uid
-            ? {
-                [itemOwnerId]: {
-                  name: 'Item Owner',
-                  joinedAt: Date.now(),
-                },
-              }
-            : {}),
-        },
-        createdAt: Date.now(),
-      });
+      const createdChat = await createChat(itemId, user.uid, user.displayName || 'Anonymous');
+      setActiveChat(createdChat);
       
       // Chat will be added to list via subscription
     } catch (error: unknown) {
@@ -172,24 +142,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
     
     setLoading(true);
     try {
-      const messageId = await sendMessage(
+      await sendMessage(
         activeChat.id!,
         user.uid,
         user.displayName || 'Anonymous',
         safeContent
       );
-      
-      // Notify other participants
-      const participantIds = Object.keys(activeChat.participants);
-      for (const participantId of participantIds) {
-        if (participantId !== user.uid) {
-          try {
-            await notifyChatMessage(activeChat.id!, messageId, participantId);
-          } catch (notifError) {
-            console.error('Failed to create notification:', notifError);
-          }
-        }
-      }
       
       setNewMessage('');
     } catch (error) {
@@ -228,14 +186,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
     if (!safeItemId || !safeTitle) return;
     
     try {
-      const createdChatId = await createChat(
+      const createdChat = await createChat(
         safeItemId,
-        safeTitle,
         user.uid,
         user.displayName || 'Anonymous'
       );
-      // The callable verifies the item's real owner and adds only that user.
-      await joinChat(createdChatId);
+      setActiveChat(createdChat);
       setNewChatItemId('');
       setNewChatItemTitle('');
       setShowNewChat(false);
