@@ -377,7 +377,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               {showArchivedChats ? 'No archived conversations' : 'No conversations yet'}
             </div>
           ) : (
-            chats.filter((chat) => (chat.userSettings?.[user.uid]?.archived === true) === showArchivedChats).map((chat) => {
+            chats.filter((chat) => (chat.userSettings?.[user.uid]?.archived === true) === showArchivedChats).sort((a, b) => Number(b.userSettings?.[user.uid]?.pinned === true) - Number(a.userSettings?.[user.uid]?.pinned === true)).map((chat) => {
               const chatSettings = chat.userSettings?.[user.uid] || {};
               const isUnread = Boolean(
                 chat.lastMessage &&
