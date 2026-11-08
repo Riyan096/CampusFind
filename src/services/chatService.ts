@@ -55,6 +55,7 @@ export interface Chat {
     timestamp: number;
     senderId: string;
   };
+  lastReadAt?: { [userId: string]: number };
 }
 
 type FirestoreTimestamp = { toMillis?: () => number; seconds?: number } | number | null | undefined;
@@ -84,6 +85,11 @@ const normalizeChat = (id: string, data: Record<string, any>): Chat => {
       }
     : undefined;
 
+  const lastReadAt: Record<string, number> = {};
+  Object.entries(data.lastReadAt || {}).forEach(([uid, timestamp]) => {
+    lastReadAt[uid] = toMillis(timestamp as FirestoreTimestamp);
+  });
+
   return {
     id,
     itemId: data.itemId,
@@ -93,6 +99,7 @@ const normalizeChat = (id: string, data: Record<string, any>): Chat => {
     participants,
     createdAt: toMillis(data.createdAt),
     ...(lastMessage ? { lastMessage } : {}),
+    lastReadAt,
   };
 };
 
@@ -315,6 +322,13 @@ export const markMessagesAsRead = async (chatId: string, userId: string): Promis
     }));
 
   await Promise.all(updates);
+};
+
+/** Record that the current participant has viewed the latest message in this chat. */
+export const markChatAsRead = async (chatId: string, userId: string): Promise<void> => {
+  await updateDoc(doc(db, 'chats', chatId), {
+    [`lastReadAt.${userId}`]: serverTimestamp(),
+  });
 };
 
 /** Leave a conversation without deleting it for the other participant. */
