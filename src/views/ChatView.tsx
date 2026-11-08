@@ -355,8 +355,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
               return (
               <div
                 key={chat.id}
-                className={`group w-full p-4 text-left border-b border-gray-100 hover:bg-gray-50 transition-colors ${
-                  activeChat?.id === chat.id ? 'bg-blue-50 border-l-4 border-l-primary' : ''
+                className={`group w-full p-4 text-left border-b border-gray-100 transition-colors ${
+                  isUnread
+                    ? 'bg-sky-50 border-l-4 border-l-sky-500 hover:bg-sky-100'
+                    : activeChat?.id === chat.id
+                      ? 'bg-blue-50 border-l-4 border-l-primary'
+                      : 'hover:bg-gray-50'
                 }`}
               >
                 <button
@@ -365,7 +369,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 >
                   <div className="flex items-center gap-2">
                     <h3 className={`font-medium truncate ${isUnread ? 'text-gray-900' : 'text-gray-800'}`}>{chat.itemTitle}</h3>
-                    {isUnread && <span className="w-2.5 h-2.5 rounded-full bg-primary flex-shrink-0" title="Unread message" aria-label="Unread message" />}
+                    {isUnread && <span className="w-2.5 h-2.5 rounded-full bg-sky-600 ring-4 ring-sky-100 flex-shrink-0" title="Unread message" aria-label="Unread message" />}
                   </div>
                   <p className="text-sm text-gray-500 truncate mt-1">
                     {chat.lastMessage?.content || 'No messages yet'}
