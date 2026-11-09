@@ -34,6 +34,17 @@ export interface ImageAttachment {
   height: number;
 }
 
+export interface StickerMessage {
+  type: 'sticker';
+  stickerId: string;
+}
+
+export const CHAT_STICKER_IDS = [
+  'happy-cat', 'love-birds', 'you-got-this', 'thank-you',
+  'oops', 'thinking', 'study-mode', 'found-it',
+  'coffee-break', 'good-luck', 'wave-hello', 'celebrate',
+] as const;
+
 export interface Message {
   id?: string;
   chatId: string;
@@ -45,6 +56,7 @@ export interface Message {
   status?: 'sending' | 'sent' | 'delivered' | 'read';
   readBy?: { [userId: string]: number };
   attachment?: ImageAttachment;
+  sticker?: StickerMessage;
   reactions?: { [userId: string]: string };
 }
 
@@ -135,6 +147,9 @@ const normalizeMessage = (id: string, chatId: string, data: Record<string, any>)
     ...(data.reactions && typeof data.reactions === 'object' ? { reactions: data.reactions as { [userId: string]: string } } : {}),
     ...(data.attachment && typeof data.attachment.publicId === 'string'
       ? { attachment: data.attachment as ImageAttachment }
+      : {}),
+    ...(data.sticker?.type === 'sticker' && typeof data.sticker.stickerId === 'string'
+      ? { sticker: data.sticker as StickerMessage }
       : {}),
   };
 };
@@ -263,8 +278,14 @@ export const sendMessage = async (
   senderId: string,
   senderName: string,
   content: string,
-  attachment?: ImageAttachment
+  attachment?: ImageAttachment,
+  sticker?: StickerMessage
 ): Promise<string> => {
+  if (sticker && (sticker.type !== 'sticker' || !CHAT_STICKER_IDS.includes(sticker.stickerId as typeof CHAT_STICKER_IDS[number]))) {
+    throw new Error('That sticker is not available. Please refresh and try again.');
+  }
+  if (attachment && sticker) throw new Error('A message can contain either a photo or a sticker, not both.');
+
   const safeName = sanitizePlainText(senderName, LIMITS.displayName, { multiline: false });
   const safeContent = sanitizePlainText(content, LIMITS.chatMessage, { multiline: true });
   if (!safeContent) throw new Error('Message cannot be empty.');
@@ -291,6 +312,7 @@ export const sendMessage = async (
     status: 'sent',
     readBy: {},
     ...(attachment ? { attachment } : {}),
+    ...(sticker ? { sticker } : {}),
   });
   batch.update(chatRef, {
     lastMessage: {
