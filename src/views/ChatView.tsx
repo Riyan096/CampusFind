@@ -164,13 +164,33 @@ export const ChatView: React.FC<ChatViewProps> = ({
         if (gifSearchQuery.trim()) params.set('q', gifSearchQuery.trim().slice(0, 50));
         const response = await fetch(`${endpoint}?${params.toString()}`, { signal: controller.signal });
         if (!response.ok) throw new Error(response.status === 429 ? 'GIPHY rate limit reached. Wait a moment and try again.' : 'GIF search is temporarily unavailable.');
-        const payload = await response.json() as { data?: Array<{ id?: string; title?: string; images?: { fixed_width?: { url?: string }; fixed_width_small?: { url?: string } } }> };
+        const payload = await response.json() as {
+          data?: Array<{ id?: string; title?: string; images?: { fixed_width?: { url?: string }; fixed_width_small?: { url?: string } } }>;
+          meta?: { status?: number; msg?: string; response_id?: string };
+        };
+        if (payload.meta && payload.meta.status !== 200) {
+          throw new Error(payload.meta.msg || `GIPHY returned an error (HTTP ${payload.meta.status}). Check your API key and try again.`);
+        }
+        const isGiphyMediaUrl = (value: string) => {
+          try {
+            const parsed = new URL(value);
+            return parsed.protocol === 'https:' &&
+              /^media[0-9]*\.giphy\.com$/i.test(parsed.hostname) &&
+              parsed.pathname.startsWith('/media/') &&
+              /\.(gif|webp)$/i.test(parsed.pathname);
+          } catch {
+            return false;
+          }
+        };
         const results = (payload.data || []).flatMap((entry): GifSearchResult[] => {
           const url = entry.images?.fixed_width?.url || '';
           const previewUrl = entry.images?.fixed_width_small?.url || url;
-          if (!entry.id || !/^[A-Za-z0-9_-]{1,128}$/.test(entry.id) || !/^https:\/\/media[0-9]*\.giphy\.com\/media\/[A-Za-z0-9_-]+\/[A-Za-z0-9_]+\.gif(?:\?.*)?$/.test(url) || !previewUrl.startsWith('https://media')) return [];
+          if (!entry.id || !/^[A-Za-z0-9_-]{1,128}$/.test(entry.id) || !isGiphyMediaUrl(url) || !isGiphyMediaUrl(previewUrl)) return [];
           return [{ gifId: entry.id, url, title: (entry.title || 'GIF').slice(0, 200), previewUrl }];
         });
+        if (payload.data?.length && results.length === 0) {
+          console.warn('GIPHY returned GIFs, but CampusFind rejected their media URL format.');
+        }
         setGifResults((current) => gifOffset === 0 ? results : [...current, ...results]);
         setGifHasMore((payload.data || []).length === GIPHY_PAGE_SIZE);
       } catch (error) {
