@@ -393,20 +393,41 @@ service cloud.firestore {
           request.resource.data.status == 'sent' &&
           request.resource.data.readBy is map &&
           request.resource.data.readBy.keys().size() == 0;
-        allow update: if isParentParticipant() &&
-          resource.data.senderId != request.auth.uid &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'read', 'status', 'readBy'
-          ]) &&
-          request.resource.data.read == true &&
-          request.resource.data.status == 'read' &&
-          request.resource.data.readBy.diff(resource.data.readBy)
-            .affectedKeys().hasOnly([request.auth.uid]) &&
-          request.resource.data.readBy.diff(resource.data.readBy)
-            .affectedKeys().hasOnly([request.auth.uid]) &&
-          request.resource.data.readBy.diff(resource.data.readBy)
-            .addedKeys().hasOnly([request.auth.uid]) &&
-          request.resource.data.readBy[request.auth.uid] == request.time;
+        function validReactionUpdate() {
+          let oldReactions = resource.data.get('reactions', {});
+          let newReactions = request.resource.data.get('reactions', {});
+          let changedUsers = newReactions.diff(oldReactions).affectedKeys();
+          return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']) &&
+            changedUsers.size() == 1 &&
+            changedUsers.hasOnly([request.auth.uid]) &&
+            (
+              (
+                request.auth.uid in newReactions &&
+                newReactions[request.auth.uid] in ['👍', '❤️', '😂', '😮', '😢', '🙏']
+              ) ||
+              (
+                !(request.auth.uid in newReactions) &&
+                request.auth.uid in oldReactions
+              )
+            );
+        }
+
+        allow update: if isParentParticipant() && (
+          (
+            resource.data.senderId != request.auth.uid &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'read', 'status', 'readBy'
+            ]) &&
+            request.resource.data.read == true &&
+            request.resource.data.status == 'read' &&
+            request.resource.data.readBy.diff(resource.data.readBy)
+              .affectedKeys().hasOnly([request.auth.uid]) &&
+            request.resource.data.readBy.diff(resource.data.readBy)
+              .addedKeys().hasOnly([request.auth.uid]) &&
+            request.resource.data.readBy[request.auth.uid] == request.time
+          ) ||
+          validReactionUpdate()
+        );
         allow delete: if false;
       }
     }
