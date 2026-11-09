@@ -362,12 +362,26 @@ service cloud.firestore {
           return isSignedIn() && request.auth.uid in parentChat().participantIds;
         }
 
+        function validImageAttachment() {
+          let attachment = request.resource.data.attachment;
+          return attachment is map &&
+            attachment.keys().hasOnly(['type', 'publicId', 'format', 'bytes', 'width', 'height']) &&
+            attachment.type == 'image' &&
+            attachment.publicId is string &&
+            attachment.publicId.matches('campusfind/chats/' + chatId + '/[A-Za-z0-9-]{36}') &&
+            attachment.format in ['jpg', 'png', 'webp'] &&
+            attachment.bytes is int && attachment.bytes > 0 && attachment.bytes <= 8388608 &&
+            attachment.width is int && attachment.width > 0 && attachment.width <= 12000 &&
+            attachment.height is int && attachment.height > 0 && attachment.height <= 12000;
+        }
+
         allow read: if isParentParticipant();
         allow create: if isParentParticipant() &&
           request.resource.data.keys().hasOnly([
             'senderId', 'senderName', 'content', 'timestamp',
-            'read', 'status', 'readBy'
+            'read', 'status', 'readBy', 'attachment'
           ]) &&
+          (!('attachment' in request.resource.data) || validImageAttachment()) &&
           request.resource.data.senderId == request.auth.uid &&
           request.resource.data.senderName is string &&
           request.resource.data.senderName.size() <= 100 &&
