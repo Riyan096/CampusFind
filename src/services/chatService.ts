@@ -45,6 +45,7 @@ export interface Message {
   status?: 'sending' | 'sent' | 'delivered' | 'read';
   readBy?: { [userId: string]: number };
   attachment?: ImageAttachment;
+  reactions?: { [userId: string]: string };
 }
 
 export interface Chat {
@@ -131,6 +132,7 @@ const normalizeMessage = (id: string, chatId: string, data: Record<string, any>)
     read: data.read === true,
     status: data.status,
     readBy,
+    ...(data.reactions && typeof data.reactions === 'object' ? { reactions: data.reactions as { [userId: string]: string } } : {}),
     ...(data.attachment && typeof data.attachment.publicId === 'string'
       ? { attachment: data.attachment as ImageAttachment }
       : {}),
@@ -323,6 +325,38 @@ export const sendMessage = async (
   }
 
   return messageRef.id;
+};
+
+/** Add, change, or remove only the current user's reaction on a message. */
+export const setMessageReaction = async (
+  chatId: string,
+  messageId: string,
+  userId: string,
+  emoji: string
+): Promise<void> => {
+  const allowedReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+  if (!allowedReactions.includes(emoji)) {
+    throw new Error('That reaction is not supported.');
+  }
+
+  const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+  const messageSnapshot = await getDoc(messageRef);
+  if (!messageSnapshot.exists()) throw new Error('This message no longer exists.');
+
+  const message = messageSnapshot.data();
+  const chatSnapshot = await getDoc(doc(db, 'chats', chatId));
+  if (
+    !chatSnapshot.exists() ||
+    !Array.isArray(chatSnapshot.data().participantIds) ||
+    !chatSnapshot.data().participantIds.includes(userId)
+  ) {
+    throw new Error('You are not a participant in this conversation.');
+  }
+
+  const currentReaction = message.reactions?.[userId];
+  await updateDoc(messageRef, {
+    [`reactions.${userId}`]: currentReaction === emoji ? deleteField() : emoji,
+  });
 };
 
 /** Mark messages from other participants as read by the current user. */
