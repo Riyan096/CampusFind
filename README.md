@@ -331,7 +331,7 @@ The longer-term goals include:
 - [x] Chat notification center and conversation management controls
 - [x] Authenticated chat photo attachments using Cloudinary and a Cloudflare Worker
 - [x] Per-user emoji reactions with Firestore rule validation
-- [x] Custom keyboard-entered emoji reactions
+- [x] Searchable full emoji picker with a `+` button and customizable per-user quick reactions
 - [x] Curated sticker picker and sticker messages
 - [x] GIPHY GIF search, previews, and GIF messages
 - [x] Higher-quality GIF picker previews
@@ -356,7 +356,7 @@ The longer-term goals include:
 
 ## Chat Development Notes
 
-Chat now supports authenticated photo attachments (Cloudinary delivery through a local Cloudflare Worker), emoji reactions, a curated sticker pack, and GIPHY GIF search with higher-quality picker previews. These features are implemented on the active feature branch and are designed to avoid Firebase Storage / Cloud Functions dependencies for chat media under the Firebase Spark plan. Video attachments remain deferred. Report/block workflows and further security regression testing are still planned.
+Chat now supports authenticated photo attachments (Cloudinary delivery through a local Cloudflare Worker), a searchable emoji picker with customizable quick reactions, a curated sticker pack, and GIPHY GIF search with higher-quality picker previews. These features are implemented on the active feature branch and are designed to avoid Firebase Storage / Cloud Functions dependencies for chat media under the Firebase Spark plan. Video attachments remain deferred. Report/block workflows and further security regression testing are still planned.
 
 See **[CHAT_ROADMAP.md](./CHAT_ROADMAP.md)** for implementation details, Firebase Spark constraints, known limitations, and the remaining chat roadmap.
 
