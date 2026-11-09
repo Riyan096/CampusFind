@@ -87,12 +87,14 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 - [ ] Run the local build and deploy the updated Firestore rules before testing with two accounts.
 
 ### 5. GIF search
-- [ ] Add a GIF button and searchable GIF picker.
-- [ ] Select a GIF provider only after reviewing API terms, attribution requirements, content-safety controls, rate limits, and free-tier limits.
-- [ ] Debounce search and paginate results to limit API usage.
-- [ ] Show a preview before sending.
-- [ ] Store the provider's stable media identifier and the required source/attribution metadata; avoid copying GIF binaries into Firestore.
-- [ ] Add safe-search/content filtering and a way to report inappropriate GIF content.
+- [x] Add a GIF button and searchable GIF picker with trending results when the search field is empty.
+- [x] Select GIPHY after reviewing its current API requirements: client-side search, required Powered by GIPHY attribution, and beta-key rate limit of 100 API calls per hour.
+- [x] Debounce text search and paginate results in batches of 24.
+- [x] Show a selected-GIF preview before sending; allow removal before send.
+- [x] Store the stable GIPHY GIF ID, approved media URL, title, and provider metadata; do not copy GIF binaries into Firestore.
+- [x] Request PG-rated results and validate the provider and media URL again in Firestore rules.
+- [ ] Add an in-app report action for inappropriate GIF content when the broader moderation/report workflow is implemented.
+- [ ] Add a local GIPHY API key to `.env` and test search, pagination, sending, and receiving with two accounts.
 
 ### 6. Report user
 - [ ] Add a Report user action in the conversation menu or user profile.
@@ -121,7 +123,7 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 2. **Photo attachments:** first media feature; validate the storage provider and Spark compatibility before coding the upload flow.
 3. **Emoji reactions:** self-contained message interaction with relatively small media/storage requirements.
 4. **Stickers:** implemented as a local curated pack; verify with a local build and two accounts.
-5. **GIF search:** next feature; select a provider after reviewing policy, safety, attribution, and quotas.
+5. **GIF search:** implemented with GIPHY client-side search, PG-rated results, attribution, debouncing, pagination, preview, and Firestore validation; local API-key setup and two-account testing remain.
 6. **Video attachments:** optional and deferred because of larger storage and bandwidth costs.
 7. **Report and block:** build protected reporting and enforcement, including admin review, before expanding the chat community.
 
