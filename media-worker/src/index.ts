@@ -259,7 +259,7 @@ async function serveImage(request: Request, env: Env, user: AuthenticatedUser): 
     !/^[A-Za-z0-9_-]{1,128}$/.test(chatId) ||
     !ALLOWED_FORMATS.has(format) ||
     !publicId.startsWith(`campusfind/chats/${chatId}/`) ||
-    !/^[A-Za-z0-9-]{36}$/.test(publicId.slice(`campusfind/chats/${chatId}/`.length)),
+    !/^[A-Za-z0-9-]{36}$/.test(publicId.slice(`campusfind/chats/${chatId}/`.length)) ||
     !/^[A-Za-z0-9_-]{1,128}$/.test(messageId)
   ) {
     return json({ error: "Invalid image reference." }, 400);
