@@ -239,6 +239,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [showNewChat, setShowNewChat] = useState(false);
   const [showArchivedChats, setShowArchivedChats] = useState(false);
   const [openReactionMessageId, setOpenReactionMessageId] = useState<string | null>(null);
+  const [customReactionDraft, setCustomReactionDraft] = useState('');
   const [openChatMenuId, setOpenChatMenuId] = useState<string | null>(null);
   const [newChatItemId, setNewChatItemId] = useState('');
   const [newChatItemTitle, setNewChatItemTitle] = useState('');
@@ -488,6 +489,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     try {
       await setMessageReaction(activeChat.id, message.id, user.uid, emoji);
       setOpenReactionMessageId(null);
+      setCustomReactionDraft('');
     } catch (error) {
       console.error('Unable to update message reaction:', error);
       alert('Could not update your reaction. Please try again.');
@@ -953,11 +955,36 @@ export const ChatView: React.FC<ChatViewProps> = ({
                               {emoji}
                             </button>
                           ))}
+                          <div className="mt-2 flex items-center gap-2 border-t border-gray-100 pt-2">
+                            <input
+                              type="text"
+                              value={customReactionDraft}
+                              onChange={(event) => setCustomReactionDraft(event.target.value.slice(0, 16))}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  event.preventDefault();
+                                  if (customReactionDraft.trim()) void handleReaction(message, customReactionDraft.trim());
+                                }
+                              }}
+                              placeholder="Type or paste an emoji"
+                              aria-label="Custom reaction emoji"
+                              maxLength={16}
+                              className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-800 outline-none focus:border-primary"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => { if (customReactionDraft.trim()) void handleReaction(message, customReactionDraft.trim()); }}
+                              disabled={!customReactionDraft.trim()}
+                              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              Add
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
                   </div>
-                ))
+                )) 
               )}
               <div ref={messagesEndRef} />
             </div>
