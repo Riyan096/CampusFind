@@ -373,8 +373,10 @@ export const setMessageReaction = async (
   emoji: string
 ): Promise<void> => {
   const allowedReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
-  if (!allowedReactions.includes(emoji)) {
-    throw new Error('That reaction is not supported.');
+  const hasEmojiCharacter = /\p{Extended_Pictographic}|\p{Regional_Indicator}{2}|[#*0-9]\uFE0F?\u20E3/u.test(emoji);
+  const isShortSingleReaction = emoji.length > 0 && Array.from(emoji).length <= 16 && !/\s/u.test(emoji);
+  if (!isShortSingleReaction || (!allowedReactions.includes(emoji) && !hasEmojiCharacter)) {
+    throw new Error('Choose a single emoji for your reaction.');
   }
 
   const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
