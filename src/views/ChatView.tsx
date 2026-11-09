@@ -675,7 +675,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                           attachment={message.attachment}
                         />
                       )}
-                      {message.content && message.content !== 'Photo' && (
+                      {message.content && (message.content !== 'Photo' || !message.attachment) && (
                         <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
                       )}
                       <div className="flex items-center justify-end gap-1 mt-1">
