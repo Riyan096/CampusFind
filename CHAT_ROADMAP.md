@@ -54,10 +54,11 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 - [ ] Add an attachment button and image picker to the message composer.
 - [ ] Support image preview before sending, cancel/remove, upload progress, retry, and clear failure states.
 - [ ] Render image messages inline with a tap/click-to-expand viewer.
-- [ ] Store attachment metadata with the message (storage reference/path, content type, file size, dimensions, uploader, and created timestamp); do not trust client-supplied metadata without validation.
+- [x] Define a typed image attachment on chat messages (`type`, Cloudinary `publicId`, format, byte size, width, and height); sender and timestamp are inherited from the message document.
+- [x] Validate attachment metadata in Firestore rules, including chat-scoped Cloudinary public IDs, supported formats, file-size limits, and dimension limits.
 - [ ] Enforce allowed image MIME types and conservative file-size limits; validate actual file content where the chosen storage service permits it.
-- [ ] Decide on a media-storage approach that works with the project's Firebase Spark plan before implementation. Verify current Firebase Storage plan requirements and quotas first; do not assume Storage uploads are available on Spark.
-- [ ] Restrict media access to conversation participants and avoid public, guessable download URLs where possible.
+- [x] Choose Cloudinary authenticated delivery behind a Cloudflare Worker for the Firebase Spark-compatible media path; Cloudinary credentials remain server-side.
+- [x] Restrict Worker upload and media retrieval to authenticated chat participants; media retrieval also verifies the exact message document contains the requested attachment reference.
 - [ ] Define retention and deletion behavior when a message or conversation is deleted.
 
 ### 2. Emoji reactions
