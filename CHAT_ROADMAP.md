@@ -92,7 +92,7 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 - [x] Debounce text search and paginate results in batches of 24.
 - [x] Show a selected-GIF preview before sending; allow removal before send.
 - [x] Store only the stable GIPHY GIF ID and provider metadata in Firestore; resolve media URLs directly from GIPHY on the client and never cache/store media URLs or GIF binaries.
-- [x] Request PG-rated results and validate the provider and media URL again in Firestore rules.
+- [x] Request PG-rated results and validate the provider and stable GIF ID in Firestore rules.
 - [ ] Add an in-app report action for inappropriate GIF content when the broader moderation/report workflow is implemented.
 - [ ] Add a local GIPHY API key to `.env` and test search, pagination, sending, and receiving with two accounts.
 
