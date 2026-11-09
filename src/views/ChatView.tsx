@@ -72,7 +72,7 @@ const GiphyChatGif: React.FC<{ gifId: string }> = ({ gifId }) => {
         if (!url.startsWith('https://media') || !url.includes('.giphy.com/')) throw new Error('GIF unavailable');
         setMediaUrl(url);
       })
-      .catch((error: unknown) => {
+      .catch(() => {
         if (!controller.signal.aborted) setFailed(true);
       });
     return () => controller.abort();
