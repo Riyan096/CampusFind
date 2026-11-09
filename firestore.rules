@@ -375,13 +375,27 @@ service cloud.firestore {
             attachment.height is int && attachment.height > 0 && attachment.height <= 12000;
         }
 
+        function validStickerMessage() {
+          let sticker = request.resource.data.sticker;
+          return sticker is map &&
+            sticker.keys().hasOnly(['type', 'stickerId']) &&
+            sticker.type == 'sticker' &&
+            sticker.stickerId in [
+              'happy-cat', 'love-birds', 'you-got-this', 'thank-you',
+              'oops', 'thinking', 'study-mode', 'found-it',
+              'coffee-break', 'good-luck', 'wave-hello', 'celebrate'
+            ];
+        }
+
         allow read: if isParentParticipant();
         allow create: if isParentParticipant() &&
           request.resource.data.keys().hasOnly([
             'senderId', 'senderName', 'content', 'timestamp',
-            'read', 'status', 'readBy', 'attachment'
+            'read', 'status', 'readBy', 'attachment', 'sticker'
           ]) &&
           (!('attachment' in request.resource.data) || validImageAttachment()) &&
+          (!('sticker' in request.resource.data) || validStickerMessage()) &&
+          !('attachment' in request.resource.data && 'sticker' in request.resource.data) &&
           request.resource.data.senderId == request.auth.uid &&
           request.resource.data.senderName is string &&
           request.resource.data.senderName.size() <= 100 &&
