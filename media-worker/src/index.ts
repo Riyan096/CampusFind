@@ -123,6 +123,23 @@ async function isChatParticipant(
   return participants.some((entry) => entry.stringValue === user.uid);
 }
 
+async function isImageAttachedToMessage(
+  chatId: string, messageId: string, publicId: string, format: string,
+  user: AuthenticatedUser, env: Env
+): Promise<boolean> {
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(messageId)) return false;
+  const base = "https://firestore.googleapis.com/v1/projects/" + encodeURIComponent(env.FIREBASE_PROJECT_ID) +
+    "/databases/(default)/documents/chats/" + encodeURIComponent(chatId) +
+    "/messages/" + encodeURIComponent(messageId);
+  const response = await fetch(base, { headers: { Authorization: "Bearer " + user.idToken } });
+  if (!response.ok) return false;
+  const document = await response.json() as { fields?: { attachment?: { mapValue?: { fields?: {
+    type?: { stringValue?: string }; publicId?: { stringValue?: string }; format?: { stringValue?: string };
+  } } } } };
+  const fields = document.fields?.attachment?.mapValue?.fields;
+  return fields?.type?.stringValue === "image" &&
+    fields.publicId?.stringValue === publicId && fields.format?.stringValue === format;
+}
 function imageFormat(file: File, bytes: Uint8Array): "jpg" | "png" | "webp" | null {
   const type = file.type.toLowerCase();
 
@@ -236,18 +253,24 @@ async function serveImage(request: Request, env: Env, user: AuthenticatedUser): 
   const chatId = url.searchParams.get("chatId") || "";
   const publicId = url.searchParams.get("publicId") || "";
   const format = (url.searchParams.get("format") || "").toLowerCase();
+  const messageId = url.searchParams.get("messageId") || "";
 
   if (
     !/^[A-Za-z0-9_-]{1,128}$/.test(chatId) ||
     !ALLOWED_FORMATS.has(format) ||
     !publicId.startsWith(`campusfind/chats/${chatId}/`) ||
-    !/^[A-Za-z0-9-]{36}$/.test(publicId.slice(`campusfind/chats/${chatId}/`.length))
+    !/^[A-Za-z0-9-]{36}$/.test(publicId.slice(`campusfind/chats/${chatId}/`.length)),
+    !/^[A-Za-z0-9_-]{1,128}$/.test(messageId)
   ) {
     return json({ error: "Invalid image reference." }, 400);
   }
 
   if (!(await isChatParticipant(chatId, user, env))) {
     return json({ error: "You do not have access to this conversation." }, 403);
+  }
+
+  if (!(await isImageAttachedToMessage(chatId, messageId, publicId, format, user, env))) {
+    return json({ error: "This photo is not attached to a message in this conversation." }, 404);
   }
 
   const deliveryPath = `${publicId}.${format}`;
