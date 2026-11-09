@@ -66,11 +66,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
     if (!file) return;
 
     if (!ACCEPTED_CHAT_IMAGE_TYPES.includes(file.type)) {
+      setSelectedImage(null);
+      setImagePreviewUrl(null);
       setImageError('Choose a JPEG, PNG, or WebP image.');
       event.target.value = '';
       return;
     }
     if (file.size === 0 || file.size > MAX_CHAT_IMAGE_BYTES) {
+      setSelectedImage(null);
+      setImagePreviewUrl(null);
       setImageError('Images must be smaller than 8 MB.');
       event.target.value = '';
       return;
