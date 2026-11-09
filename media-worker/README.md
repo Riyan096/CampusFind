@@ -43,7 +43,7 @@ The health endpoint does not require Firebase authentication. Upload and image e
 ## Endpoints
 
 - `POST /api/upload`: multipart form fields `chatId` and `file`; requires `Authorization: Bearer <Firebase ID token>`.
-- `GET /api/media?chatId=...&publicId=...&format=...`: requires the same Firebase bearer token and checks chat membership before proxying the image.
+- `GET /api/media?chatId=...&messageId=...&publicId=...&format=...`: requires the same Firebase bearer token, checks chat membership, and verifies that the exact message document contains the matching image attachment metadata before proxying the image.
 - `GET /health`: local health check.
 
 The frontend is not connected yet. Do not deploy this Worker until the photo-message Firestore rules, chat UI, and end-to-end tests are complete.
