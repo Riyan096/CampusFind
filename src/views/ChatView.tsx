@@ -29,7 +29,7 @@ const DEFAULT_CHAT_REACTION_OPTIONS = ['👍', '❤️', '😂', '😮', '😢',
 const MAX_QUICK_REACTIONS = 8;
 const isValidQuickReaction = (value: unknown): value is string =>
   typeof value === 'string' && Array.from(value).length > 0 && Array.from(value).length <= 16 &&
-  !/\\s/u.test(value) && /\\p{Extended_Pictographic}|\\p{Regional_Indicator}{2}|[#*0-9]\\uFE0F?\\u20E3/u.test(value);
+  !/\s/u.test(value) && /[\p{Extended_Pictographic}\p{Regional_Indicator}]|[#*0-9]\uFE0F?\u20E3/u.test(value);
 const CHAT_STICKERS = [
   { id: 'happy-cat', label: 'Happy Cat', emoji: '😸', category: 'Reactions', background: 'bg-amber-100' },
   { id: 'love-birds', label: 'Sending Love', emoji: '🥰', category: 'Reactions', background: 'bg-pink-100' },
@@ -1060,7 +1060,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
                                 height={340}
                                 searchPlaceHolder="Search all emoji"
                                 previewConfig={{ showPreview: false }}
-                                skinTonesDisabled
                                 lazyLoadEmojis
                               />
                             </div>
