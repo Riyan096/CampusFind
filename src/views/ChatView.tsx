@@ -1,6 +1,5 @@
 import React, { Suspense, useState, useEffect, useRef, useCallback } from 'react';
 
-const EmojiPicker = React.lazy(() => import('emoji-picker-react'));
 import { useAuth } from '../context/AuthContext';
 import { 
   subscribeToUserChats, 
@@ -23,6 +22,8 @@ import { markChatNotificationsAsRead } from '../services/notificationService';
 import { auth } from '../services/firebase';
 import { AuthenticatedChatImage } from '../components/AuthenticatedChatImage';
 import type { ImageAttachment } from '../services/chatService';
+
+const EmojiPicker = React.lazy(() => import('emoji-picker-react'));
 
 const MAX_CHAT_IMAGE_BYTES = 8 * 1024 * 1024;
 const ACCEPTED_CHAT_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
