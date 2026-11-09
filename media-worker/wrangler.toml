@@ -1,0 +1,11 @@
+name = "campusfind-media"
+main = "src/index.ts"
+compatibility_date = "2026-11-09"
+
+[vars]
+FIREBASE_PROJECT_ID = "campusfind-app"
+CLOUDINARY_CLOUD_NAME = "an5eg6cs"
+ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:4173"
+
+[secrets]
+required = ["CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"]
