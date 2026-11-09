@@ -191,7 +191,7 @@ async function uploadImage(request: Request, env: Env, user: AuthenticatedUser):
   const signature = await sha1Hex(signaturePayload + env.CLOUDINARY_API_SECRET);
 
   const cloudinaryForm = new FormData();
-  cloudinaryForm.set("file", new Blob([bytes], { type: file.type }), `photo.${format}`);
+  cloudinaryForm.set("file", file, `photo.${format}`);
   cloudinaryForm.set("api_key", env.CLOUDINARY_API_KEY);
   cloudinaryForm.set("timestamp", String(timestamp));
   cloudinaryForm.set("type", "authenticated");
