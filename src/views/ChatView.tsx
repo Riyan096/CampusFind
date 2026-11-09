@@ -184,7 +184,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         };
         const results = (payload.data || []).flatMap((entry): GifSearchResult[] => {
           const url = entry.images?.fixed_width?.url || '';
-          const previewUrl = entry.images?.fixed_width_small?.url || url;
+          const previewUrl = entry.images?.fixed_width?.url || url;
           if (!entry.id || !/^[A-Za-z0-9_-]{1,128}$/.test(entry.id) || !isGiphyMediaUrl(url) || !isGiphyMediaUrl(previewUrl)) return [];
           return [{ gifId: entry.id, url, title: (entry.title || 'GIF').slice(0, 200), previewUrl }];
         });
