@@ -15,6 +15,12 @@ import {
 import { Button, Input } from '../components/UI';
 import { LIMITS, sanitizeFirestoreDocId, sanitizePlainText } from '../utils/sanitize';
 import { markChatNotificationsAsRead } from '../services/notificationService';
+import { auth } from '../services/firebase';
+import { AuthenticatedChatImage } from '../components/AuthenticatedChatImage';
+import type { ImageAttachment } from '../services/chatService';
+
+const MAX_CHAT_IMAGE_BYTES = 8 * 1024 * 1024;
+const ACCEPTED_CHAT_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 interface ChatViewProps {
   itemId?: string;
@@ -35,6 +41,45 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [imageError, setImageError] = useState('');
+  const [sendingImage, setSendingImage] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const mediaWorkerUrl = (import.meta.env.VITE_MEDIA_WORKER_URL || 'http://localhost:8787').replace(/\/$/, '');
+
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    };
+  }, [imagePreviewUrl]);
+
+  const clearSelectedImage = () => {
+    setSelectedImage(null);
+    setImagePreviewUrl(null);
+    setImageError('');
+    if (imageInputRef.current) imageInputRef.current.value = '';
+  };
+
+  const handleImageSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!ACCEPTED_CHAT_IMAGE_TYPES.includes(file.type)) {
+      setImageError('Choose a JPEG, PNG, or WebP image.');
+      event.target.value = '';
+      return;
+    }
+    if (file.size === 0 || file.size > MAX_CHAT_IMAGE_BYTES) {
+      setImageError('Images must be smaller than 8 MB.');
+      event.target.value = '';
+      return;
+    }
+
+    setImageError('');
+    setSelectedImage(file);
+    setImagePreviewUrl(URL.createObjectURL(file));
+  };
   const [loading, setLoading] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [showArchivedChats, setShowArchivedChats] = useState(false);
@@ -180,26 +225,73 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeChat || !user) return;
+    if (!activeChat?.id || !user || (!newMessage.trim() && !selectedImage)) return;
 
     const safeContent = sanitizePlainText(newMessage, LIMITS.chatMessage, { multiline: true });
-    if (!safeContent) return;
-    
+    if (!safeContent && !selectedImage) return;
+
     setLoading(true);
+    setSendingImage(Boolean(selectedImage));
+    setImageError('');
+
     try {
+      let attachment: ImageAttachment | undefined;
+
+      if (selectedImage) {
+        const currentUser = auth.currentUser;
+        if (!currentUser) throw new Error('Your sign-in session has expired. Please sign in again.');
+
+        const token = await currentUser.getIdToken();
+        const formData = new FormData();
+        formData.append('chatId', activeChat.id);
+        formData.append('file', selectedImage);
+
+        const uploadResponse = await fetch(mediaWorkerUrl + '/api/upload', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + token },
+          body: formData,
+        });
+        const uploadResult = await uploadResponse.json().catch(() => ({})) as Partial<ImageAttachment> & { error?: string };
+        if (!uploadResponse.ok) {
+          throw new Error(uploadResult.error || 'The photo could not be uploaded. Please try again.');
+        }
+
+        if (
+          typeof uploadResult.publicId !== 'string' ||
+          !['jpg', 'png', 'webp'].includes(uploadResult.format || '') ||
+          typeof uploadResult.bytes !== 'number' ||
+          typeof uploadResult.width !== 'number' ||
+          typeof uploadResult.height !== 'number'
+        ) {
+          throw new Error('The media service returned invalid photo information.');
+        }
+
+        attachment = {
+          type: 'image',
+          publicId: uploadResult.publicId,
+          format: uploadResult.format as ImageAttachment['format'],
+          bytes: uploadResult.bytes,
+          width: uploadResult.width,
+          height: uploadResult.height,
+        };
+      }
+
       await sendMessage(
-        activeChat.id!,
+        activeChat.id,
         user.uid,
         user.displayName || 'Anonymous',
-        safeContent
+        safeContent || 'Photo',
+        attachment
       );
-      
+
       setNewMessage('');
+      clearSelectedImage();
     } catch (error) {
-      console.error('Error sending message:', error);
-      alert('Failed to send message. Please try again.');
+      console.error('Error sending chat message:', error);
+      setImageError(error instanceof Error ? error.message : 'Failed to send message. Please try again.');
     } finally {
       setLoading(false);
+      setSendingImage(false);
     }
   };
 
@@ -572,7 +664,16 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       <p className="text-xs font-medium mb-1 opacity-75">
                         {message.senderName}
                       </p>
-                      <p className="text-sm">{message.content}</p>
+                      {message.attachment && message.id && (
+                        <AuthenticatedChatImage
+                          chatId={message.chatId}
+                          messageId={message.id}
+                          attachment={message.attachment}
+                        />
+                      )}
+                      {message.content && message.content !== 'Photo' && (
+                        <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                      )}
                       <div className="flex items-center justify-end gap-1 mt-1">
                         <span className="text-xs opacity-60">
                           {formatTime(message.timestamp)}
@@ -592,7 +693,38 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
             {/* Message Input */}
             <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-200 bg-gray-50">
+              {imagePreviewUrl && selectedImage && (
+                <div className="mb-3 flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-3">
+                  <img src={imagePreviewUrl} alt="Selected photo preview" className="h-20 w-20 rounded-lg object-cover" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-gray-800">{selectedImage.name}</p>
+                    <p className="text-xs text-gray-500">{(selectedImage.size / (1024 * 1024)).toFixed(2)} MB</p>
+                  </div>
+                  <button type="button" onClick={clearSelectedImage} disabled={loading} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-red-600" aria-label="Remove selected photo">
+                    <span className="material-icons">close</span>
+                  </button>
+                </div>
+              )}
+              {imageError && <p role="alert" className="mb-2 text-sm text-red-600">{imageError}</p>}
               <div className="flex gap-2">
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handleImageSelection}
+                  className="hidden"
+                  aria-label="Choose a photo"
+                />
+                <button
+                  type="button"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={loading}
+                  className="rounded-lg border border-gray-300 px-3 text-gray-600 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  title="Attach a photo"
+                  aria-label="Attach a photo"
+                >
+                  <span className="material-icons">image</span>
+                </button>
                 <Input
                   type="text"
                   value={newMessage}
@@ -609,11 +741,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 />
                 <Button 
                   type="submit" 
-                  disabled={loading || !newMessage.trim()}
+                  disabled={loading || (!newMessage.trim() && !selectedImage)}
                   className="px-4"
                 >
                   {loading ? (
-                    <span className="material-icons animate-spin text-sm">refresh</span>
+                    <span className="material-icons animate-spin text-sm">{sendingImage ? 'cloud_upload' : 'refresh'}</span>
                   ) : (
                     <span className="material-icons text-sm">send</span>
                   )}
