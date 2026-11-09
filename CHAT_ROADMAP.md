@@ -64,6 +64,8 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 ### 2. Emoji reactions
 - [x] Add a compact reaction picker to each message.
 - [x] Add six quick reactions: 👍, ❤️, 😂, 😮, 😢, and 🙏.
+- [x] Let users type or paste a custom emoji reaction in addition to the quick reactions.
+- [x] Validate custom reactions as short emoji strings in the service and bound their stored length in Firestore rules.
 - [x] Allow one user to add, change, or remove their reaction to a message.
 - [x] Show reaction counts and highlight the current user's selected reaction.
 - [x] Enforce chat participation and per-user-only reaction changes in Firestore rules.
