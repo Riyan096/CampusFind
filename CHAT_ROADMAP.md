@@ -79,11 +79,12 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 - [ ] Verify free-tier feasibility and quotas before choosing a provider; video should follow photo attachments, not precede them.
 
 ### 4. Stickers
-- [ ] Add a sticker button and a curated starter sticker pack.
-- [ ] Create a sticker picker with categories and a recently-used section.
-- [ ] Store a stable sticker identifier/pack reference in the message rather than embedding large image data.
-- [ ] Render stickers as distinct message content with accessible labels.
-- [ ] Decide whether custom/user-uploaded sticker packs are in scope; start with a curated set to control storage and moderation.
+- [x] Add a sticker button and an original curated starter pack (12 stickers).
+- [x] Create a sticker picker with All / Reactions / Campus / Everyday categories and a recently-used section.
+- [x] Store a stable sticker ID in the message rather than embedding image data.
+- [x] Render stickers as distinct message content with accessible labels.
+- [x] Keep the starter pack local and curated; custom/user-uploaded sticker packs remain out of scope for the MVP.
+- [ ] Run the local build and deploy the updated Firestore rules before testing with two accounts.
 
 ### 5. GIF search
 - [ ] Add a GIF button and searchable GIF picker.
@@ -119,9 +120,9 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 1. **Data model and security design:** define message types, attachment metadata, reactions, blocks, and reports; update Firestore rules and tests before exposing controls.
 2. **Photo attachments:** first media feature; validate the storage provider and Spark compatibility before coding the upload flow.
 3. **Emoji reactions:** self-contained message interaction with relatively small media/storage requirements.
-4. **Stickers:** start with a small curated pack and stable sticker IDs.
-5. **GIF search:** integrate a provider after reviewing policy, safety, attribution, and quotas.
-6. **Video attachments:** last among media features because of larger storage and bandwidth costs.
+4. **Stickers:** implemented as a local curated pack; verify with a local build and two accounts.
+5. **GIF search:** next feature; select a provider after reviewing policy, safety, attribution, and quotas.
+6. **Video attachments:** optional and deferred because of larger storage and bandwidth costs.
 7. **Report and block:** build protected reporting and enforcement, including admin review, before expanding the chat community.
 
 ## Definition of done for each feature
@@ -137,10 +138,10 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 
 ## Development notes
 
-- Active working branch: `fix/free-tier-firestore-chat`.
+- Active working branch: `feature/chat-photo-media-worker`.
 - Local verification commands:
   ```powershell
-  git pull origin fix/free-tier-firestore-chat
+  git pull origin feature/chat-photo-media-worker
   npm run build
   npm run dev
   ```
