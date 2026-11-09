@@ -11,7 +11,8 @@ import {
   updateChatUserSettings,
   setMessageReaction,
   type Chat,
-  type Message
+  type Message,
+  type StickerMessage
 } from '../services/chatService';
 import { Button, Input } from '../components/UI';
 import { LIMITS, sanitizeFirestoreDocId, sanitizePlainText } from '../utils/sanitize';
@@ -23,6 +24,21 @@ import type { ImageAttachment } from '../services/chatService';
 const MAX_CHAT_IMAGE_BYTES = 8 * 1024 * 1024;
 const ACCEPTED_CHAT_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const CHAT_REACTION_OPTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+const CHAT_STICKERS = [
+  { id: 'happy-cat', label: 'Happy Cat', emoji: '😸', category: 'Reactions', background: 'bg-amber-100' },
+  { id: 'love-birds', label: 'Sending Love', emoji: '🥰', category: 'Reactions', background: 'bg-pink-100' },
+  { id: 'you-got-this', label: 'You Got This', emoji: '💪', category: 'Reactions', background: 'bg-orange-100' },
+  { id: 'thank-you', label: 'Thank You', emoji: '🙏', category: 'Reactions', background: 'bg-violet-100' },
+  { id: 'oops', label: 'Oops!', emoji: '😅', category: 'Reactions', background: 'bg-yellow-100' },
+  { id: 'thinking', label: 'Thinking', emoji: '🤔', category: 'Reactions', background: 'bg-sky-100' },
+  { id: 'study-mode', label: 'Study Mode', emoji: '📚', category: 'Campus', background: 'bg-blue-100' },
+  { id: 'found-it', label: 'Found It!', emoji: '🎉', category: 'Campus', background: 'bg-emerald-100' },
+  { id: 'coffee-break', label: 'Coffee Break', emoji: '☕', category: 'Campus', background: 'bg-orange-100' },
+  { id: 'good-luck', label: 'Good Luck', emoji: '🍀', category: 'Campus', background: 'bg-green-100' },
+  { id: 'wave-hello', label: 'Hello!', emoji: '👋', category: 'Everyday', background: 'bg-cyan-100' },
+  { id: 'celebrate', label: 'Celebrate', emoji: '🥳', category: 'Everyday', background: 'bg-fuchsia-100' },
+] as const;
+const STICKER_CATEGORIES = ['All', 'Reactions', 'Campus', 'Everyday'] as const;
 
 interface ChatViewProps {
   itemId?: string;
@@ -47,8 +63,29 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [imageError, setImageError] = useState('');
   const [sendingImage, setSendingImage] = useState(false);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
+  const [stickerCategory, setStickerCategory] = useState<(typeof STICKER_CATEGORIES)[number]>('All');
+  const [recentStickerIds, setRecentStickerIds] = useState<string[]>([]);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const mediaWorkerUrl = (import.meta.env.VITE_MEDIA_WORKER_URL || 'http://localhost:8787').replace(/\/$/, '');
+
+  useEffect(() => {
+    if (!user) {
+      setRecentStickerIds([]);
+      return;
+    }
+    try {
+      const stored = localStorage.getItem(`campusfind:chat-stickers:${user.uid}`);
+      const parsed: unknown = stored ? JSON.parse(stored) : [];
+      setRecentStickerIds(
+        Array.isArray(parsed)
+          ? parsed.filter((id): id is string => typeof id === 'string' && CHAT_STICKERS.some((sticker) => sticker.id === id)).slice(0, 8)
+          : []
+      );
+    } catch {
+      setRecentStickerIds([]);
+    }
+  }, [user?.uid]);
 
   useEffect(() => {
     return () => {
@@ -299,6 +336,35 @@ export const ChatView: React.FC<ChatViewProps> = ({
     } finally {
       setLoading(false);
       setSendingImage(false);
+    }
+  };
+
+  const handleSendSticker = async (sticker: (typeof CHAT_STICKERS)[number]) => {
+    if (!activeChat?.id || !user || loading || selectedImage) return;
+    setLoading(true);
+    setShowStickerPicker(false);
+    try {
+      const stickerMessage: StickerMessage = { type: 'sticker', stickerId: sticker.id };
+      await sendMessage(
+        activeChat.id,
+        user.uid,
+        user.displayName || 'Anonymous',
+        sticker.label,
+        undefined,
+        stickerMessage
+      );
+      const nextRecent = [sticker.id, ...recentStickerIds.filter((id) => id !== sticker.id)].slice(0, 8);
+      setRecentStickerIds(nextRecent);
+      try {
+        localStorage.setItem(`campusfind:chat-stickers:${user.uid}`, JSON.stringify(nextRecent));
+      } catch {
+        // Recent stickers still work for this session if browser storage is unavailable.
+      }
+    } catch (error) {
+      console.error('Error sending sticker:', error);
+      alert(error instanceof Error ? error.message : 'Could not send this sticker. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -682,6 +748,19 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       <p className="text-xs font-medium mb-1 opacity-75">
                         {message.senderName}
                       </p>
+                      {message.sticker ? (() => {
+                        const sticker = CHAT_STICKERS.find((entry) => entry.id === message.sticker?.stickerId);
+                        return sticker ? (
+                          <div className="my-1 flex flex-col items-center" role="img" aria-label={sticker.label}>
+                            <div className={`flex h-28 w-28 items-center justify-center rounded-3xl border-2 border-white/80 shadow-sm ${sticker.background}`}>
+                              <span className="text-7xl leading-none" aria-hidden="true">{sticker.emoji}</span>
+                            </div>
+                            <span className="mt-1 text-xs font-semibold opacity-80">{sticker.label}</span>
+                          </div>
+                        ) : (
+                          <p className="text-sm italic opacity-75">Sticker unavailable</p>
+                        );
+                      })() : null}
                       {message.attachment && message.id && (
                         <AuthenticatedChatImage
                           chatId={message.chatId}
@@ -689,7 +768,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                           attachment={message.attachment}
                         />
                       )}
-                      {message.content && (message.content !== 'Photo' || !message.attachment) && (
+                      {message.content && !message.sticker && (message.content !== 'Photo' || !message.attachment) && (
                         <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
                       )}
                       <div className="flex items-center justify-end gap-1 mt-1">
@@ -769,6 +848,47 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
             {/* Message Input */}
             <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-200 bg-gray-50">
+              {showStickerPicker && (
+                <div className="mb-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-sm font-semibold text-gray-800">CampusFind Stickers</p>
+                    <button type="button" onClick={() => setShowStickerPicker(false)} className="rounded-lg p-1 text-gray-500 hover:bg-gray-100" aria-label="Close sticker picker">
+                      <span className="material-icons text-base">close</span>
+                    </button>
+                  </div>
+                  {recentStickerIds.length > 0 && (
+                    <div className="mb-3">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Recently used</p>
+                      <div className="flex flex-wrap gap-2">
+                        {recentStickerIds.map((id) => {
+                          const sticker = CHAT_STICKERS.find((entry) => entry.id === id);
+                          return sticker ? (
+                            <button key={id} type="button" onClick={() => void handleSendSticker(sticker)} disabled={loading || Boolean(selectedImage)} className="flex h-16 w-16 flex-col items-center justify-center rounded-xl border border-gray-200 hover:border-primary hover:bg-primary/5 disabled:opacity-50" aria-label={`Send ${sticker.label} sticker`} title={sticker.label}>
+                              <span className="text-3xl">{sticker.emoji}</span>
+                              <span className="max-w-full truncate px-1 text-[10px] text-gray-600">{sticker.label}</span>
+                            </button>
+                          ) : null;
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  <div className="mb-2 flex flex-wrap gap-1" role="tablist" aria-label="Sticker categories">
+                    {STICKER_CATEGORIES.map((category) => (
+                      <button key={category} type="button" role="tab" aria-selected={stickerCategory === category} onClick={() => setStickerCategory(category)} className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${stickerCategory === category ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                        {category}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {CHAT_STICKERS.filter((sticker) => stickerCategory === 'All' || sticker.category === stickerCategory).map((sticker) => (
+                      <button key={sticker.id} type="button" onClick={() => void handleSendSticker(sticker)} disabled={loading || Boolean(selectedImage)} className="flex min-h-20 flex-col items-center justify-center rounded-xl border border-gray-200 p-2 transition hover:border-primary hover:bg-primary/5 disabled:opacity-50" aria-label={`Send ${sticker.label} sticker`} title={sticker.label}>
+                        <span className="text-3xl">{sticker.emoji}</span>
+                        <span className="mt-1 text-center text-[10px] font-medium text-gray-600">{sticker.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {imagePreviewUrl && selectedImage && (
                 <div className="mb-3 flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-3">
                   <img src={imagePreviewUrl} alt="Selected photo preview" className="h-20 w-20 rounded-lg object-cover" />
@@ -794,12 +914,23 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 <button
                   type="button"
                   onClick={() => imageInputRef.current?.click()}
-                  disabled={loading}
+                  disabled={loading || showStickerPicker}
                   className="rounded-lg border border-gray-300 px-3 text-gray-600 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
                   title="Attach a photo"
                   aria-label="Attach a photo"
                 >
                   <span className="material-icons">image</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowStickerPicker((open) => !open)}
+                  disabled={loading || Boolean(selectedImage)}
+                  className={`rounded-lg border px-3 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${showStickerPicker ? 'border-primary bg-primary/10 text-primary' : 'border-gray-300 text-gray-600 hover:bg-gray-100'}`}
+                  title="Send a sticker"
+                  aria-label="Send a sticker"
+                  aria-expanded={showStickerPicker}
+                >
+                  <span className="material-icons">emoji_emotions</span>
                 </button>
                 <Input
                   type="text"
