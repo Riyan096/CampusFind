@@ -331,6 +331,7 @@ The longer-term goals include:
 - [x] Chat notification center and conversation management controls
 - [x] Authenticated chat photo attachments using Cloudinary and a Cloudflare Worker
 - [x] Per-user emoji reactions with Firestore rule validation
+- [x] Custom keyboard-entered emoji reactions
 - [x] Curated sticker picker and sticker messages
 - [x] GIPHY GIF search, previews, and GIF messages
 - [x] Higher-quality GIF picker previews
