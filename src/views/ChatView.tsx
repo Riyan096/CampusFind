@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import EmojiPicker from 'emoji-picker-react';
 import { useAuth } from '../context/AuthContext';
 import { 
   subscribeToUserChats, 
@@ -24,7 +25,11 @@ import type { ImageAttachment } from '../services/chatService';
 
 const MAX_CHAT_IMAGE_BYTES = 8 * 1024 * 1024;
 const ACCEPTED_CHAT_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const CHAT_REACTION_OPTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+const DEFAULT_CHAT_REACTION_OPTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+const MAX_QUICK_REACTIONS = 8;
+const isValidQuickReaction = (value: unknown): value is string =>
+  typeof value === 'string' && Array.from(value).length > 0 && Array.from(value).length <= 16 &&
+  !/\\s/u.test(value) && /\\p{Extended_Pictographic}|\\p{Regional_Indicator}{2}|[#*0-9]\\uFE0F?\\u20E3/u.test(value);
 const CHAT_STICKERS = [
   { id: 'happy-cat', label: 'Happy Cat', emoji: '😸', category: 'Reactions', background: 'bg-amber-100' },
   { id: 'love-birds', label: 'Sending Love', emoji: '🥰', category: 'Reactions', background: 'bg-pink-100' },
@@ -128,6 +133,23 @@ export const ChatView: React.FC<ChatViewProps> = ({
       );
     } catch {
       setRecentStickerIds([]);
+    }
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (!user) {
+      setQuickReactionOptions(DEFAULT_CHAT_REACTION_OPTIONS);
+      return;
+    }
+    try {
+      const stored = localStorage.getItem(`campusfind:quick-reactions:${user.uid}`);
+      const parsed: unknown = stored ? JSON.parse(stored) : null;
+      const validOptions = Array.isArray(parsed)
+        ? parsed.filter(isValidQuickReaction).filter((emoji, index, values) => values.indexOf(emoji) === index).slice(0, MAX_QUICK_REACTIONS)
+        : [];
+      setQuickReactionOptions(validOptions.length ? validOptions : DEFAULT_CHAT_REACTION_OPTIONS);
+    } catch {
+      setQuickReactionOptions(DEFAULT_CHAT_REACTION_OPTIONS);
     }
   }, [user?.uid]);
 
@@ -239,7 +261,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [showNewChat, setShowNewChat] = useState(false);
   const [showArchivedChats, setShowArchivedChats] = useState(false);
   const [openReactionMessageId, setOpenReactionMessageId] = useState<string | null>(null);
-  const [customReactionDraft, setCustomReactionDraft] = useState('');
+  const [showFullReactionPicker, setShowFullReactionPicker] = useState(false);
+  const [isCustomizingReactions, setIsCustomizingReactions] = useState(false);
+  const [quickReactionOptions, setQuickReactionOptions] = useState<string[]>(DEFAULT_CHAT_REACTION_OPTIONS);
   const [openChatMenuId, setOpenChatMenuId] = useState<string | null>(null);
   const [newChatItemId, setNewChatItemId] = useState('');
   const [newChatItemTitle, setNewChatItemTitle] = useState('');
@@ -484,16 +508,42 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
+  const saveQuickReactionOptions = (options: string[]) => {
+    const nextOptions = options.filter(isValidQuickReaction).filter((emoji, index, values) => values.indexOf(emoji) === index).slice(0, MAX_QUICK_REACTIONS);
+    setQuickReactionOptions(nextOptions);
+    if (user) {
+      try {
+        localStorage.setItem(`campusfind:quick-reactions:${user.uid}`, JSON.stringify(nextOptions));
+      } catch (error) {
+        console.warn('Unable to save quick reaction preferences:', error);
+      }
+    }
+  };
+
   const handleReaction = async (message: Message, emoji: string) => {
     if (!activeChat?.id || !message.id || !user) return;
     try {
       await setMessageReaction(activeChat.id, message.id, user.uid, emoji);
       setOpenReactionMessageId(null);
-      setCustomReactionDraft('');
+      setShowFullReactionPicker(false);
+      setIsCustomizingReactions(false);
     } catch (error) {
       console.error('Unable to update message reaction:', error);
       alert('Could not update your reaction. Please try again.');
     }
+  };
+
+  const handleReactionEmojiPick = (message: Message, emoji: string) => {
+    if (!isCustomizingReactions) {
+      void handleReaction(message, emoji);
+      return;
+    }
+    if (quickReactionOptions.includes(emoji)) return;
+    if (quickReactionOptions.length >= MAX_QUICK_REACTIONS) {
+      alert(`You can keep up to ${MAX_QUICK_REACTIONS} quick reactions.`);
+      return;
+    }
+    saveQuickReactionOptions([...quickReactionOptions, emoji]);
   };
 
   const formatTime = (timestamp: number) => {
@@ -943,43 +993,78 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         </button>
                       </div>
                       {openReactionMessageId === message.id && (
-                        <div className="mt-1 flex flex-wrap gap-1 rounded-xl border border-gray-200 bg-white p-2 shadow-sm" aria-label="Choose a reaction">
-                          {CHAT_REACTION_OPTIONS.map((emoji) => (
+                        <div className="relative mt-1 w-full max-w-sm rounded-xl border border-gray-200 bg-white p-2 shadow-sm" aria-label="Choose a reaction">
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <span className="text-xs font-semibold text-gray-600">
+                              {isCustomizingReactions ? 'Customize quick reactions' : 'Quick reactions'}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {isCustomizingReactions && (
+                                <button
+                                  type="button"
+                                  onClick={() => saveQuickReactionOptions(DEFAULT_CHAT_REACTION_OPTIONS)}
+                                  className="text-xs text-gray-500 underline hover:text-gray-800"
+                                >
+                                  Reset
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => { setIsCustomizingReactions((value) => !value); setShowFullReactionPicker(false); }}
+                                className="text-xs font-medium text-primary hover:underline"
+                              >
+                                {isCustomizingReactions ? 'Done' : 'Customize'}
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1">
+                            {quickReactionOptions.map((emoji) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                onClick={() => {
+                                  if (isCustomizingReactions) {
+                                    if (quickReactionOptions.length > 1) saveQuickReactionOptions(quickReactionOptions.filter((entry) => entry !== emoji));
+                                  } else {
+                                    void handleReaction(message, emoji);
+                                  }
+                                }}
+                                className="relative rounded-lg p-1.5 text-xl transition hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                aria-label={isCustomizingReactions ? `Remove ${emoji} from quick reactions` : `React with ${emoji}`}
+                                title={isCustomizingReactions ? 'Remove from quick reactions' : `React with ${emoji}`}
+                              >
+                                {emoji}
+                                {isCustomizingReactions && <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-[10px] leading-none text-white">×</span>}
+                              </button>
+                            ))}
                             <button
-                              key={emoji}
                               type="button"
-                              onClick={() => void handleReaction(message, emoji)}
-                              className="rounded-lg p-1.5 text-lg transition hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                              aria-label={`React with ${emoji}`}
+                              onClick={() => setShowFullReactionPicker((value) => !value)}
+                              className="flex h-9 w-9 items-center justify-center rounded-lg border border-dashed border-gray-300 text-xl text-gray-600 transition hover:border-primary hover:bg-primary/5 hover:text-primary"
+                              aria-label={isCustomizingReactions ? 'Add a quick reaction emoji' : 'Choose any emoji'}
+                              title={isCustomizingReactions ? 'Add quick reaction' : 'More emojis'}
                             >
-                              {emoji}
-                            </button>
-                          ))}
-                          <div className="mt-2 flex items-center gap-2 border-t border-gray-100 pt-2">
-                            <input
-                              type="text"
-                              value={customReactionDraft}
-                              onChange={(event) => setCustomReactionDraft(event.target.value.slice(0, 16))}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') {
-                                  event.preventDefault();
-                                  if (customReactionDraft.trim()) void handleReaction(message, customReactionDraft.trim());
-                                }
-                              }}
-                              placeholder="Type or paste an emoji"
-                              aria-label="Custom reaction emoji"
-                              maxLength={16}
-                              className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-gray-800 outline-none focus:border-primary"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => { if (customReactionDraft.trim()) void handleReaction(message, customReactionDraft.trim()); }}
-                              disabled={!customReactionDraft.trim()}
-                              className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              Add
+                              +
                             </button>
                           </div>
+                          {isCustomizingReactions && (
+                            <p className="mt-2 text-[11px] text-gray-500">
+                              Select an emoji below to add it. Select a quick emoji above to remove it. Up to {MAX_QUICK_REACTIONS} favorites.
+                            </p>
+                          )}
+                          {showFullReactionPicker && (
+                            <div className="mt-2 overflow-hidden rounded-lg border border-gray-100">
+                              <EmojiPicker
+                                onEmojiClick={(emojiData) => handleReactionEmojiPick(message, emojiData.emoji)}
+                                width="100%"
+                                height={340}
+                                searchPlaceHolder="Search all emoji"
+                                previewConfig={{ showPreview: false }}
+                                skinTonesDisabled
+                                lazyLoadEmojis
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
