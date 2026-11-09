@@ -749,7 +749,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   className="px-4"
                 >
                   {loading ? (
-                    <span className="material-icons animate-spin text-sm">{sendingImage ? 'cloud_upload' : 'refresh'}</span>
+                    <span className={`material-icons text-sm${sendingImage ? '' : ' animate-spin'}`}>{sendingImage ? 'progress_activity' : 'refresh'}</span>
                   ) : (
                     <span className="material-icons text-sm">send</span>
                   )}
