@@ -390,12 +390,10 @@ service cloud.firestore {
         function validGifMessage() {
           let gif = request.resource.data.gif;
           return gif is map &&
-            gif.keys().hasOnly(['type', 'provider', 'gifId', 'url', 'title']) &&
+            gif.keys().hasOnly(['type', 'provider', 'gifId']) &&
             gif.type == 'gif' &&
             gif.provider == 'giphy' &&
-            gif.gifId is string && gif.gifId.matches('[A-Za-z0-9_-]{1,128}') &&
-            gif.url is string && gif.url.matches('https://media[0-9]*[.]giphy[.]com/media/[A-Za-z0-9_-]+/[A-Za-z0-9_]+[.]gif([?].*)?') &&
-            gif.title is string && gif.title.size() <= 200;
+            gif.gifId is string && gif.gifId.matches('[A-Za-z0-9_-]{1,128}');
         }
 
         allow read: if isParentParticipant();
