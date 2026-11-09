@@ -25,6 +25,15 @@ import {
 import { db } from './firebase';
 import { LIMITS, sanitizeFirestoreDocId, sanitizePlainText } from '../utils/sanitize';
 
+export interface ImageAttachment {
+  type: 'image';
+  publicId: string;
+  format: 'jpg' | 'png' | 'webp';
+  bytes: number;
+  width: number;
+  height: number;
+}
+
 export interface Message {
   id?: string;
   chatId: string;
@@ -35,6 +44,7 @@ export interface Message {
   read: boolean;
   status?: 'sending' | 'sent' | 'delivered' | 'read';
   readBy?: { [userId: string]: number };
+  attachment?: ImageAttachment;
 }
 
 export interface Chat {
@@ -121,6 +131,9 @@ const normalizeMessage = (id: string, chatId: string, data: Record<string, any>)
     read: data.read === true,
     status: data.status,
     readBy,
+    ...(data.attachment && typeof data.attachment.publicId === 'string'
+      ? { attachment: data.attachment as ImageAttachment }
+      : {}),
   };
 };
 
@@ -247,7 +260,8 @@ export const sendMessage = async (
   chatId: string,
   senderId: string,
   senderName: string,
-  content: string
+  content: string,
+  attachment?: ImageAttachment
 ): Promise<string> => {
   const safeName = sanitizePlainText(senderName, LIMITS.displayName, { multiline: false });
   const safeContent = sanitizePlainText(content, LIMITS.chatMessage, { multiline: true });
@@ -274,6 +288,7 @@ export const sendMessage = async (
     read: false,
     status: 'sent',
     readBy: {},
+    ...(attachment ? { attachment } : {}),
   });
   batch.update(chatRef, {
     lastMessage: {
