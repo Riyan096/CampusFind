@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import EmojiPicker from 'emoji-picker-react';
+import React, { Suspense, useState, useEffect, useRef, useCallback } from 'react';
+
+const EmojiPicker = React.lazy(() => import('emoji-picker-react'));
 import { useAuth } from '../context/AuthContext';
 import { 
   subscribeToUserChats, 
@@ -1054,14 +1055,16 @@ export const ChatView: React.FC<ChatViewProps> = ({
                           )}
                           {showFullReactionPicker && (
                             <div className="mt-2 overflow-hidden rounded-lg border border-gray-100">
-                              <EmojiPicker
-                                onEmojiClick={(emojiData) => handleReactionEmojiPick(message, emojiData.emoji)}
-                                width="100%"
-                                height={340}
-                                searchPlaceHolder="Search all emoji"
-                                previewConfig={{ showPreview: false }}
-                                lazyLoadEmojis
-                              />
+                              <Suspense fallback={<div className="p-4 text-center text-sm text-gray-500">Loading emoji picker…</div>}>
+                                <EmojiPicker
+                                  onEmojiClick={(emojiData) => handleReactionEmojiPick(message, emojiData.emoji)}
+                                  width="100%"
+                                  height={340}
+                                  searchPlaceholder="Search all emoji"
+                                  previewConfig={{ showPreview: false }}
+                                  lazyLoadEmojis
+                                />
+                              </Suspense>
                             </div>
                           )}
                         </div>
