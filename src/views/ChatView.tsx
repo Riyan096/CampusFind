@@ -41,7 +41,7 @@ const CHAT_STICKERS = [
 ] as const;
 const STICKER_CATEGORIES = ['All', 'Reactions', 'Campus', 'Everyday'] as const;
 const GIPHY_PAGE_SIZE = 24;
-type GifSearchResult = GifMessage & { previewUrl: string };
+interface GifSearchResult { gifId: string; title: string; url: string; previewUrl: string; }
 
 interface ChatViewProps {
   itemId?: string;
@@ -50,6 +50,38 @@ interface ChatViewProps {
   chatId?: string; // New prop for selecting specific chat
   onClose?: () => void;
 }
+
+const GiphyChatGif: React.FC<{ gifId: string }> = ({ gifId }) => {
+  const [mediaUrl, setMediaUrl] = useState('');
+  const [failed, setFailed] = useState(false);
+  const apiKey = import.meta.env.VITE_GIPHY_API_KEY || '';
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setMediaUrl('');
+    setFailed(false);
+    if (!apiKey) { setFailed(true); return () => controller.abort(); }
+    const params = new URLSearchParams({ api_key: apiKey, rating: 'pg' });
+    fetch('https://api.giphy.com/v1/gifs/' + encodeURIComponent(gifId) + '?' + params.toString(), { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('GIF unavailable');
+        return response.json() as Promise<{ data?: { images?: { fixed_width?: { url?: string } } } }>;
+      })
+      .then((payload) => {
+        const url = payload.data?.images?.fixed_width?.url || '';
+        if (!url.startsWith('https://media') || !url.includes('.giphy.com/')) throw new Error('GIF unavailable');
+        setMediaUrl(url);
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) setFailed(true);
+      });
+    return () => controller.abort();
+  }, [gifId, apiKey]);
+
+  if (failed) return <p className="my-2 text-xs opacity-70">GIF unavailable</p>;
+  if (!mediaUrl) return <div className="my-2 h-28 w-40 animate-pulse rounded-xl bg-gray-200/70" aria-label="Loading GIF" />;
+  return <div className="my-2 max-w-full"><img src={mediaUrl} alt="GIF from GIPHY" loading="lazy" className="max-h-64 max-w-full rounded-xl object-contain" /><p className="mt-1 text-[10px] opacity-70">GIF via GIPHY</p></div>;
+};
 
 export const ChatView: React.FC<ChatViewProps> = ({ 
   itemId, 
@@ -137,7 +169,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           const url = entry.images?.fixed_width?.url || '';
           const previewUrl = entry.images?.fixed_width_small?.url || url;
           if (!entry.id || !/^[A-Za-z0-9_-]{1,128}$/.test(entry.id) || !/^https:\/\/media[0-9]*\.giphy\.com\/media\/[A-Za-z0-9_-]+\/[A-Za-z0-9_]+\.gif(?:\?.*)?$/.test(url) || !previewUrl.startsWith('https://media')) return [];
-          return [{ type: 'gif', provider: 'giphy', gifId: entry.id, url, title: (entry.title || 'GIF').slice(0, 200), previewUrl }];
+          return [{ gifId: entry.id, url, title: (entry.title || 'GIF').slice(0, 200), previewUrl }];
         });
         setGifResults((current) => gifOffset === 0 ? results : [...current, ...results]);
         setGifHasMore((payload.data || []).length === GIPHY_PAGE_SIZE);
@@ -387,7 +419,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         safeContent || (selectedImage ? 'Photo' : 'GIF'),
         attachment,
         undefined,
-        selectedGif ? { type: 'gif', provider: 'giphy', gifId: selectedGif.gifId, url: selectedGif.url, title: selectedGif.title } : undefined
+        selectedGif ? { type: 'gif', provider: 'giphy', gifId: selectedGif.gifId } : undefined
       );
 
       setNewMessage('');
@@ -824,12 +856,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                           <p className="text-sm italic opacity-75">Sticker unavailable</p>
                         );
                       })() : null}
-                      {message.gif && (
-                        <div className="my-2 max-w-full">
-                          <img src={message.gif.url} alt={message.gif.title || 'GIF'} loading="lazy" className="max-h-64 max-w-full rounded-xl object-contain" />
-                          <p className="mt-1 text-[10px] opacity-70">GIF via GIPHY</p>
-                        </div>
-                      )}
+                      {message.gif && <GiphyChatGif gifId={message.gif.gifId} />}
                       {message.attachment && message.id && (
                         <AuthenticatedChatImage
                           chatId={message.chatId}
@@ -1027,7 +1054,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setShowStickerPicker(false); setShowGifPicker((open) => !open); }}
+                  onClick={() => { setShowStickerPicker(false); if (!showGifPicker) { setGifOffset(0); setGifResults([]); } setShowGifPicker((open) => !open); }}
                   disabled={loading || Boolean(selectedImage) || Boolean(selectedGif) || showStickerPicker}
                   className={`rounded-lg border px-3 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${showGifPicker ? 'border-primary bg-primary/10 text-primary' : 'border-gray-300 text-gray-600 hover:bg-gray-100'}`}
                   title="Search GIFs"
