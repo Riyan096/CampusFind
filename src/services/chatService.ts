@@ -39,6 +39,14 @@ export interface StickerMessage {
   stickerId: string;
 }
 
+export interface GifMessage {
+  type: 'gif';
+  provider: 'giphy';
+  gifId: string;
+  url: string;
+  title: string;
+}
+
 export const CHAT_STICKER_IDS = [
   'happy-cat', 'love-birds', 'you-got-this', 'thank-you',
   'oops', 'thinking', 'study-mode', 'found-it',
@@ -57,6 +65,7 @@ export interface Message {
   readBy?: { [userId: string]: number };
   attachment?: ImageAttachment;
   sticker?: StickerMessage;
+  gif?: GifMessage;
   reactions?: { [userId: string]: string };
 }
 
@@ -150,6 +159,9 @@ const normalizeMessage = (id: string, chatId: string, data: Record<string, any>)
       : {}),
     ...(data.sticker?.type === 'sticker' && typeof data.sticker.stickerId === 'string'
       ? { sticker: data.sticker as StickerMessage }
+      : {}),
+    ...(data.gif?.type === 'gif' && data.gif.provider === 'giphy' && typeof data.gif.gifId === 'string' && typeof data.gif.url === 'string'
+      ? { gif: data.gif as GifMessage }
       : {}),
   };
 };
@@ -279,12 +291,17 @@ export const sendMessage = async (
   senderName: string,
   content: string,
   attachment?: ImageAttachment,
-  sticker?: StickerMessage
+  sticker?: StickerMessage,
+  gif?: GifMessage
 ): Promise<string> => {
   if (sticker && (sticker.type !== 'sticker' || !CHAT_STICKER_IDS.includes(sticker.stickerId as typeof CHAT_STICKER_IDS[number]))) {
     throw new Error('That sticker is not available. Please refresh and try again.');
   }
   if (attachment && sticker) throw new Error('A message can contain either a photo or a sticker, not both.');
+  if (gif && (gif.type !== 'gif' || gif.provider !== 'giphy' || !/^[A-Za-z0-9_-]{1,128}$/.test(gif.gifId) || !/^https:\/\/media[0-9]*\.giphy\.com\/media\/[A-Za-z0-9_-]+\/[A-Za-z0-9_]+\.gif(?:\?.*)?$/.test(gif.url) || typeof gif.title !== 'string' || gif.title.length > 200)) {
+    throw new Error('That GIF could not be sent. Please choose another result.');
+  }
+  if ([attachment, sticker, gif].filter(Boolean).length > 1) throw new Error('A message can contain only one attachment.');
 
   const safeName = sanitizePlainText(senderName, LIMITS.displayName, { multiline: false });
   const safeContent = sanitizePlainText(content, LIMITS.chatMessage, { multiline: true });
@@ -313,6 +330,7 @@ export const sendMessage = async (
     readBy: {},
     ...(attachment ? { attachment } : {}),
     ...(sticker ? { sticker } : {}),
+    ...(gif ? { gif } : {}),
   });
   batch.update(chatRef, {
     lastMessage: {
