@@ -9,6 +9,7 @@ import {
   markChatAsRead,
   leaveChat,
   updateChatUserSettings,
+  setMessageReaction,
   type Chat,
   type Message
 } from '../services/chatService';
@@ -21,6 +22,7 @@ import type { ImageAttachment } from '../services/chatService';
 
 const MAX_CHAT_IMAGE_BYTES = 8 * 1024 * 1024;
 const ACCEPTED_CHAT_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const CHAT_REACTION_OPTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
 interface ChatViewProps {
   itemId?: string;
@@ -87,6 +89,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [loading, setLoading] = useState(false);
   const [showNewChat, setShowNewChat] = useState(false);
   const [showArchivedChats, setShowArchivedChats] = useState(false);
+  const [openReactionMessageId, setOpenReactionMessageId] = useState<string | null>(null);
   const [openChatMenuId, setOpenChatMenuId] = useState<string | null>(null);
   const [newChatItemId, setNewChatItemId] = useState('');
   const [newChatItemTitle, setNewChatItemTitle] = useState('');
@@ -296,6 +299,17 @@ export const ChatView: React.FC<ChatViewProps> = ({
     } finally {
       setLoading(false);
       setSendingImage(false);
+    }
+  };
+
+  const handleReaction = async (message: Message, emoji: string) => {
+    if (!activeChat?.id || !message.id || !user) return;
+    try {
+      await setMessageReaction(activeChat.id, message.id, user.uid, emoji);
+      setOpenReactionMessageId(null);
+    } catch (error) {
+      console.error('Unable to update message reaction:', error);
+      alert('Could not update your reaction. Please try again.');
     }
   };
 
@@ -688,6 +702,64 @@ export const ChatView: React.FC<ChatViewProps> = ({
                           </span>
                         )}
                       </div>
+                      {Object.entries(
+                        Object.values(message.reactions || {}).reduce<Record<string, number>>((counts, emoji) => {
+                          counts[emoji] = (counts[emoji] || 0) + 1;
+                          return counts;
+                        }, {})
+                      ).length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {Object.entries(
+                            Object.values(message.reactions || {}).reduce<Record<string, number>>((counts, emoji) => {
+                              counts[emoji] = (counts[emoji] || 0) + 1;
+                              return counts;
+                            }, {})
+                          ).map(([emoji, count]) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => void handleReaction(message, emoji)}
+                              aria-label={`${emoji} reaction, ${count} ${count === 1 ? 'person' : 'people'}`}
+                              aria-pressed={message.reactions?.[user.uid] === emoji}
+                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors ${
+                                message.reactions?.[user.uid] === emoji
+                                  ? 'border-blue-400 bg-blue-100 text-blue-800'
+                                  : 'border-gray-300 bg-white/80 text-gray-700 hover:bg-gray-100'
+                              }`}
+                            >
+                              <span>{emoji}</span>
+                              <span>{count}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <div className="mt-1 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setOpenReactionMessageId((current) => current === message.id ? null : message.id || null)}
+                          className="rounded-full p-1 text-xs opacity-60 transition hover:bg-black/5 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                          aria-label="Add a reaction"
+                          aria-expanded={openReactionMessageId === message.id}
+                          title="Add a reaction"
+                        >
+                          <span className="material-icons text-sm">add_reaction</span>
+                        </button>
+                      </div>
+                      {openReactionMessageId === message.id && (
+                        <div className="mt-1 flex flex-wrap gap-1 rounded-xl border border-gray-200 bg-white p-2 shadow-sm" aria-label="Choose a reaction">
+                          {CHAT_REACTION_OPTIONS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => void handleReaction(message, emoji)}
+                              className="rounded-lg p-1.5 text-lg transition hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                              aria-label={`React with ${emoji}`}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))
