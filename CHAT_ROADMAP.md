@@ -72,7 +72,7 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 - [x] Show reaction counts and highlight the current user's selected reaction.
 - [x] Enforce chat participation and per-user-only reaction changes in Firestore rules.
 - [x] Update only the current user's nested reaction field instead of rewriting the entire message document.
-- [ ] Run the local build and deploy the updated Firestore rules before testing with two accounts.
+- [ ] Run `npm install` to refresh the lockfile, run the local build, and test emoji selection/customization with two accounts. This feature does not require a Firestore rules deployment because quick-reaction preferences are stored locally.
 
 ### 3. Video attachments
 - [ ] Add video selection and preview to the composer.
