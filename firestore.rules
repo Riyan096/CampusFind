@@ -387,15 +387,29 @@ service cloud.firestore {
             ];
         }
 
+        function validGifMessage() {
+          let gif = request.resource.data.gif;
+          return gif is map &&
+            gif.keys().hasOnly(['type', 'provider', 'gifId', 'url', 'title']) &&
+            gif.type == 'gif' &&
+            gif.provider == 'giphy' &&
+            gif.gifId is string && gif.gifId.matches('[A-Za-z0-9_-]{1,128}') &&
+            gif.url is string && gif.url.matches('https://media[0-9]*[.]giphy[.]com/media/[A-Za-z0-9_-]+/[A-Za-z0-9_]+[.]gif([?].*)?') &&
+            gif.title is string && gif.title.size() <= 200;
+        }
+
         allow read: if isParentParticipant();
         allow create: if isParentParticipant() &&
           request.resource.data.keys().hasOnly([
             'senderId', 'senderName', 'content', 'timestamp',
-            'read', 'status', 'readBy', 'attachment', 'sticker'
+            'read', 'status', 'readBy', 'attachment', 'sticker', 'gif'
           ]) &&
           (!('attachment' in request.resource.data) || validImageAttachment()) &&
           (!('sticker' in request.resource.data) || validStickerMessage()) &&
+          (!('gif' in request.resource.data) || validGifMessage()) &&
           !('attachment' in request.resource.data && 'sticker' in request.resource.data) &&
+          !('attachment' in request.resource.data && 'gif' in request.resource.data) &&
+          !('sticker' in request.resource.data && 'gif' in request.resource.data) &&
           request.resource.data.senderId == request.auth.uid &&
           request.resource.data.senderName is string &&
           request.resource.data.senderName.size() <= 100 &&
