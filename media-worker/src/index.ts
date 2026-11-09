@@ -55,7 +55,9 @@ function corsHeaders(origin: string | null): Headers {
 
 function withCors(response: Response, origin: string | null): Response {
   const headers = new Headers(response.headers);
-  for (const [key, value] of corsHeaders(origin)) headers.set(key, value);
+  corsHeaders(origin).forEach((value, key) => {
+    headers.set(key, value);
+  });
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
