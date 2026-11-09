@@ -62,12 +62,13 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 - [ ] Define retention and deletion behavior when a message or conversation is deleted.
 
 ### 2. Emoji reactions
-- [ ] Add a reaction picker to each message.
-- [ ] Support a small useful default emoji set plus a searchable/expandable picker if appropriate.
-- [ ] Allow one user to add, change, or remove their reaction to a message.
-- [ ] Show reaction counts and the current user's selected reaction.
-- [ ] Prevent non-participants from reacting and prevent users from modifying another user's reactions.
-- [ ] Keep reaction writes small and avoid rewriting the entire message document for every reaction.
+- [x] Add a compact reaction picker to each message.
+- [x] Add six quick reactions: 👍, ❤️, 😂, 😮, 😢, and 🙏.
+- [x] Allow one user to add, change, or remove their reaction to a message.
+- [x] Show reaction counts and highlight the current user's selected reaction.
+- [x] Enforce chat participation and per-user-only reaction changes in Firestore rules.
+- [x] Update only the current user's nested reaction field instead of rewriting the entire message document.
+- [ ] Run the local build and deploy the updated Firestore rules before testing with two accounts.
 
 ### 3. Video attachments
 - [ ] Add video selection and preview to the composer.
