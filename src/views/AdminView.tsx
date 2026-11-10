@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy, writeBatch, serverTimestamp } from 'firebase/firestore';
 
 import { db } from '../services/firebase';
 import { Button } from '../components/UI';
@@ -150,7 +150,7 @@ export const AdminView: React.FC = () => {
       });
       success(`Admin status ${!currentStatus ? 'granted' : 'revoked'}`);
       fetchData();
-    } catch (err) {
+    } catch {
       error('Failed to update admin status');
     }
   };
