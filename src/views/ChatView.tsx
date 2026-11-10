@@ -1279,7 +1279,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                             <span className="material-icons text-lg">more_horiz</span>
                           </button>
                           {openMessageActionMenuId === message.id && (
-                            <div role="menu" aria-label="Message actions" className="absolute right-0 top-full z-30 mt-1 min-w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 text-gray-800 shadow-lg">
+                            <div role="menu" aria-label="Message actions" className="absolute right-0 bottom-full z-30 mb-1 min-w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 text-gray-800 shadow-lg">
                               <button type="button" role="menuitem" onClick={() => { startReply(message); setOpenMessageActionMenuId(null); }} className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none">
                                 <span className="material-icons text-base text-gray-500">reply</span>Reply
                               </button>
