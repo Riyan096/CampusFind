@@ -1250,7 +1250,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </div>
 
             {/* Messages */}
-            <div ref={messagesContainerRef} onScroll={handleMessagesScroll} className="relative flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="relative min-h-0 flex-1">
+              <div ref={messagesContainerRef} onScroll={handleMessagesScroll} className="h-full overflow-y-auto p-4 space-y-3">
               {messages.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-gray-400">
                   <div className="text-center">
@@ -1488,15 +1489,17 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 )) 
               )}
               <div ref={messagesEndRef} />
+              </div>
               {showScrollToBottom && messages.length > 0 && (
                 <button
                   type="button"
                   onClick={scrollToLatestMessage}
-                  className="absolute bottom-4 right-4 z-20 flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 shadow-lg transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  aria-label="Scroll to latest message"
-                  title="Scroll to latest message"
+                  className="absolute bottom-4 right-4 z-30 inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 shadow-lg transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  aria-label="Jump to latest message"
+                  title="Jump to latest message"
                 >
-                  <span className="material-icons">keyboard_double_arrow_down</span>
+                  <span className="material-icons text-lg">keyboard_double_arrow_down</span>
+                  <span>Latest</span>
                 </button>
               )}
             </div>
