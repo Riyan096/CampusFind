@@ -11,7 +11,7 @@ export interface LeafletMarkerLike {
 
 export interface LeafletNamespace {
   map(container: HTMLElement, options?: Record<string, boolean>): LeafletMapLike;
-  tileLayer(url: string, options: { attribution: string }): { addTo(map: LeafletMapLike): unknown };
+  tileLayer(url: string, options: { attribution?: string; opacity?: number }): { addTo(map: LeafletMapLike): unknown };
   divIcon(options: {
     className: string;
     html: string;
