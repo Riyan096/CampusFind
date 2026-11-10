@@ -292,6 +292,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [showNewChat, setShowNewChat] = useState(false);
   const [showArchivedChats, setShowArchivedChats] = useState(false);
   const [openReactionMessageId, setOpenReactionMessageId] = useState<string | null>(null);
+  const [openMessageActionMenuId, setOpenMessageActionMenuId] = useState<string | null>(null);
   const [showFullReactionPicker, setShowFullReactionPicker] = useState(false);
   const [isCustomizingReactions, setIsCustomizingReactions] = useState(false);
   const [quickReactionOptions, setQuickReactionOptions] = useState<string[]>(DEFAULT_CHAT_REACTION_OPTIONS);
@@ -354,6 +355,26 @@ export const ChatView: React.FC<ChatViewProps> = ({
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [openChatMenuId]);
+
+  // Close message action menus when clicking outside or pressing Escape.
+  useEffect(() => {
+    if (!openMessageActionMenuId) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || !target.closest('[data-message-menu-root]')) {
+        setOpenMessageActionMenuId(null);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpenMessageActionMenuId(null);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [openMessageActionMenuId]);
 
   // Keep the signed-in user's private block list synchronized across chats.
   useEffect(() => {
@@ -1244,38 +1265,41 @@ export const ChatView: React.FC<ChatViewProps> = ({
                           ))}
                         </div>
                       )}
-                      {!message.deleted && editingMessageId !== message.id && <div className="mt-1 flex items-center justify-end gap-2">
-                        {message.senderId === user.uid && !message.attachment && !message.sticker && !message.gif && (
-                          <button type="button" onClick={() => handleStartEditMessage(message)} className="rounded-full px-2 py-1 text-xs opacity-70 transition hover:bg-black/5 hover:opacity-100" aria-label="Edit message" title="Edit message">
-                            <span className="material-icons text-sm align-middle">edit</span><span className="ml-1">Edit</span>
+                      {!message.deleted && editingMessageId !== message.id && (
+                        <div className="relative mt-1 flex justify-end" data-message-menu-root>
+                          <button
+                            type="button"
+                            onClick={() => setOpenMessageActionMenuId((current) => current === message.id ? null : message.id || null)}
+                            className="rounded-full p-1.5 text-gray-500 opacity-60 transition hover:bg-black/5 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            aria-label="Message actions"
+                            aria-haspopup="menu"
+                            aria-expanded={openMessageActionMenuId === message.id}
+                            title="Message actions"
+                          >
+                            <span className="material-icons text-lg">more_horiz</span>
                           </button>
-                        )}
-                        {message.senderId === user.uid && (
-                          <button type="button" onClick={() => void handleDeleteOwnMessage(message)} className="rounded-full px-2 py-1 text-xs opacity-70 transition hover:bg-red-500/10 hover:text-red-600 hover:opacity-100" aria-label="Delete message" title="Delete message">
-                            <span className="material-icons text-sm align-middle">delete</span><span className="ml-1">Delete</span>
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => startReply(message)}
-                          className="rounded-full px-2 py-1 text-xs opacity-70 transition hover:bg-black/5 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                          aria-label="Reply to message"
-                          title="Reply"
-                        >
-                          <span className="material-icons text-sm align-middle">reply</span>
-                          <span className="ml-1">Reply</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setOpenReactionMessageId((current) => current === message.id ? null : message.id || null)}
-                          className="rounded-full p-1 text-xs opacity-60 transition hover:bg-black/5 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                          aria-label="Add a reaction"
-                          aria-expanded={openReactionMessageId === message.id}
-                          title="Add a reaction"
-                        >
-                          <span className="material-icons text-sm">add_reaction</span>
-                        </button>
-                      </div>}
+                          {openMessageActionMenuId === message.id && (
+                            <div role="menu" aria-label="Message actions" className="absolute right-0 top-full z-30 mt-1 min-w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 text-gray-800 shadow-lg">
+                              <button type="button" role="menuitem" onClick={() => { startReply(message); setOpenMessageActionMenuId(null); }} className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none">
+                                <span className="material-icons text-base text-gray-500">reply</span>Reply
+                              </button>
+                              {message.senderId === user.uid && !message.attachment && !message.sticker && !message.gif && (
+                                <button type="button" role="menuitem" onClick={() => { handleStartEditMessage(message); setOpenMessageActionMenuId(null); }} className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none">
+                                  <span className="material-icons text-base text-gray-500">edit</span>Edit
+                                </button>
+                              )}
+                              {message.senderId === user.uid && (
+                                <button type="button" role="menuitem" onClick={() => { setOpenMessageActionMenuId(null); void handleDeleteOwnMessage(message); }} className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 focus:bg-red-50 focus:outline-none">
+                                  <span className="material-icons text-base">delete</span>Delete
+                                </button>
+                              )}
+                              <button type="button" role="menuitem" onClick={() => { setOpenMessageActionMenuId(null); setOpenReactionMessageId(message.id || null); setShowFullReactionPicker(false); setIsCustomizingReactions(false); }} className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-gray-50 focus:bg-gray-50 focus:outline-none">
+                                <span className="material-icons text-base text-gray-500">add_reaction</span>React
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {!message.deleted && openReactionMessageId === message.id && (
                         <div className="relative mt-1 w-full max-w-sm rounded-xl border border-gray-200 bg-white p-2 shadow-sm" aria-label="Choose a reaction">
                           <div className="mb-2 flex items-center justify-between gap-2">
