@@ -405,3 +405,7 @@ Built by **Mohammad Bhuyia** as a software engineering portfolio project focused
 - Users can block accounts, manage their blocked list, and submit private reports from a conversation's action menu.
 - Reports are stored in a protected Firestore collection and can be reviewed by admins in the Admin Dashboard. The reported user cannot view the report.
 - Reporting does not automatically suspend or block an account; admins choose a review status and can leave internal notes.
+
+
+### Message controls
+- Authors can edit text-only messages and delete their own messages. Deleted messages remain as neutral placeholders so conversation order and existing reply references are preserved.
