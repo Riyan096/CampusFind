@@ -523,6 +523,37 @@ service cloud.firestore {
           request.resource.data.status == 'sent' &&
           request.resource.data.readBy is map &&
           request.resource.data.readBy.keys().size() == 0;
+        function validOwnerMessageEdit() {
+          return resource.data.senderId == request.auth.uid &&
+            resource.data.get('deleted', false) == false &&
+            !('attachment' in resource.data) &&
+            !('sticker' in resource.data) &&
+            !('gif' in resource.data) &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'content', 'edited', 'editedAt'
+            ]) &&
+            request.resource.data.content is string &&
+            request.resource.data.content.size() > 0 &&
+            request.resource.data.content.size() <= 4000 &&
+            request.resource.data.edited == true &&
+            request.resource.data.editedAt == request.time;
+        }
+
+        function validOwnerMessageDelete() {
+          return resource.data.senderId == request.auth.uid &&
+            resource.data.get('deleted', false) == false &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'content', 'deleted', 'deletedAt', 'attachment', 'sticker', 'gif', 'reactions'
+            ]) &&
+            request.resource.data.content == 'This message was deleted' &&
+            request.resource.data.deleted == true &&
+            request.resource.data.deletedAt == request.time &&
+            !('attachment' in request.resource.data) &&
+            !('sticker' in request.resource.data) &&
+            !('gif' in request.resource.data) &&
+            !('reactions' in request.resource.data);
+        }
+
         function validReactionUpdate() {
           let oldReactions = resource.data.get('reactions', {});
           let newReactions = request.resource.data.get('reactions', {});
@@ -558,7 +589,9 @@ service cloud.firestore {
               .addedKeys().hasOnly([request.auth.uid]) &&
             request.resource.data.readBy[request.auth.uid] == request.time
           ) ||
-          validReactionUpdate()
+          validReactionUpdate() ||
+          validOwnerMessageEdit() ||
+          validOwnerMessageDelete()
         );
         allow delete: if false;
       }
