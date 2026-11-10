@@ -236,6 +236,8 @@ service cloud.firestore {
           ]) &&
           d.userId is string &&
           d.userId != request.auth.uid &&
+          !exists(/databases/$(database)/documents/users/$(request.auth.uid)/blockedUsers/$(d.userId)) &&
+          !exists(/databases/$(database)/documents/users/$(d.userId)/blockedUsers/$(request.auth.uid)) &&
           d.title is string && d.title.size() > 0 && d.title.size() <= 200 &&
           d.message is string && d.message.size() <= 120 &&
           d.type == 'chat_message' &&
@@ -381,9 +383,12 @@ service cloud.firestore {
 
         function isBlockedBetweenParticipants() {
           let participants = parentChat().participantIds;
-          let otherUserId = participants[0] == request.auth.uid ? participants[1] : participants[0];
-          return exists(/databases/$(database)/documents/users/$(request.auth.uid)/blockedUsers/$(otherUserId)) ||
-            exists(/databases/$(database)/documents/users/$(otherUserId)/blockedUsers/$(request.auth.uid));
+          let otherUserId = participants.size() == 2
+            ? (participants[0] == request.auth.uid ? participants[1] : participants[0])
+            : '';
+          return participants.size() == 2 &&
+            (exists(/databases/$(database)/documents/users/$(request.auth.uid)/blockedUsers/$(otherUserId)) ||
+            exists(/databases/$(database)/documents/users/$(otherUserId)/blockedUsers/$(request.auth.uid)));
         }
 
         function validImageAttachment() {
