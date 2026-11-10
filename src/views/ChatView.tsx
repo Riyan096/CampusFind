@@ -542,6 +542,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
     };
   }, [activeChat?.id, user?.uid]);
 
+  useEffect(() => {
+    shouldAutoScrollRef.current = true;
+    setShowScrollToBottom(false);
+  }, [activeChat?.id]);
+
   // Auto-follow new messages only while the reader is already near the bottom.
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -1487,7 +1492,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 <button
                   type="button"
                   onClick={scrollToLatestMessage}
-                  className="sticky bottom-3 ml-auto flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 shadow-lg transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="absolute bottom-4 right-4 z-20 flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 shadow-lg transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   aria-label="Scroll to latest message"
                   title="Scroll to latest message"
                 >
