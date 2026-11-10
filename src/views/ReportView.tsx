@@ -1,14 +1,12 @@
-import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import {
   ItemType,
   ItemCategory,
-  ItemStatus,
   LostItemStatus,
   FoundItemStatus,
   type Achievement,
   type Item,
 } from '../types';
-import { getCurrentLocation } from '../services/geocodeService';
 
 
 import { Button, Input, Select, Card } from '../components/UI';
@@ -46,9 +44,6 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<ItemCategory>(ItemCategory.OTHER);
   const [location, setLocation] = useState('Campus Center'); // Generic default
-  const [locationLatLng, setLocationLatLng] = useState<[number, number] | null>(null);
-  const [geocodingLocation, setGeocodingLocation] = useState(false);
-  const [locationSearch, setLocationSearch] = useState('');
   const [aiTags, setAiTags] = useState<string[]>([]);
   const [useAI, setUseAI] = useState<boolean>(() => {
     const saved = localStorage.getItem('campusfind_use_ai');
@@ -200,10 +195,6 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
 
   const handleCategoryChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     setCategory(e.target.value as ItemCategory);
-  }, []);
-
-  const handleLocationChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    setLocation(e.target.value as string);
   }, []);
 
   const handleNotifyOwner = useCallback(async (match: PotentialMatch) => {
