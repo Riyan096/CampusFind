@@ -115,8 +115,9 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 - [x] Enforce blocks in Firestore rules for new chats and message creation in either direction; UI checks provide clearer feedback but are not the security boundary.
 - [x] Preserve existing conversation history after a block while disabling the blocker's composer and preventing either side from sending new messages.
 - [x] Check blocks before creating a new item chat so a user cannot bypass a block by opening another item conversation.
-- [ ] Add a dedicated blocked-users management screen so users can review and unblock accounts outside an active chat.
-- [ ] Decide how blocking interacts with reports, notifications, and admin moderation.
+- [x] Add a Blocked Users section to the profile page so users can review public profile names/photos and unblock accounts outside an active chat.
+- [x] Suppress new chat-message notifications when either participant has blocked the other; existing history remains visible.
+- [ ] Decide how blocking interacts with reports and admin moderation.
 
 ---
 
