@@ -508,3 +508,73 @@ test('participants can use custom single and compound emoji reactions', async ()
   await assertSucceeds(message.update({reactions: {'reaction-user': '😍'}}));
   await assertSucceeds(message.update({reactions: {'reaction-user': '👨‍👩‍👧‍👦'}}));
 });
+
+test('participants can reply to an existing message in the same conversation', async () => {
+  await seedUser('reply-sender');
+  await seedUser('reply-recipient');
+  await seedItem('reply-item');
+  await seedChat('reply-chat', 'reply-sender', 'reply-recipient', 'reply-item');
+  await adminDb.collection('chats').doc('reply-chat').collection('messages').doc('original-message').set({
+    senderId: 'reply-recipient',
+    senderName: 'Reply recipient',
+    content: 'Where did you last see the keys?',
+    timestamp: Timestamp.now(),
+    read: false,
+    status: 'sent',
+    readBy: {}
+  });
+
+  const db = testEnv.authenticatedContext('reply-sender').firestore();
+  const replies = db.collection('chats').doc('reply-chat').collection('messages');
+  await assertSucceeds(replies.doc('valid-reply').set({
+    ...validChatMessage('reply-sender'),
+    replyTo: {
+      messageId: 'original-message',
+      senderId: 'reply-recipient',
+      senderName: 'Reply recipient',
+      content: 'Where did you last see the keys?',
+      type: 'text'
+    }
+  }));
+});
+
+test('message replies reject missing, cross-chat, and forged original references', async () => {
+  await seedUser('reply-sender');
+  await seedUser('reply-recipient');
+  await seedItem('reply-item');
+  await seedItem('other-reply-item');
+  await seedChat('reply-chat', 'reply-sender', 'reply-recipient', 'reply-item');
+  await seedChat('other-reply-chat', 'reply-sender', 'reply-recipient', 'other-reply-item');
+  await adminDb.collection('chats').doc('reply-chat').collection('messages').doc('original-message').set({
+    senderId: 'reply-recipient',
+    senderName: 'Reply recipient',
+    content: 'Original text',
+    timestamp: Timestamp.now(),
+    read: false,
+    status: 'sent',
+    readBy: {}
+  });
+
+  const db = testEnv.authenticatedContext('reply-sender').firestore();
+  const messages = db.collection('chats').doc('reply-chat').collection('messages');
+  const baseReply = {
+    messageId: 'original-message',
+    senderId: 'reply-recipient',
+    senderName: 'Reply recipient',
+    content: 'Original text',
+    type: 'text'
+  };
+
+  await assertFails(messages.doc('missing-reply').set({
+    ...validChatMessage('reply-sender'),
+    replyTo: {...baseReply, messageId: 'does-not-exist'}
+  }));
+  await assertFails(db.collection('chats').doc('other-reply-chat').collection('messages').doc('cross-chat-reply').set({
+    ...validChatMessage('reply-sender'),
+    replyTo: baseReply
+  }));
+  await assertFails(messages.doc('forged-reply').set({
+    ...validChatMessage('reply-sender'),
+    replyTo: {...baseReply, content: 'Forged preview'}
+  }));
+});
