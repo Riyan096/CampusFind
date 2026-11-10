@@ -14,6 +14,8 @@ import {
   leaveChat,
   updateChatUserSettings,
   setMessageReaction,
+  editMessage,
+  deleteMessage,
   type Chat,
   type Message,
   type StickerMessage,
@@ -123,6 +125,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [messagingUnavailableChatId, setMessagingUnavailableChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [replyingTo, setReplyingTo] = useState<ReplyPreview | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editMessageDraft, setEditMessageDraft] = useState('');
+  const [editMessageSaving, setEditMessageSaving] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -531,6 +536,45 @@ export const ChatView: React.FC<ChatViewProps> = ({
     } finally {
       setLoading(false);
       setSendingImage(false);
+    }
+  };
+
+  const handleStartEditMessage = (message: Message) => {
+    if (!message.id || message.senderId !== user?.uid || message.deleted || message.attachment || message.sticker || message.gif) return;
+    setEditingMessageId(message.id);
+    setEditMessageDraft(message.content);
+  };
+
+  const handleCancelEditMessage = () => {
+    setEditingMessageId(null);
+    setEditMessageDraft('');
+  };
+
+  const handleSaveEditMessage = async (message: Message) => {
+    if (!activeChat?.id || !message.id || !user || editMessageSaving) return;
+    const safeDraft = sanitizePlainText(editMessageDraft, LIMITS.chatMessage, { multiline: true });
+    if (!safeDraft) return;
+    setEditMessageSaving(true);
+    try {
+      await editMessage(activeChat.id, message.id, user.uid, safeDraft);
+      handleCancelEditMessage();
+    } catch (error) {
+      console.error('Unable to edit message:', error);
+      alert(error instanceof Error ? error.message : 'Unable to edit this message. Please try again.');
+    } finally {
+      setEditMessageSaving(false);
+    }
+  };
+
+  const handleDeleteOwnMessage = async (message: Message) => {
+    if (!activeChat?.id || !message.id || !user || message.senderId !== user.uid || message.deleted) return;
+    if (!confirm('Delete this message? It will be replaced with a “This message was deleted” notice for everyone.')) return;
+    try {
+      await deleteMessage(activeChat.id, message.id, user.uid);
+      if (editingMessageId === message.id) handleCancelEditMessage();
+    } catch (error) {
+      console.error('Unable to delete message:', error);
+      alert(error instanceof Error ? error.message : 'Unable to delete this message. Please try again.');
     }
   };
 
@@ -1114,6 +1158,24 @@ export const ChatView: React.FC<ChatViewProps> = ({
                           </span>
                         </button>
                       )}
+                      {message.deleted ? (
+                        <p className="py-2 text-sm italic opacity-75">This message was deleted</p>
+                      ) : editingMessageId === message.id ? (
+                        <div className="min-w-0 space-y-2">
+                          <textarea
+                            value={editMessageDraft}
+                            onChange={(event) => setEditMessageDraft(sanitizePlainText(event.target.value, LIMITS.chatMessage, { multiline: true, trim: false }))}
+                            rows={Math.min(6, Math.max(2, editMessageDraft.split('\\n').length))}
+                            maxLength={LIMITS.chatMessage}
+                            aria-label="Edit message"
+                            className="w-full min-w-[220px] rounded-lg border border-gray-300 bg-white p-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-primary/40"
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button type="button" onClick={handleCancelEditMessage} disabled={editMessageSaving} className="rounded-lg px-2 py-1 text-xs text-gray-600 hover:bg-black/5 disabled:opacity-50">Cancel</button>
+                            <button type="button" onClick={() => void handleSaveEditMessage(message)} disabled={editMessageSaving || !editMessageDraft.trim()} className="rounded-lg bg-white/20 px-3 py-1 text-xs font-semibold hover:bg-white/30 disabled:opacity-50">{editMessageSaving ? 'Saving…' : 'Save'}</button>
+                          </div>
+                        </div>
+                      ) : <>
                       {message.sticker ? (() => {
                         const sticker = CHAT_STICKERS.find((entry) => entry.id === message.sticker?.stickerId);
                         return sticker ? (
@@ -1138,9 +1200,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       {message.content && !message.sticker && !message.gif && (message.content !== 'Photo' || !message.attachment) && (
                         <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
                       )}
+                      </>}
                       <div className="flex items-center justify-end gap-1 mt-1">
                         <span className="text-xs opacity-60">
-                          {formatTime(message.timestamp)}
+                          {formatTime(message.timestamp)}{message.edited && !message.deleted ? ' · Edited' : ''}
                         </span>
                         {message.senderId === user?.uid && (
                           <span className="material-icons text-xs opacity-80">
@@ -1148,7 +1211,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                           </span>
                         )}
                       </div>
-                      {Object.entries(
+                      {!message.deleted && editingMessageId !== message.id && Object.entries(
                         Object.values(message.reactions || {}).reduce<Record<string, number>>((counts, emoji) => {
                           counts[emoji] = (counts[emoji] || 0) + 1;
                           return counts;
@@ -1179,7 +1242,17 @@ export const ChatView: React.FC<ChatViewProps> = ({
                           ))}
                         </div>
                       )}
-                      <div className="mt-1 flex items-center justify-end gap-2">
+                      {!message.deleted && editingMessageId !== message.id && <div className="mt-1 flex items-center justify-end gap-2">
+                        {message.senderId === user.uid && !message.attachment && !message.sticker && !message.gif && (
+                          <button type="button" onClick={() => handleStartEditMessage(message)} className="rounded-full px-2 py-1 text-xs opacity-70 transition hover:bg-black/5 hover:opacity-100" aria-label="Edit message" title="Edit message">
+                            <span className="material-icons text-sm align-middle">edit</span><span className="ml-1">Edit</span>
+                          </button>
+                        )}
+                        {message.senderId === user.uid && (
+                          <button type="button" onClick={() => void handleDeleteOwnMessage(message)} className="rounded-full px-2 py-1 text-xs opacity-70 transition hover:bg-red-500/10 hover:text-red-600 hover:opacity-100" aria-label="Delete message" title="Delete message">
+                            <span className="material-icons text-sm align-middle">delete</span><span className="ml-1">Delete</span>
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => startReply(message)}
@@ -1200,8 +1273,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
                         >
                           <span className="material-icons text-sm">add_reaction</span>
                         </button>
-                      </div>
-                      {openReactionMessageId === message.id && (
+                      </div>}
+                      {!message.deleted && openReactionMessageId === message.id && (
                         <div className="relative mt-1 w-full max-w-sm rounded-xl border border-gray-200 bg-white p-2 shadow-sm" aria-label="Choose a reaction">
                           <div className="mb-2 flex items-center justify-between gap-2">
                             <span className="text-xs font-semibold text-gray-600">
