@@ -159,6 +159,17 @@ service cloud.firestore {
 
       allow delete: if isAdmin();
 
+      match /blockedUsers/{blockedUserId} {
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow create: if isSignedIn() && request.auth.uid == userId &&
+          blockedUserId != userId &&
+          request.resource.data.keys().hasOnly(['blockedUserId', 'createdAt']) &&
+          request.resource.data.blockedUserId == blockedUserId &&
+          request.resource.data.createdAt == request.time;
+        allow update: if false;
+        allow delete: if isSignedIn() && request.auth.uid == userId;
+      }
+
       match /notifications/{notificationId} {
         allow read: if isSignedIn() && request.auth.uid == userId;
         allow create: if isAdmin();
@@ -276,6 +287,11 @@ service cloud.firestore {
         return isSignedIn() && request.auth.uid in resource.data.participantIds;
       }
 
+      function hasBlockBetween(userA, userB) {
+        return exists(/databases/$(database)/documents/users/$(userA)/blockedUsers/$(userB)) ||
+          exists(/databases/$(database)/documents/users/$(userB)/blockedUsers/$(userA));
+      }
+
       function validChatCreate() {
         let itemPath = /databases/$(database)/documents/items/$(request.resource.data.itemId);
         return isSignedIn() &&
@@ -291,6 +307,7 @@ service cloud.firestore {
           exists(itemPath) &&
           get(itemPath).data.reportedBy is string &&
           get(itemPath).data.reportedBy != request.auth.uid &&
+          !hasBlockBetween(request.auth.uid, get(itemPath).data.reportedBy) &&
           request.resource.data.itemTitle == get(itemPath).data.title &&
           request.resource.data.participantIds is list &&
           request.resource.data.participantIds.size() == 2 &&
@@ -362,6 +379,13 @@ service cloud.firestore {
           return isSignedIn() && request.auth.uid in parentChat().participantIds;
         }
 
+        function isBlockedBetweenParticipants() {
+          let participants = parentChat().participantIds;
+          let otherUserId = participants[0] == request.auth.uid ? participants[1] : participants[0];
+          return exists(/databases/$(database)/documents/users/$(request.auth.uid)/blockedUsers/$(otherUserId)) ||
+            exists(/databases/$(database)/documents/users/$(otherUserId)/blockedUsers/$(request.auth.uid));
+        }
+
         function validImageAttachment() {
           let attachment = request.resource.data.attachment;
           return attachment is map &&
@@ -397,7 +421,7 @@ service cloud.firestore {
         }
 
         allow read: if isParentParticipant();
-        allow create: if isParentParticipant() &&
+        allow create: if isParentParticipant() && !isBlockedBetweenParticipants() &&
           request.resource.data.keys().hasOnly([
             'senderId', 'senderName', 'content', 'timestamp',
             'read', 'status', 'readBy', 'attachment', 'sticker', 'gif'
