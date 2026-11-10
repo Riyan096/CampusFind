@@ -18,8 +18,9 @@ class EmailService {
   private fromEmail: string = 'noreply@campusfind.edu';
 
   constructor() {
-    // Check if email service is configured
-    this.emailEnabled = !!import.meta.env.VITE_EMAIL_API_KEY;
+    // No email provider is integrated yet. Do not set a VITE_EMAIL_API_KEY:
+    // this client-side service only records demo logs and does not send email.
+    this.emailEnabled = false;
   }
 
   /**
