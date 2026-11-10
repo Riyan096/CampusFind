@@ -63,7 +63,7 @@ AI suggestions are treated as assistance rather than an authoritative decision, 
 
 The chat system uses Firebase Realtime Database for low-latency communication. Conversations contain participant information, messages, timestamps, delivery/read state, and recent-message metadata.
 
-The active chat implementation uses Cloud Firestore for Spark-plan compatibility, with participant-based access rules, per-user read state, and per-user conversation settings. Existing Realtime Database chat data is preserved; see [CHAT_ROADMAP.md](./CHAT_ROADMAP.md) for the implementation log and detailed feature plan.
+The active chat implementation uses Cloud Firestore for Spark-plan compatibility, with participant-based access rules, per-user read state, and per-user conversation settings. Existing Realtime Database chat data is preserved; see [CHAT_ROADMAP.md](./CHAT_ROADMAP.md) for the implementation log and detailed feature plan. It also supports quoted replies to text messages, photos, GIFs, and stickers; each reply links back to its original message, and Firestore rules verify that the referenced message belongs to the same conversation.
 
 ### Gamification
 
