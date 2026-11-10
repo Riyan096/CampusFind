@@ -76,15 +76,17 @@ interface ChatViewProps {
 }
 
 const GiphyChatGif: React.FC<{ gifId: string }> = ({ gifId }) => {
-  const [mediaUrl, setMediaUrl] = useState('');
-  const [failed, setFailed] = useState(false);
+  const [mediaState, setMediaState] = useState<{ gifId: string; mediaUrl: string; failed: boolean }>({
+    gifId,
+    mediaUrl: '',
+    failed: false,
+  });
   const apiKey = import.meta.env.VITE_GIPHY_API_KEY || '';
 
   useEffect(() => {
     const controller = new AbortController();
-    setMediaUrl('');
-    setFailed(false);
-    if (!apiKey) { setFailed(true); return () => controller.abort(); }
+    if (!apiKey) return () => controller.abort();
+
     const params = new URLSearchParams({ api_key: apiKey, rating: 'pg' });
     fetch('https://api.giphy.com/v1/gifs/' + encodeURIComponent(gifId) + '?' + params.toString(), { signal: controller.signal })
       .then(async (response) => {
@@ -94,17 +96,21 @@ const GiphyChatGif: React.FC<{ gifId: string }> = ({ gifId }) => {
       .then((payload) => {
         const url = payload.data?.images?.fixed_width?.url || '';
         if (!url.startsWith('https://media') || !url.includes('.giphy.com/')) throw new Error('GIF unavailable');
-        setMediaUrl(url);
+        if (!controller.signal.aborted) setMediaState({ gifId, mediaUrl: url, failed: false });
       })
       .catch(() => {
-        if (!controller.signal.aborted) setFailed(true);
+        if (!controller.signal.aborted) setMediaState({ gifId, mediaUrl: '', failed: true });
       });
     return () => controller.abort();
   }, [gifId, apiKey]);
 
-  if (failed) return <p className="my-2 text-xs opacity-70">GIF unavailable</p>;
-  if (!mediaUrl) return <div className="my-2 h-28 w-40 animate-pulse rounded-xl bg-gray-200/70" aria-label="Loading GIF" />;
-  return <div className="my-2 max-w-full"><img src={mediaUrl} alt="GIF from GIPHY" loading="lazy" className="max-h-64 max-w-full rounded-xl object-contain" /><p className="mt-1 text-[10px] opacity-70">GIF via GIPHY</p></div>;
+  const currentState = mediaState.gifId === gifId
+    ? mediaState
+    : { gifId, mediaUrl: '', failed: !apiKey };
+
+  if (currentState.failed || !apiKey) return <p className="my-2 text-xs opacity-70">GIF unavailable</p>;
+  if (!currentState.mediaUrl) return <div className="my-2 h-28 w-40 animate-pulse rounded-xl bg-gray-200/70" aria-label="Loading GIF" />;
+  return <div className="my-2 max-w-full"><img src={currentState.mediaUrl} alt="GIF from GIPHY" loading="lazy" className="max-h-64 max-w-full rounded-xl object-contain" /><p className="mt-1 text-[10px] opacity-70">GIF via GIPHY</p></div>;
 };
 
 export const ChatView: React.FC<ChatViewProps> = ({ 
@@ -159,8 +165,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
     try {
       const stored = localStorage.getItem(`campusfind:chat-stickers:${user.uid}`);
       const parsed: unknown = stored ? JSON.parse(stored) : [];
-      // This effect synchronizes a user-scoped preference after Firebase auth resolves.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRecentStickerIds(
         Array.isArray(parsed)
           ? parsed.filter((id): id is string => typeof id === 'string' && CHAT_STICKERS.some((sticker) => sticker.id === id)).slice(0, 8)
