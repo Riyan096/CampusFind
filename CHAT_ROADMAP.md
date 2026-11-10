@@ -101,13 +101,14 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 - [ ] Add a local GIPHY API key to `.env` and test search, pagination, sending, and receiving with two accounts.
 
 ### 6. Report user
-- [ ] Add a Report user action in the conversation menu or user profile.
-- [ ] Provide clear report reasons (for example: harassment, threats, spam, impersonation, inappropriate content, or other) and an optional description.
-- [ ] Allow a reporter to submit a report without exposing the report to the reported user.
-- [ ] Store reports in a protected moderation collection with reporter, reported user, relevant conversation/message references, reason, details, status, and timestamps.
-- [ ] Prevent users from reading or changing reports they did not submit; restrict moderation review to authorized admins.
-- [ ] Add an admin review workflow with statuses such as New, Reviewing, Actioned, and Dismissed.
-- [ ] Avoid automatically suspending a user solely from an unreviewed report.
+- [x] Add a Report user action to each conversation's action menu.
+- [x] Provide structured report reasons (harassment, threats, spam, impersonation, inappropriate content, scam, or other) and optional details.
+- [x] Submit reports privately without notifying or exposing the report to the reported user.
+- [x] Store reporter, reported user, conversation and item references, reason, details, status, and server timestamps in `/userReports`.
+- [x] Restrict report reads to the submitting user and admins; only admins can review/update reports, and reports cannot be deleted by clients.
+- [x] Add an admin Reports tab with New, Reviewing, Actioned, and Dismissed statuses plus internal review notes.
+- [x] Do not automatically suspend users from an unreviewed report.
+- [ ] Run the local build and Firestore emulator tests, deploy updated rules, and test submission/review with two accounts.
 
 ### 7. Block user
 - [x] Add Block / Unblock user actions in the active chat with a confirmation step.
@@ -162,3 +163,10 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 - Removed the duplicate block-list panel from Profile; blocking preferences now have their own destination.
 - Uses existing Firestore `/users/{uid}/blockedUsers` records and existing `unblockUser` service. No new database schema or Firebase Functions required.
 - Local build and browser testing are still required before merge.
+
+
+## User reporting workflow
+- Added a private report form to the conversation action menu and a protected `/userReports` collection.
+- Reports are scoped to an existing conversation shared by reporter and reported user; self-reports and arbitrary user-targeted reports are rejected by rules.
+- Added admin-only review controls for status and internal notes. Reporting does not automatically block, suspend, or notify the reported account.
+- Local build, emulator tests, Firestore rules deployment, and two-account browser testing remain required.
