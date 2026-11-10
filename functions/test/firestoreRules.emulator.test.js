@@ -573,7 +573,8 @@ test('chat participants can publish and read only their own typing status', asyn
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }));
   await assertSucceeds(secondTyping.get());
-  await assertFails(secondTyping.set({
+  // User A must not be able to publish typing status under user B's document ID.
+  await assertFails(firstTyping.firestore.collection('chats').doc('typing-chat').collection('typing').doc('typing-b').set({
     isTyping: true,
     displayName: 'Forged identity',
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
