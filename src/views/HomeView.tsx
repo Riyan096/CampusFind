@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback, useMemo, useState } from "react";
-import type { Item } from '../types';
+import type { Item, UserStats } from '../types';
 import type { LeafletMapLike } from '../types/leaflet';
 import { ItemType, ItemCategory, LostItemStatus, FoundItemStatus } from '../types';
 import { StreakDisplay } from '../components/StreakDisplay';
@@ -7,9 +7,14 @@ import { AchievementsPanel } from '../components/AchievementsPanel';
 
 
 
+type HomeUserStats = UserStats & {
+  streaks?: React.ComponentProps<typeof StreakDisplay>['streaks'];
+  unlockedAchievements?: string[];
+};
+
 interface HomeViewProps {
   items: Item[];
-  stats: any;
+  stats: HomeUserStats | null;
   onChangeTab: (tab: string) => void;
 }
 
