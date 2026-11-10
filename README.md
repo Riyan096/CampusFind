@@ -339,7 +339,8 @@ The longer-term goals include:
 
 ### Planned
 
-- [ ] Report user and block user workflows
+- [x] Per-user block/unblock from chat with Firestore-enforced messaging restrictions
+- [ ] Report user workflow and blocked-user management screen
 - [ ] Stronger privacy controls
 - [ ] Video attachments (deferred)
 - [ ] Storage and media security review
@@ -356,7 +357,7 @@ The longer-term goals include:
 
 ## Chat Development Notes
 
-Chat now supports authenticated photo attachments (Cloudinary delivery through a local Cloudflare Worker), a searchable emoji picker with customizable quick reactions, a curated sticker pack, and GIPHY GIF search with higher-quality picker previews. These features are implemented on the active feature branch and are designed to avoid Firebase Storage / Cloud Functions dependencies for chat media under the Firebase Spark plan. Video attachments remain deferred. Report/block workflows and further security regression testing are still planned.
+Chat now supports authenticated photo attachments (Cloudinary delivery through a local Cloudflare Worker), a searchable emoji picker with customizable quick reactions, a curated sticker pack, and GIPHY GIF search with higher-quality picker previews. These features are implemented on the active feature branch and are designed to avoid Firebase Storage / Cloud Functions dependencies for chat media under the Firebase Spark plan. Video attachments remain deferred. User blocking is implemented on its feature branch; reporting, a blocked-user management screen, and further security regression testing remain planned.
 
 See **[CHAT_ROADMAP.md](./CHAT_ROADMAP.md)** for implementation details, Firebase Spark constraints, known limitations, and the remaining chat roadmap.
 
