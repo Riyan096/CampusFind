@@ -4,6 +4,9 @@ import { useAuth } from '../context/AuthContext';
 import { 
   subscribeToUserChats, 
   subscribeToMessages, 
+  subscribeToBlockedUsers,
+  blockUser,
+  unblockUser, 
   sendMessage, 
   createChat, 
   markMessagesAsRead,
@@ -99,6 +102,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const { user } = useAuth();
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
+  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
+  const [blockActionLoading, setBlockActionLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -279,6 +284,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   
   // Track last leave operation time to prevent race conditions
   const lastLeaveTimeRef = useRef<number>(0);
+  const activeOtherUserId = activeChat?.participantIds.find((participantId) => participantId !== user?.uid) || null;
+  const isActiveUserBlocked = Boolean(activeOtherUserId && blockedUserIds.has(activeOtherUserId));
 
   // Define handleCreateChat before useEffect that calls it
   const handleCreateChat = useCallback(async (itemId: string) => {
@@ -322,6 +329,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [openChatMenuId]);
+
+  // Keep the signed-in user's private block list synchronized across chats.
+  useEffect(() => {
+    if (!user) {
+      setBlockedUserIds(new Set());
+      return;
+    }
+    return subscribeToBlockedUsers(user.uid, (ids) => setBlockedUserIds(new Set(ids)));
+  }, [user?.uid]);
 
   // Load user's chats
   useEffect(() => {
@@ -612,6 +628,35 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
+  const handleToggleBlock = async () => {
+    if (!user || !activeOtherUserId || blockActionLoading) return;
+    const currentlyBlocked = blockedUserIds.has(activeOtherUserId);
+    const confirmation = currentlyBlocked
+      ? 'Unblock this user? They will be able to message you again if they have not blocked you.'
+      : 'Block this user? Neither of you will be able to send new messages to the other. Your existing conversation history will remain visible.';
+    if (!confirm(confirmation)) return;
+
+    setBlockActionLoading(true);
+    try {
+      if (currentlyBlocked) {
+        await unblockUser(user.uid, activeOtherUserId);
+        setBlockedUserIds((current) => {
+          const next = new Set(current);
+          next.delete(activeOtherUserId);
+          return next;
+        });
+      } else {
+        await blockUser(user.uid, activeOtherUserId);
+        setBlockedUserIds((current) => new Set(current).add(activeOtherUserId));
+      }
+    } catch (error) {
+      console.error('Unable to update blocked user:', error);
+      alert(error instanceof Error ? error.message : 'Unable to update this block. Please try again.');
+    } finally {
+      setBlockActionLoading(false);
+    }
+  };
+
   const handleLeaveChat = async (chatId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!user || leavingChatIdsRef.current.has(chatId)) return;
@@ -882,14 +927,26 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   {Object.keys(activeChat.participants).length} participants
                 </p>
               </div>
-              {onClose && (
+              <div className="flex items-center gap-2">
+                {activeOtherUserId && (
+                  <button
+                    type="button"
+                    onClick={() => void handleToggleBlock()}
+                    disabled={blockActionLoading}
+                    className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50 ${isActiveUserBlocked ? 'border-green-300 bg-green-50 text-green-700 hover:bg-green-100' : 'border-red-200 bg-white text-red-600 hover:bg-red-50'}`}
+                  >
+                    {blockActionLoading ? 'Please wait…' : isActiveUserBlocked ? 'Unblock' : 'Block'}
+                  </button>
+                )}
+                {onClose && (
                 <button 
                   onClick={onClose}
                   className="p-2 text-gray-500 hover:text-gray-700"
                 >
                   <span className="material-icons">close</span>
                 </button>
-              )}
+                )}
+              </div>
             </div>
 
             {/* Messages */}
@@ -1078,6 +1135,16 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </div>
 
             {/* Message Input */}
+            {isActiveUserBlocked ? (
+              <div className="border-t border-gray-200 bg-gray-50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-100 bg-red-50 p-3">
+                  <p className="text-sm text-red-700">You blocked this user. New messages are disabled until you unblock them.</p>
+                  <button type="button" onClick={() => void handleToggleBlock()} disabled={blockActionLoading} className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-red-700 shadow-sm hover:bg-red-100 disabled:opacity-50">
+                    {blockActionLoading ? 'Please wait…' : 'Unblock user'}
+                  </button>
+                </div>
+              </div>
+            ) : (
             <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-200 bg-gray-50">
               {showGifPicker && (
                 <div className="mb-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
@@ -1223,6 +1290,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 </Button>
               </div>
             </form>
+            )}
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-400">
