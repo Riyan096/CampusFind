@@ -509,6 +509,54 @@ test('participants can use custom single and compound emoji reactions', async ()
   await assertSucceeds(message.update({reactions: {'reaction-user': '👨‍👩‍👧‍👦'}}));
 });
 
+test('only the sender can edit their own text messages', async () => {
+  await seedUser('message-author');
+  await seedUser('message-recipient');
+  await seedItem('edit-item');
+  await seedChat('edit-chat', 'message-author', 'message-recipient', 'edit-item');
+  await adminDb.collection('chats').doc('edit-chat').collection('messages').doc('text-message').set({
+    senderId: 'message-author', senderName: 'Message author', content: 'Original text',
+    timestamp: Timestamp.now(), read: false, status: 'sent', readBy: {}
+  });
+  const authorDb = testEnv.authenticatedContext('message-author').firestore();
+  const recipientDb = testEnv.authenticatedContext('message-recipient').firestore();
+  const authorMessage = authorDb.collection('chats').doc('edit-chat').collection('messages').doc('text-message');
+  const recipientMessage = recipientDb.collection('chats').doc('edit-chat').collection('messages').doc('text-message');
+  await assertSucceeds(authorMessage.update({content: 'Corrected text', edited: true, editedAt: firebase.firestore.FieldValue.serverTimestamp()}));
+  await assertFails(recipientMessage.update({content: 'Tampered text', edited: true, editedAt: firebase.firestore.FieldValue.serverTimestamp()}));
+  await assertFails(authorMessage.update({senderId: 'message-recipient'}));
+});
+
+test('message owners can soft-delete messages while preserving the message document', async () => {
+  await seedUser('message-author');
+  await seedUser('message-recipient');
+  await seedItem('delete-item');
+  await seedChat('delete-chat', 'message-author', 'message-recipient', 'delete-item');
+  await adminDb.collection('chats').doc('delete-chat').collection('messages').doc('photo-message').set({
+    senderId: 'message-author', senderName: 'Message author', content: 'Photo',
+    timestamp: Timestamp.now(), read: false, status: 'sent', readBy: {},
+    attachment: {type: 'image', publicId: 'campusfind/chats/delete-chat/12345678-1234-1234-1234-123456789012', format: 'jpg', bytes: 1024, width: 100, height: 100}
+  });
+  const authorDb = testEnv.authenticatedContext('message-author').firestore();
+  const recipientDb = testEnv.authenticatedContext('message-recipient').firestore();
+  const authorMessage = authorDb.collection('chats').doc('delete-chat').collection('messages').doc('photo-message');
+  const recipientMessage = recipientDb.collection('chats').doc('delete-chat').collection('messages').doc('photo-message');
+  const deleteUpdate = {
+    content: 'This message was deleted', deleted: true,
+    deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    attachment: firebase.firestore.FieldValue.delete(),
+    sticker: firebase.firestore.FieldValue.delete(),
+    gif: firebase.firestore.FieldValue.delete(),
+    reactions: firebase.firestore.FieldValue.delete()
+  };
+  await assertFails(recipientMessage.update(deleteUpdate));
+  await assertSucceeds(authorMessage.update(deleteUpdate));
+  const deleted = await assertSucceeds(recipientMessage.get());
+  assert.equal(deleted.data().deleted, true);
+  assert.equal(deleted.data().content, 'This message was deleted');
+  assert.equal('attachment' in deleted.data(), false);
+});
+
 test('participants can reply to an existing message in the same conversation', async () => {
   await seedUser('reply-sender');
   await seedUser('reply-recipient');
