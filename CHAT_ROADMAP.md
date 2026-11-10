@@ -110,13 +110,12 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 - [ ] Avoid automatically suspending a user solely from an unreviewed report.
 
 ### 7. Block user
-- [ ] Add Block / Unblock user actions and a confirmation step.
-- [ ] Persist blocks per blocking user; blocking must not silently block the user for everyone else.
-- [ ] Prevent new chats and message sending between users when either direction of the relationship requires it under the chosen product policy.
-- [ ] Define what happens to existing conversations after a block (hide, archive, disable composer, and/or preserve history).
-- [ ] Prevent blocked users from bypassing the restriction by starting a new item chat.
-- [ ] Ensure Firestore rules enforce the block, not just the UI.
-- [ ] Add a blocked-users management screen so users can review and unblock accounts.
+- [x] Add Block / Unblock user actions in the active chat with a confirmation step.
+- [x] Persist each block privately under the blocking user's `/users/{uid}/blockedUsers/{blockedUid}` subcollection.
+- [x] Enforce blocks in Firestore rules for new chats and message creation in either direction; UI checks provide clearer feedback but are not the security boundary.
+- [x] Preserve existing conversation history after a block while disabling the blocker's composer and preventing either side from sending new messages.
+- [x] Check blocks before creating a new item chat so a user cannot bypass a block by opening another item conversation.
+- [ ] Add a dedicated blocked-users management screen so users can review and unblock accounts outside an active chat.
 - [ ] Decide how blocking interacts with reports, notifications, and admin moderation.
 
 ---
@@ -129,7 +128,7 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 4. **Stickers:** implemented as a local curated pack; verify with a local build and two accounts.
 5. **GIF search:** implemented with GIPHY client-side search, PG-rated results, attribution, debouncing, pagination, preview, and Firestore validation; local API-key setup and two-account testing remain.
 6. **Video attachments:** optional and deferred because of larger storage and bandwidth costs.
-7. **Report and block:** build protected reporting and enforcement, including admin review, before expanding the chat community.
+7. **Report and block:** chat-level blocking is implemented on `feature/block-users`; continue with a blocked-users management screen, then protected reporting and admin review.
 
 ## Definition of done for each feature
 
@@ -144,10 +143,10 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 
 ## Development notes
 
-- Active working branch: `feature/chat-photo-media-worker`.
+- Active working branch for blocking: `feature/block-users` (based on `feature/chat-photo-media-worker`).
 - Local verification commands:
   ```powershell
-  git pull origin feature/chat-photo-media-worker
+  git pull origin feature/block-users
   npm run build
   npm run dev
   ```
