@@ -46,7 +46,7 @@ const getCache = (): GeocodeCache => {
           now - value.timestamp < CACHE_TTL_MS &&
           'coords' in value && Array.isArray(value.coords) &&
           value.coords.length === 2 &&
-          value.coords.every((coordinate) => typeof coordinate === 'number' && Number.isFinite(coordinate));
+          value.coords.every((coordinate: unknown) => typeof coordinate === 'number' && Number.isFinite(coordinate));
       });
       return Object.fromEntries(validEntries);
     }
