@@ -142,7 +142,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [imageError, setImageError] = useState('');
-  const [sendingImage, setSendingImage] = useState(false);
   const [showStickerPicker, setShowStickerPicker] = useState(false);
   const [stickerCategory, setStickerCategory] = useState<(typeof STICKER_CATEGORIES)[number]>('All');
   const [recentStickerIds, setRecentStickerIds] = useState<string[]>([]);
@@ -595,7 +594,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
     if (!safeContent && !selectedImage && !selectedGif) return;
 
     setLoading(true);
-    setSendingImage(Boolean(selectedImage));
     setImageError('');
 
     try {
@@ -665,7 +663,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
       }
     } finally {
       setLoading(false);
-      setSendingImage(false);
     }
   };
 
