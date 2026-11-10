@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { Item } from '../types';
 import { ItemType } from '../types';
-import { geocodeAddress, ensureItemLocation } from '../services/geocodeService';
+import { ensureItemLocation } from '../services/geocodeService';
 import { Card, Badge } from '../components/UI';
 
 
