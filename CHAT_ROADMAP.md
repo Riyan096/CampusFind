@@ -130,7 +130,7 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 4. **Stickers:** implemented as a local curated pack; verify with a local build and two accounts.
 5. **GIF search:** implemented with GIPHY client-side search, PG-rated results, attribution, debouncing, pagination, preview, and Firestore validation; local API-key setup and two-account testing remain.
 6. **Video attachments:** optional and deferred because of larger storage and bandwidth costs.
-7. **Report and block:** chat-level blocking is implemented on `feature/block-users`; continue with a blocked-users management screen, then protected reporting and admin review.
+7. **Report and block:** chat-level blocking, blocked-account management, private user reports, and admin review are implemented on `feature/block-users`; complete local verification and rules deployment before merge.
 
 ## Definition of done for each feature
 
