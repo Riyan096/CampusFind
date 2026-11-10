@@ -74,6 +74,10 @@ export interface Message {
   gif?: GifMessage;
   replyTo?: ReplyPreview;
   reactions?: { [userId: string]: string };
+  edited?: boolean;
+  editedAt?: number;
+  deleted?: boolean;
+  deletedAt?: number;
 }
 
 /** Subscribe to the signed-in user's private blocked-user list. */
@@ -217,6 +221,10 @@ const normalizeMessage = (id: string, chatId: string, data: Record<string, any>)
     ...(data.replyTo && typeof data.replyTo.messageId === 'string' && typeof data.replyTo.senderId === 'string'
       ? { replyTo: data.replyTo as ReplyPreview }
       : {}),
+    ...(data.edited === true ? { edited: true } : {}),
+    ...(data.editedAt ? { editedAt: toMillis(data.editedAt) } : {}),
+    ...(data.deleted === true ? { deleted: true } : {}),
+    ...(data.deletedAt ? { deletedAt: toMillis(data.deletedAt) } : {}),
   };
 };
 
@@ -450,6 +458,50 @@ export const sendMessage = async (
   }
 
   return messageRef.id;
+};
+
+/** Edit a text-only message authored by the current participant. */
+export const editMessage = async (
+  chatId: string,
+  messageId: string,
+  userId: string,
+  content: string
+): Promise<void> => {
+  const safeContent = sanitizePlainText(content, LIMITS.chatMessage, { multiline: true });
+  if (!safeContent) throw new Error('Message cannot be empty.');
+  const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+  const snapshot = await getDoc(messageRef);
+  if (!snapshot.exists()) throw new Error('This message no longer exists.');
+  const message = snapshot.data();
+  if (message.senderId !== userId) throw new Error('You can only edit your own messages.');
+  if (message.deleted === true) throw new Error('Deleted messages cannot be edited.');
+  if (message.attachment || message.sticker || message.gif) {
+    throw new Error('Only text messages can be edited.');
+  }
+  await updateDoc(messageRef, { content: safeContent, edited: true, editedAt: serverTimestamp() });
+};
+
+/** Soft-delete a message authored by the current participant, preserving reply references. */
+export const deleteMessage = async (
+  chatId: string,
+  messageId: string,
+  userId: string
+): Promise<void> => {
+  const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+  const snapshot = await getDoc(messageRef);
+  if (!snapshot.exists()) throw new Error('This message no longer exists.');
+  const message = snapshot.data();
+  if (message.senderId !== userId) throw new Error('You can only delete your own messages.');
+  if (message.deleted === true) return;
+  await updateDoc(messageRef, {
+    content: 'This message was deleted',
+    deleted: true,
+    deletedAt: serverTimestamp(),
+    attachment: deleteField(),
+    sticker: deleteField(),
+    gif: deleteField(),
+    reactions: deleteField(),
+  });
 };
 
 /** Add, change, or remove only the current user's reaction on a message. */
