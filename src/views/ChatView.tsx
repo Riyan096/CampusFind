@@ -159,6 +159,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
     try {
       const stored = localStorage.getItem(`campusfind:chat-stickers:${user.uid}`);
       const parsed: unknown = stored ? JSON.parse(stored) : [];
+      // This effect synchronizes a user-scoped preference after Firebase auth resolves.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRecentStickerIds(
         Array.isArray(parsed)
           ? parsed.filter((id): id is string => typeof id === 'string' && CHAT_STICKERS.some((sticker) => sticker.id === id)).slice(0, 8)
