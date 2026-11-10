@@ -91,7 +91,7 @@ export const subscribeToTypingUsers = (
     const now = Date.now();
     callback(latestEntries
       .filter(({ id, data }) => id !== currentUserId && data.isTyping === true &&
-        now - toMillis(data.updatedAt) < 10000)
+        now - toMillis(data.updatedAt as FirestoreTimestamp) < 10000)
       .map(({ data }) => typeof data.displayName === 'string' ? data.displayName : 'Someone'));
   };
   const unsubscribe = onSnapshot(
