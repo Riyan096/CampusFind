@@ -25,7 +25,7 @@ interface NominatimReverseResult {
 
 interface GeocodableItem {
   location?: string;
-  latlng?: [number, number];
+  latlng?: [number, number] | null;
 }
 
 const GEOCODE_CACHE_KEY = 'campusfind_geocode_cache_v1';
