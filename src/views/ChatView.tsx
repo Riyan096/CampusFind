@@ -105,6 +105,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
   const [blockActionLoading, setBlockActionLoading] = useState(false);
   const [blockMuteChat, setBlockMuteChat] = useState<Chat | null>(null);
+  const [messagingUnavailableChatId, setMessagingUnavailableChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -418,6 +419,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
     return () => unsubscribe();
   }, [activeChat, user]);
 
+  const isMessagingPermissionDenied = (error: unknown) =>
+    typeof error === 'object' && error !== null && 'code' in error &&
+    (error as { code?: unknown }).code === 'permission-denied';
+
+  useEffect(() => {
+    setMessagingUnavailableChatId(null);
+    setImageError('');
+  }, [activeChat?.id]);
+
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -491,7 +501,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
       setSelectedGif(null);
     } catch (error) {
       console.error('Error sending chat message:', error);
-      setImageError(error instanceof Error ? error.message : 'Failed to send message. Please try again.');
+      if (isMessagingPermissionDenied(error) && activeChat?.id) {
+        setMessagingUnavailableChatId(activeChat.id);
+        setImageError('');
+      } else {
+        setImageError(error instanceof Error ? error.message : 'Failed to send message. Please try again.');
+      }
     } finally {
       setLoading(false);
       setSendingImage(false);
@@ -521,7 +536,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
       }
     } catch (error) {
       console.error('Error sending sticker:', error);
-      alert(error instanceof Error ? error.message : 'Could not send this sticker. Please try again.');
+      if (isMessagingPermissionDenied(error) && activeChat?.id) {
+        setMessagingUnavailableChatId(activeChat.id);
+      } else {
+        alert(error instanceof Error ? error.message : 'Could not send this sticker. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -1152,13 +1171,21 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </div>
 
             {/* Message Input */}
-            {isActiveUserBlocked ? (
+            {isActiveUserBlocked || messagingUnavailableChatId === activeChat.id ? (
               <div className="border-t border-gray-200 bg-gray-50 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-100 bg-red-50 p-3">
-                  <p className="text-sm text-red-700">You blocked this user. New messages are disabled until you unblock them.</p>
-                  <button type="button" onClick={() => setBlockMuteChat(activeChat)} disabled={blockActionLoading} className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-red-700 shadow-sm hover:bg-red-100 disabled:opacity-50">
-                    Manage block settings
-                  </button>
+                  <div className="flex items-start gap-2">
+                    <span className="material-icons mt-0.5 text-gray-500" aria-hidden="true">info</span>
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">Messaging unavailable</p>
+                      <p className="mt-0.5 text-xs text-gray-600">You can't send messages in this conversation right now. The conversation history is still available.</p>
+                    </div>
+                  </div>
+                  {isActiveUserBlocked && (
+                    <button type="button" onClick={() => setBlockMuteChat(activeChat)} disabled={blockActionLoading} className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-100 disabled:opacity-50">
+                      Manage block settings
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (
