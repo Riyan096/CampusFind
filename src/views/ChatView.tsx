@@ -450,6 +450,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
     setMessagingUnavailableChatId(null);
     setImageError('');
     setReplyingTo(null);
+    setEditingMessageId(null);
+    setEditMessageDraft('');
   }, [activeChat?.id]);
 
   // Scroll to bottom when messages change
@@ -1165,7 +1167,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                           <textarea
                             value={editMessageDraft}
                             onChange={(event) => setEditMessageDraft(sanitizePlainText(event.target.value, LIMITS.chatMessage, { multiline: true, trim: false }))}
-                            rows={Math.min(6, Math.max(2, editMessageDraft.split('\\n').length))}
+                            rows={3}
                             maxLength={LIMITS.chatMessage}
                             aria-label="Edit message"
                             className="w-full min-w-[220px] rounded-lg border border-gray-300 bg-white p-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-primary/40"
