@@ -113,7 +113,7 @@ export const MapView: React.FC<MapViewProps> = ({ items }) => {
 
       // Add dynamic markers (skip geocoding in useEffect to avoid blocking)
       items.forEach(async (item) => {
-    let coords = item.latlng || (await ensureItemLocation(item)) || undefined;
+    const coords = item.latlng || (await ensureItemLocation(item)) || undefined;
     if (coords) {
           const [jitterLat, jitterLng] = offsetCoordinates(coords, item.id);
 
