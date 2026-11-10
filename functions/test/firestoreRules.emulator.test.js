@@ -557,6 +557,46 @@ test('message owners can soft-delete messages while preserving the message docum
   assert.equal('attachment' in deleted.data(), false);
 });
 
+test('chat participants can publish and read only their own typing status', async () => {
+  await seedUser('typing-a');
+  await seedUser('typing-b');
+  await seedChat('typing-chat', 'typing-a', 'typing-b', 'typing-item');
+
+  const firstDb = testEnv.authenticatedContext('typing-a').firestore();
+  const secondDb = testEnv.authenticatedContext('typing-b').firestore();
+  const firstTyping = firstDb.collection('chats').doc('typing-chat').collection('typing').doc('typing-a');
+  const secondTyping = secondDb.collection('chats').doc('typing-chat').collection('typing').doc('typing-b');
+
+  await assertSucceeds(firstTyping.set({
+    isTyping: true,
+    displayName: 'First user',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }));
+  await assertSucceeds(secondTyping.get());
+  await assertFails(secondTyping.set({
+    isTyping: true,
+    displayName: 'Forged identity',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }));
+  await assertSucceeds(firstTyping.delete());
+});
+
+test('nonparticipants cannot read or publish chat typing status', async () => {
+  await seedUser('typing-a');
+  await seedUser('typing-b');
+  await seedUser('typing-outsider');
+  await seedChat('typing-chat-private', 'typing-a', 'typing-b', 'typing-item');
+
+  const outsiderDb = testEnv.authenticatedContext('typing-outsider').firestore();
+  const typingRef = outsiderDb.collection('chats').doc('typing-chat-private').collection('typing').doc('typing-outsider');
+  await assertFails(typingRef.get());
+  await assertFails(typingRef.set({
+    isTyping: true,
+    displayName: 'Outsider',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }));
+});
+
 test('participants can reply to an existing message in the same conversation', async () => {
   await seedUser('reply-sender');
   await seedUser('reply-recipient');
