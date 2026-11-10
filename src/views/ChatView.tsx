@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { 
   subscribeToUserChats, 
   subscribeToMessages, 
+  subscribeToTypingUsers,
+  setTypingStatus,
   subscribeToBlockedUsers,
   blockUser,
   unblockUser, 
@@ -130,6 +132,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [editMessageSaving, setEditMessageSaving] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
+  const [typingNames, setTypingNames] = useState<string[]>([]);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [imageError, setImageError] = useState('');
@@ -302,6 +306,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [leavingChatIds, setLeavingChatIds] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingActiveRef = useRef(false);
+  const shouldAutoScrollRef = useRef(true);
   // Prevent chat-list snapshots from repeatedly overriding the user's manual selection.
   const lastAutoOpenedItemIdRef = useRef<string | null>(null);
   
@@ -375,6 +382,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [openMessageActionMenuId]);
+
+  // Subscribe only to the active conversation's other participant typing status.
+  useEffect(() => {
+    if (!activeChat?.id || !user) {
+      setTypingNames([]);
+      return;
+    }
+    return subscribeToTypingUsers(activeChat.id, user.uid, setTypingNames);
+  }, [activeChat?.id, user?.uid]);
 
   // Keep the signed-in user's private block list synchronized across chats.
   useEffect(() => {
@@ -475,26 +491,83 @@ export const ChatView: React.FC<ChatViewProps> = ({
     setEditMessageDraft('');
   }, [activeChat?.id]);
 
-  // Keep the message pane at the bottom when a chat opens or its messages load.
-  // Scroll the pane itself rather than scrollIntoView, which can move the whole page.
+  const clearTypingStatus = useCallback(() => {
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = null;
+    if (typingActiveRef.current && activeChat?.id && user?.uid) {
+      typingActiveRef.current = false;
+      void setTypingStatus(activeChat.id, user.uid, user.displayName || 'Anonymous', false)
+        .catch((error) => console.error('Unable to clear typing status:', error));
+    }
+  }, [activeChat?.id, user?.uid, user?.displayName]);
+
+  const handleComposerChange = (value: string) => {
+    setNewMessage(sanitizePlainText(value, LIMITS.chatMessage, { multiline: false, trim: false }));
+    if (!activeChat?.id || !user || isActiveUserBlocked || messagingUnavailableChatId === activeChat.id) return;
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    if (value.trim() && !typingActiveRef.current) {
+      typingActiveRef.current = true;
+      void setTypingStatus(activeChat.id, user.uid, user.displayName || 'Anonymous', true)
+        .catch((error) => {
+          typingActiveRef.current = false;
+          console.error('Unable to publish typing status:', error);
+        });
+    }
+    if (!value.trim()) {
+      clearTypingStatus();
+      return;
+    }
+    typingTimeoutRef.current = setTimeout(clearTypingStatus, 1600);
+  };
+
+  useEffect(() => {
+    typingActiveRef.current = false;
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = null;
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      if (activeChat?.id && user?.uid) {
+        void setTypingStatus(activeChat.id, user.uid, user.displayName || 'Anonymous', false)
+          .catch((error) => console.error('Unable to clear typing status:', error));
+      }
+      typingActiveRef.current = false;
+    };
+  }, [activeChat?.id, user?.uid]);
+
+  // Auto-follow new messages only while the reader is already near the bottom.
   useEffect(() => {
     const container = messagesContainerRef.current;
-    if (!container || !activeChat?.id) return;
+    if (!container || !activeChat?.id || !shouldAutoScrollRef.current) return;
 
     let secondFrame = 0;
     const firstFrame = window.requestAnimationFrame(() => {
       container.scrollTop = container.scrollHeight;
-      // A second frame accounts for the message list finishing its layout.
       secondFrame = window.requestAnimationFrame(() => {
         container.scrollTop = container.scrollHeight;
       });
     });
-
     return () => {
       window.cancelAnimationFrame(firstFrame);
       if (secondFrame) window.cancelAnimationFrame(secondFrame);
     };
   }, [activeChat?.id, messages]);
+
+  const scrollToLatestMessage = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    shouldAutoScrollRef.current = true;
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    setShowScrollToBottom(false);
+  };
+
+  const handleMessagesScroll = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    const isNearBottom = distanceFromBottom < 100;
+    shouldAutoScrollRef.current = isNearBottom;
+    setShowScrollToBottom(!isNearBottom);
+  };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1145,6 +1218,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 <p className="text-xs text-gray-500">
                   {Object.keys(activeChat.participants).length} participants
                 </p>
+                {typingNames.length > 0 && (
+                  <p className="mt-1 text-xs font-medium text-primary" aria-live="polite">
+                    {typingNames.length > 1 ? 'Someone is typing…' : typingNames[0] + ' is typing…'}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 {onClose && (
@@ -1159,7 +1237,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </div>
 
             {/* Messages */}
-            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div ref={messagesContainerRef} onScroll={handleMessagesScroll} className="relative flex-1 overflow-y-auto p-4 space-y-3">
               {messages.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-gray-400">
                   <div className="text-center">
@@ -1397,6 +1475,17 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 )) 
               )}
               <div ref={messagesEndRef} />
+              {showScrollToBottom && messages.length > 0 && (
+                <button
+                  type="button"
+                  onClick={scrollToLatestMessage}
+                  className="sticky bottom-3 ml-auto flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 shadow-lg transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  aria-label="Scroll to latest message"
+                  title="Scroll to latest message"
+                >
+                  <span className="material-icons">keyboard_double_arrow_down</span>
+                </button>
+              )}
             </div>
 
             {/* Message Input */}
@@ -1553,14 +1642,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 <Input
                   type="text"
                   value={newMessage}
-                  onChange={(e) =>
-                    setNewMessage(
-                      sanitizePlainText(e.target.value, LIMITS.chatMessage, {
-                        multiline: false,
-                        trim: false,
-                      })
-                    )
-                  }
+                  onChange={(e) => handleComposerChange(e.target.value)}
                   placeholder="Type a message..."
                   className="flex-1"
                 />
