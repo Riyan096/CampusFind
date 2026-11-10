@@ -17,7 +17,8 @@ import {
   type Chat,
   type Message,
   type StickerMessage,
-  type GifMessage
+  type GifMessage,
+  type ReplyPreview
 } from '../services/chatService';
 import { Button, Input } from '../components/UI';
 import { LIMITS, sanitizeFirestoreDocId, sanitizePlainText } from '../utils/sanitize';
@@ -121,6 +122,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [messagingUnavailableChatId, setMessagingUnavailableChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [replyingTo, setReplyingTo] = useState<ReplyPreview | null>(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
@@ -292,6 +295,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [newChatItemTitle, setNewChatItemTitle] = useState('');
   const [leavingChatIds, setLeavingChatIds] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   // Prevent chat-list snapshots from repeatedly overriding the user's manual selection.
   const lastAutoOpenedItemIdRef = useRef<string | null>(null);
   
@@ -440,6 +444,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   useEffect(() => {
     setMessagingUnavailableChatId(null);
     setImageError('');
+    setReplyingTo(null);
   }, [activeChat?.id]);
 
   // Scroll to bottom when messages change
@@ -507,12 +512,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
         safeContent || (selectedImage ? 'Photo' : 'GIF'),
         attachment,
         undefined,
-        selectedGif ? { type: 'gif', provider: 'giphy', gifId: selectedGif.gifId } : undefined
+        selectedGif ? { type: 'gif', provider: 'giphy', gifId: selectedGif.gifId } : undefined,
+        replyingTo || undefined
       );
 
       setNewMessage('');
       clearSelectedImage();
       setSelectedGif(null);
+      setReplyingTo(null);
     } catch (error) {
       console.error('Error sending chat message:', error);
       if (isMessagingPermissionDenied(error) && activeChat?.id) {
@@ -539,9 +546,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
         user.displayName || 'Anonymous',
         sticker.label,
         undefined,
-        stickerMessage
+        stickerMessage,
+        undefined,
+        replyingTo || undefined
       );
       const nextRecent = [sticker.id, ...recentStickerIds.filter((id) => id !== sticker.id)].slice(0, 8);
+      setReplyingTo(null);
       setRecentStickerIds(nextRecent);
       try {
         localStorage.setItem(`campusfind:chat-stickers:${user.uid}`, JSON.stringify(nextRecent));
@@ -596,6 +606,31 @@ export const ChatView: React.FC<ChatViewProps> = ({
       return;
     }
     saveQuickReactionOptions([...quickReactionOptions, emoji]);
+  };
+
+  const startReply = (message: Message) => {
+    if (!message.id) return;
+    const type: ReplyPreview['type'] = message.attachment ? 'photo'
+      : message.sticker ? 'sticker'
+      : message.gif ? 'gif'
+      : 'text';
+    setReplyingTo({
+      messageId: message.id,
+      senderId: message.senderId,
+      senderName: message.senderName,
+      content: message.content || (type === 'photo' ? 'Photo' : type === 'gif' ? 'GIF' : 'Message'),
+      type,
+    });
+    setShowGifPicker(false);
+    setShowStickerPicker(false);
+  };
+
+  const jumpToMessage = (messageId: string) => {
+    const target = document.getElementById(`chat-message-${messageId}`);
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightedMessageId(messageId);
+    window.setTimeout(() => setHighlightedMessageId((current) => current === messageId ? null : current), 1400);
   };
 
   const formatTime = (timestamp: number) => {
@@ -1041,7 +1076,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
               {messages.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-gray-400">
                   <div className="text-center">
@@ -1053,10 +1088,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 messages.map((message) => (
                   <div
                     key={message.id}
-                    className={`flex ${message.senderId === user.uid ? 'justify-end' : 'justify-start'}`}
+                    id={`chat-message-${message.id}`}
+                    className={`flex scroll-mt-4 ${message.senderId === user.uid ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
-                      className={`max-w-[70%] px-4 py-2 rounded-2xl ${
+                      className={`max-w-[70%] px-4 py-2 rounded-2xl transition-shadow ${highlightedMessageId === message.id ? 'ring-2 ring-amber-400 shadow-lg' : ''} ${
                         message.senderId === user.uid
                           ? 'bg-primary text-white rounded-br-md'
                           : 'bg-gray-100 text-gray-800 rounded-bl-md'
@@ -1065,6 +1101,19 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       <p className="text-xs font-medium mb-1 opacity-75">
                         {message.senderName}
                       </p>
+                      {message.replyTo && (
+                        <button
+                          type="button"
+                          onClick={() => jumpToMessage(message.replyTo!.messageId)}
+                          className={`mb-2 block w-full rounded-lg border-l-4 px-3 py-2 text-left text-xs transition hover:brightness-95 ${message.senderId === user.uid ? 'border-white/70 bg-white/15 text-white' : 'border-primary bg-white text-gray-700'}`}
+                          aria-label={`Jump to ${message.replyTo.senderName}'s original message`}
+                        >
+                          <span className="block font-semibold">{message.replyTo.senderName}</span>
+                          <span className="mt-0.5 block truncate opacity-80">
+                            {message.replyTo.type === 'photo' ? '📷 Photo' : message.replyTo.type === 'gif' ? 'GIF' : message.replyTo.type === 'sticker' ? `Sticker · ${message.replyTo.content}` : message.replyTo.content}
+                          </span>
+                        </button>
+                      )}
                       {message.sticker ? (() => {
                         const sticker = CHAT_STICKERS.find((entry) => entry.id === message.sticker?.stickerId);
                         return sticker ? (
@@ -1130,7 +1179,17 @@ export const ChatView: React.FC<ChatViewProps> = ({
                           ))}
                         </div>
                       )}
-                      <div className="mt-1 flex justify-end">
+                      <div className="mt-1 flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => startReply(message)}
+                          className="rounded-full px-2 py-1 text-xs opacity-70 transition hover:bg-black/5 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                          aria-label="Reply to message"
+                          title="Reply"
+                        >
+                          <span className="material-icons text-sm align-middle">reply</span>
+                          <span className="ml-1">Reply</span>
+                        </button>
                         <button
                           type="button"
                           onClick={() => setOpenReactionMessageId((current) => current === message.id ? null : message.id || null)}
@@ -1245,6 +1304,20 @@ export const ChatView: React.FC<ChatViewProps> = ({
               </div>
             ) : (
             <form onSubmit={handleSendMessage} className="p-4 border-t border-gray-200 bg-gray-50">
+              {replyingTo && (
+                <div className="mb-3 flex items-center gap-3 rounded-xl border border-primary/20 bg-white p-3">
+                  <span className="material-icons text-primary" aria-hidden="true">reply</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-gray-800">Replying to {replyingTo.senderName}</p>
+                    <p className="truncate text-xs text-gray-500">
+                      {replyingTo.type === 'photo' ? '📷 Photo' : replyingTo.type === 'gif' ? 'GIF' : replyingTo.type === 'sticker' ? `Sticker · ${replyingTo.content}` : replyingTo.content}
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => setReplyingTo(null)} disabled={loading} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100" aria-label="Cancel reply">
+                    <span className="material-icons text-base">close</span>
+                  </button>
+                </div>
+              )}
               {showGifPicker && (
                 <div className="mb-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
                   <div className="mb-3 flex items-center justify-between">
