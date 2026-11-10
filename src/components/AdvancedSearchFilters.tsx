@@ -54,18 +54,20 @@ export const AdvancedSearchFilters: React.FC<AdvancedSearchFiltersProps> = ({
         startDate = today.toISOString().split('T')[0];
         endDate = startDate;
         break;
-      case 'week':
+      case 'week': {
         const weekAgo = new Date(today);
         weekAgo.setDate(weekAgo.getDate() - 7);
         startDate = weekAgo.toISOString().split('T')[0];
         endDate = today.toISOString().split('T')[0];
         break;
-      case 'month':
+      }
+      case 'month': {
         const monthAgo = new Date(today);
         monthAgo.setMonth(monthAgo.getMonth() - 1);
         startDate = monthAgo.toISOString().split('T')[0];
         endDate = today.toISOString().split('T')[0];
         break;
+      }
     }
 
     onChange({
