@@ -7,10 +7,7 @@ import { AchievementsPanel } from '../components/AchievementsPanel';
 
 
 
-type HomeUserStats = UserStats & {
-  streaks?: React.ComponentProps<typeof StreakDisplay>['streaks'];
-  unlockedAchievements?: string[];
-};
+type HomeUserStats = UserStats;
 
 interface HomeViewProps {
   items: Item[];
