@@ -417,6 +417,27 @@ service cloud.firestore {
       );
       allow delete: if isChatParticipant() && resource.data.createdBy == request.auth.uid;
 
+      match /typing/{typingUserId} {
+        function isTypingChatParticipant() {
+          return isSignedIn() &&
+            request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participantIds;
+        }
+
+        function validTypingWrite() {
+          return request.resource.data.keys().hasOnly(['isTyping', 'displayName', 'updatedAt']) &&
+            request.resource.data.isTyping == true &&
+            request.resource.data.displayName is string &&
+            request.resource.data.displayName.size() > 0 &&
+            request.resource.data.displayName.size() <= 100 &&
+            request.resource.data.updatedAt == request.time;
+        }
+
+        allow read: if isTypingChatParticipant();
+        allow create, update: if isTypingChatParticipant() &&
+          request.auth.uid == typingUserId && validTypingWrite();
+        allow delete: if isTypingChatParticipant() && request.auth.uid == typingUserId;
+      }
+
       match /messages/{messageId} {
         function parentChat() {
           return get(/databases/$(database)/documents/chats/$(chatId)).data;
