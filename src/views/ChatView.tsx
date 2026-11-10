@@ -647,6 +647,28 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
+  const handleUnblockFromActionMenu = async () => {
+    if (!user || !blockMuteChat || blockActionLoading) return;
+    const otherUserId = blockMuteChat.participantIds.find((participantId) => participantId !== user.uid);
+    if (!otherUserId) return;
+
+    setBlockActionLoading(true);
+    try {
+      await unblockUser(user.uid, otherUserId);
+      setBlockedUserIds((current) => {
+        const next = new Set(current);
+        next.delete(otherUserId);
+        return next;
+      });
+      setBlockMuteChat(null);
+    } catch (error) {
+      console.error('Unable to unblock user:', error);
+      alert(error instanceof Error ? error.message : 'Unable to unblock this user. Please try again.');
+    } finally {
+      setBlockActionLoading(false);
+    }
+  };
+
   const handleMuteFromActionMenu = async () => {
     if (!user || !blockMuteChat?.id || blockActionLoading) return;
     const currentlyMuted = blockMuteChat.userSettings?.[user.uid]?.muted === true;
@@ -1315,14 +1337,25 @@ export const ChatView: React.FC<ChatViewProps> = ({
               Muting turns off notifications for this conversation. Blocking prevents both of you from sending new messages to each other. Your existing chat history will remain.
             </p>
             <div className="mt-5 flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => void handleBlockFromActionMenu()}
-                disabled={blockActionLoading || Boolean(blockMuteChat.participantIds.find((participantId) => participantId !== user?.uid) && blockedUserIds.has(blockMuteChat.participantIds.find((participantId) => participantId !== user?.uid)!))}
-                className="w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
-              >
-                {blockActionLoading ? 'Please wait…' : 'Block user'}
-              </button>
+              {blockMuteChat.participantIds.some((participantId) => participantId !== user?.uid && blockedUserIds.has(participantId)) ? (
+                <button
+                  type="button"
+                  onClick={() => void handleUnblockFromActionMenu()}
+                  disabled={blockActionLoading}
+                  className="w-full rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                >
+                  {blockActionLoading ? 'Please wait…' : 'Unblock user'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void handleBlockFromActionMenu()}
+                  disabled={blockActionLoading}
+                  className="w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  {blockActionLoading ? 'Please wait…' : 'Block user'}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => void handleMuteFromActionMenu()}
