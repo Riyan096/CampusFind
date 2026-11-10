@@ -72,7 +72,7 @@ export const MapView: React.FC<MapViewProps> = ({ items }) => {
     const map = mapInstanceRef.current;
     if (!L || !map) return;
 
-        let coords = item.latlng || (await ensureItemLocation(item)) || undefined;
+        const coords = item.latlng || (await ensureItemLocation(item)) || undefined;
         if (coords) {
       const [jitterLat, jitterLng] = offsetCoordinates(coords, item.id);
       
