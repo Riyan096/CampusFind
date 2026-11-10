@@ -121,7 +121,7 @@ test.beforeEach(async () => {
 });
 
 test.afterEach(async () => {
-  await Promise.all([clearItems(), clearBlockedUsers(), clearUsers(), clearPublicProfiles(), clearPointAwards()]);
+  await Promise.all([clearItems(), clearReports(), clearBlockedUsers(), clearUsers(), clearPublicProfiles(), clearPointAwards()]);
 });
 
 test.after(async () => {
