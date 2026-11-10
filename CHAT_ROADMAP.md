@@ -179,3 +179,13 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 - Reports are scoped to an existing conversation shared by reporter and reported user; self-reports and arbitrary user-targeted reports are rejected by rules.
 - Added admin-only review controls for status and internal notes. Reporting does not automatically block, suspend, or notify the reported account.
 - Local build, emulator tests, Firestore rules deployment, and two-account browser testing remain required.
+
+
+## Message editing and deletion
+- [x] Allow authors to edit their own text-only messages with an Edited label.
+- [x] Allow authors to soft-delete their own messages, replacing content with a neutral deleted-message placeholder.
+- [x] Remove attachment metadata on deletion so deleted photo media can no longer be fetched through the authenticated media worker.
+- [x] Preserve message documents and reply references when deleting; replies remain readable.
+- [x] Enforce ownership, allowed field changes, and server timestamps in Firestore rules.
+- [x] Add emulator tests for owner-only editing and soft deletion.
+- [ ] Run local build and Firestore emulator tests, deploy updated rules, and verify with two accounts.
