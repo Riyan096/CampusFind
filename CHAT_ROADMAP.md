@@ -23,6 +23,9 @@
 - [x] Added an Active / Archived chat view and a three-dot conversation menu for Pin/Unpin, Mute/Unmute, and Archive/Unarchive.
 - [x] Added menu dismissal that supports multiple conversation rows without intercepting the selected menu action.
 - [x] Added visual unread conversation highlighting and status indicators for pinned/muted chats.
+- [x] Added live typing indicators using participant-only Firestore presence documents; typing status clears after a short idle period and abandoned status expires locally.
+- [x] Added a floating jump-to-latest button when a user scrolls away from the newest messages.
+- [x] Kept automatic scrolling enabled only while the reader is near the bottom, so incoming messages do not pull someone away from older messages.
 
 ### Notifications
 - [x] Added in-app notifications for incoming chat messages using a separate notification write after the message is committed. A notification-write failure should not undo or block a successfully sent message.
