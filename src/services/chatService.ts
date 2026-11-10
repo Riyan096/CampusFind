@@ -67,6 +67,52 @@ export interface Message {
   reactions?: { [userId: string]: string };
 }
 
+/** Subscribe to the signed-in user's private blocked-user list. */
+export const subscribeToBlockedUsers = (
+  userId: string,
+  callback: (blockedUserIds: string[]) => void
+) => onSnapshot(
+  collection(db, 'users', userId, 'blockedUsers'),
+  (snapshot) => callback(snapshot.docs.map((entry) => entry.id)),
+  (error) => console.error('Unable to load blocked users:', error)
+);
+
+/** Block another account for the current user only. */
+export const blockUser = async (userId: string, blockedUserId: string): Promise<void> => {
+  const safeUserId = sanitizeFirestoreDocId(userId);
+  const safeBlockedUserId = sanitizeFirestoreDocId(blockedUserId);
+  if (!safeUserId || !safeBlockedUserId || safeUserId === safeBlockedUserId) {
+    throw new Error('Choose a valid user to block.');
+  }
+
+  const blockRef = doc(db, 'users', safeUserId, 'blockedUsers', safeBlockedUserId);
+  const existing = await getDoc(blockRef);
+  if (existing.exists()) return;
+
+  await setDoc(blockRef, {
+    blockedUserId: safeBlockedUserId,
+    createdAt: serverTimestamp(),
+  });
+};
+
+/** Remove a block created by the signed-in user. */
+export const unblockUser = async (userId: string, blockedUserId: string): Promise<void> => {
+  const safeUserId = sanitizeFirestoreDocId(userId);
+  const safeBlockedUserId = sanitizeFirestoreDocId(blockedUserId);
+  if (!safeUserId || !safeBlockedUserId || safeUserId === safeBlockedUserId) {
+    throw new Error('Choose a valid user to unblock.');
+  }
+  await deleteDoc(doc(db, 'users', safeUserId, 'blockedUsers', safeBlockedUserId));
+};
+
+const hasBlockBetween = async (firstUserId: string, secondUserId: string): Promise<boolean> => {
+  const [firstBlocksSecond, secondBlocksFirst] = await Promise.all([
+    getDoc(doc(db, 'users', firstUserId, 'blockedUsers', secondUserId)),
+    getDoc(doc(db, 'users', secondUserId, 'blockedUsers', firstUserId)),
+  ]);
+  return firstBlocksSecond.exists() || secondBlocksFirst.exists();
+};
+
 export interface Chat {
   id?: string;
   itemId: string;
@@ -187,6 +233,9 @@ export const createChat = async (
   }
   if (ownerId === userId) {
     throw new Error('You cannot start a conversation about your own item.');
+  }
+  if (await hasBlockBetween(userId, ownerId)) {
+    throw new Error('This conversation is unavailable because one of the users has blocked the other.');
   }
 
   const existingQuery = query(
@@ -315,6 +364,9 @@ export const sendMessage = async (
   }
 
   const recipientId = chatData.participantIds.find((participantId: string) => participantId !== senderId);
+  if (!recipientId || await hasBlockBetween(senderId, recipientId)) {
+    throw new Error('This message cannot be sent because one of the users has blocked the other.');
+  }
   const messageRef = doc(collection(chatRef, 'messages'));
   const batch = writeBatch(db);
 
