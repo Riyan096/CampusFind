@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy, writeBatch, serverTimestamp } from 'firebase/firestore';
 
@@ -88,13 +88,7 @@ export const AdminView: React.FC = () => {
   const [notificationMessage, setNotificationMessage] = useState('');
   const [notificationType, setNotificationType] = useState<'info' | 'success' | 'warning'>('info');
 
-  useEffect(() => {
-    if (isAdmin) {
-      fetchData();
-    }
-  }, [isAdmin]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -140,8 +134,12 @@ export const AdminView: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [error]);
 
+
+  useEffect(() => {
+    if (isAdmin) void fetchData();
+  }, [isAdmin, fetchData]);
 
   const handleToggleAdmin = async (userId: string, currentStatus: boolean) => {
     try {
