@@ -470,12 +470,42 @@ service cloud.firestore {
             gif.gifId is string && gif.gifId.matches('[A-Za-z0-9_-]{1,128}');
         }
 
+        function validReplyTo() {
+          let reply = request.resource.data.replyTo;
+          let originalPath = /databases/$(database)/documents/chats/$(chatId)/messages/$(reply.messageId);
+          let original = get(originalPath).data;
+          return reply is map &&
+            reply.keys().hasOnly(['messageId', 'senderId', 'senderName', 'content', 'type']) &&
+            reply.messageId is string &&
+            reply.messageId.matches('[A-Za-z0-9_-]{1,128}') &&
+            reply.senderId is string &&
+            reply.senderId in parentChat().participantIds &&
+            reply.senderName is string && reply.senderName.size() <= 100 &&
+            reply.content is string && reply.content.size() <= 4000 &&
+            reply.type in ['text', 'photo', 'sticker', 'gif'] &&
+            exists(originalPath) &&
+            original.senderId == reply.senderId &&
+            original.senderName == reply.senderName &&
+            original.content == reply.content &&
+            (
+              (reply.type == 'photo' && 'attachment' in original &&
+                !('sticker' in original) && !('gif' in original)) ||
+              (reply.type == 'sticker' && 'sticker' in original &&
+                !('attachment' in original) && !('gif' in original)) ||
+              (reply.type == 'gif' && 'gif' in original &&
+                !('attachment' in original) && !('sticker' in original)) ||
+              (reply.type == 'text' && !('attachment' in original) &&
+                !('sticker' in original) && !('gif' in original))
+            );
+        }
+
         allow read: if isParentParticipant();
         allow create: if isParentParticipant() && !isBlockedBetweenParticipants() &&
           request.resource.data.keys().hasOnly([
             'senderId', 'senderName', 'content', 'timestamp',
-            'read', 'status', 'readBy', 'attachment', 'sticker', 'gif'
+            'read', 'status', 'readBy', 'attachment', 'sticker', 'gif', 'replyTo'
           ]) &&
+          (!('replyTo' in request.resource.data) || validReplyTo()) &&
           (!('attachment' in request.resource.data) || validImageAttachment()) &&
           (!('sticker' in request.resource.data) || validStickerMessage()) &&
           (!('gif' in request.resource.data) || validGifMessage()) &&
