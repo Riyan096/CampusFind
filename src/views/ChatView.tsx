@@ -1156,8 +1156,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
               <div className="border-t border-gray-200 bg-gray-50 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-100 bg-red-50 p-3">
                   <p className="text-sm text-red-700">You blocked this user. New messages are disabled until you unblock them.</p>
-                  <button type="button" onClick={() => void handleToggleBlock()} disabled={blockActionLoading} className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-red-700 shadow-sm hover:bg-red-100 disabled:opacity-50">
-                    {blockActionLoading ? 'Please wait…' : 'Unblock user'}
+                  <button type="button" onClick={() => setBlockMuteChat(activeChat)} disabled={blockActionLoading} className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-red-700 shadow-sm hover:bg-red-100 disabled:opacity-50">
+                    Manage block settings
                   </button>
                 </div>
               </div>
