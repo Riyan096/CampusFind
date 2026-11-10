@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const { initializeApp } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
+const { getFirestore, Timestamp } = require('firebase-admin/firestore');
 const firebase = require('firebase/compat/app');
 require('firebase/compat/firestore');
 const { readFileSync } = require('node:fs');
@@ -302,7 +302,7 @@ test('normal user cannot tamper with point awards', async () => {
 async function seedBlock(blockerId, blockedId) {
   await adminDb.collection('users').doc(blockerId).collection('blockedUsers').doc(blockedId).set({
     blockedUserId: blockedId,
-    createdAt: firebase.firestore.Timestamp.now()
+    createdAt: Timestamp.now()
   });
 }
 
@@ -313,10 +313,10 @@ async function seedChat(chatId, firstUserId, secondUserId, itemId) {
     createdBy: firstUserId,
     participantIds: [firstUserId, secondUserId],
     participants: {
-      [firstUserId]: {name: 'First user', joinedAt: firebase.firestore.Timestamp.now()},
-      [secondUserId]: {name: 'Second user', joinedAt: firebase.firestore.Timestamp.now()}
+      [firstUserId]: {name: 'First user', joinedAt: Timestamp.now()},
+      [secondUserId]: {name: 'Second user', joinedAt: Timestamp.now()}
     },
-    createdAt: firebase.firestore.Timestamp.now()
+    createdAt: Timestamp.now()
   });
 }
 
@@ -400,7 +400,7 @@ test('participants can use custom single and compound emoji reactions', async ()
     senderId: 'other-user',
     senderName: 'Other user',
     content: 'React to this',
-    timestamp: firebase.firestore.Timestamp.now(),
+    timestamp: Timestamp.now(),
     read: false,
     status: 'sent',
     readBy: {},
