@@ -25,6 +25,7 @@ import { markChatNotificationsAsRead } from '../services/notificationService';
 import { auth } from '../services/firebase';
 import { AuthenticatedChatImage } from '../components/AuthenticatedChatImage';
 import type { ImageAttachment } from '../services/chatService';
+import { submitUserReport, type UserReportReason } from '../services/reportService';
 
 const EmojiPicker = React.lazy(() => import('emoji-picker-react'));
 
@@ -51,6 +52,15 @@ const CHAT_STICKERS = [
 ] as const;
 const STICKER_CATEGORIES = ['All', 'Reactions', 'Campus', 'Everyday'] as const;
 const GIPHY_PAGE_SIZE = 24;
+const USER_REPORT_REASONS: { value: UserReportReason; label: string }[] = [
+  { value: 'harassment', label: 'Harassment or bullying' },
+  { value: 'threats', label: 'Threats or intimidation' },
+  { value: 'spam', label: 'Spam or unwanted messages' },
+  { value: 'impersonation', label: 'Impersonation' },
+  { value: 'inappropriate_content', label: 'Inappropriate content' },
+  { value: 'scam', label: 'Scam or suspicious activity' },
+  { value: 'other', label: 'Something else' },
+];
 interface GifSearchResult { gifId: string; title: string; url: string; previewUrl: string; }
 
 interface ChatViewProps {
@@ -105,6 +115,10 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
   const [blockActionLoading, setBlockActionLoading] = useState(false);
   const [blockMuteChat, setBlockMuteChat] = useState<Chat | null>(null);
+  const [reportChat, setReportChat] = useState<Chat | null>(null);
+  const [reportReason, setReportReason] = useState<UserReportReason>('harassment');
+  const [reportDetails, setReportDetails] = useState('');
+  const [reportSubmitting, setReportSubmitting] = useState(false);
   const [messagingUnavailableChatId, setMessagingUnavailableChatId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -703,6 +717,34 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
+  const handleSubmitUserReport = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!user || !reportChat || reportSubmitting) return;
+    const reportedUserId = reportChat.participantIds.find((participantId) => participantId !== user.uid);
+    if (!reportedUserId) return;
+
+    setReportSubmitting(true);
+    try {
+      await submitUserReport({
+        reporterId: user.uid,
+        reportedUserId,
+        chatId: reportChat.id || '',
+        itemId: reportChat.itemId,
+        reason: reportReason,
+        details: reportDetails,
+      });
+      setReportChat(null);
+      setReportReason('harassment');
+      setReportDetails('');
+      alert('Your report was submitted. Thank you for helping keep CampusFind safe.');
+    } catch (reportError) {
+      console.error('Unable to submit user report:', reportError);
+      alert(reportError instanceof Error ? reportError.message : 'Unable to submit your report. Please try again.');
+    } finally {
+      setReportSubmitting(false);
+    }
+  };
+
   const handleLeaveChat = async (chatId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!user || leavingChatIdsRef.current.has(chatId)) return;
@@ -924,6 +966,19 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       >
                         <span className="material-icons text-base text-indigo-600">notifications_off</span>
                         Block or mute user…
+                      </button>
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          setReportChat(chat);
+                          setReportReason('harassment');
+                          setReportDetails('');
+                          setOpenChatMenuId(null);
+                        }}
+                        className="w-full px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-3"
+                      >
+                        <span className="material-icons text-base">flag</span>
+                        Report user
                       </button>
                       <button
                         role="menuitem"
@@ -1345,6 +1400,70 @@ export const ChatView: React.FC<ChatViewProps> = ({
           </div>
         )}
       </div>
+      {reportChat && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !reportSubmitting) setReportChat(null);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="report-user-title"
+            className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"
+          >
+            <div className="flex items-start gap-3">
+              <span className="material-icons rounded-full bg-red-50 p-2 text-red-600">flag</span>
+              <div>
+                <h3 id="report-user-title" className="text-lg font-semibold text-gray-900">Report user</h3>
+                <p className="mt-1 text-sm text-gray-600">
+                  Tell us what happened. Your report is private and won't be shared with the reported user.
+                </p>
+              </div>
+            </div>
+            <form onSubmit={(event) => void handleSubmitUserReport(event)} className="mt-5 space-y-4">
+              <div>
+                <label htmlFor="user-report-reason" className="mb-1 block text-sm font-medium text-gray-700">What's the issue?</label>
+                <select
+                  id="user-report-reason"
+                  value={reportReason}
+                  onChange={(event) => setReportReason(event.target.value as UserReportReason)}
+                  disabled={reportSubmitting}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  {USER_REPORT_REASONS.map((reason) => (
+                    <option key={reason.value} value={reason.value}>{reason.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="user-report-details" className="mb-1 block text-sm font-medium text-gray-700">
+                  Additional details <span className="font-normal text-gray-400">(optional)</span>
+                </label>
+                <textarea
+                  id="user-report-details"
+                  value={reportDetails}
+                  onChange={(event) => setReportDetails(sanitizePlainText(event.target.value, 1000, { multiline: true, trim: false }))}
+                  disabled={reportSubmitting}
+                  rows={4}
+                  maxLength={1000}
+                  placeholder="Share any context that could help us review this report."
+                  className="w-full resize-y rounded-lg border border-gray-300 px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+                <p className="mt-1 text-right text-xs text-gray-400">{reportDetails.length}/1000</p>
+              </div>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button type="button" onClick={() => setReportChat(null)} disabled={reportSubmitting} className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+                <button type="submit" disabled={reportSubmitting} className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50">
+                  {reportSubmitting ? 'Submitting…' : 'Submit report'}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
       {blockMuteChat && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
