@@ -308,6 +308,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingActiveRef = useRef(false);
+  const lastTypingUpdateRef = useRef(0);
   const shouldAutoScrollRef = useRef(true);
   // Prevent chat-list snapshots from repeatedly overriding the user's manual selection.
   const lastAutoOpenedItemIdRef = useRef<string | null>(null);
@@ -496,6 +497,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     typingTimeoutRef.current = null;
     if (typingActiveRef.current && activeChat?.id && user?.uid) {
       typingActiveRef.current = false;
+      lastTypingUpdateRef.current = 0;
       void setTypingStatus(activeChat.id, user.uid, user.displayName || 'Anonymous', false)
         .catch((error) => console.error('Unable to clear typing status:', error));
     }
@@ -505,11 +507,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
     setNewMessage(sanitizePlainText(value, LIMITS.chatMessage, { multiline: false, trim: false }));
     if (!activeChat?.id || !user || isActiveUserBlocked || messagingUnavailableChatId === activeChat.id) return;
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    if (value.trim() && !typingActiveRef.current) {
+    if (value.trim() && (
+      !typingActiveRef.current || Date.now() - lastTypingUpdateRef.current > 4000
+    )) {
       typingActiveRef.current = true;
+      lastTypingUpdateRef.current = Date.now();
       void setTypingStatus(activeChat.id, user.uid, user.displayName || 'Anonymous', true)
         .catch((error) => {
           typingActiveRef.current = false;
+          lastTypingUpdateRef.current = 0;
           console.error('Unable to publish typing status:', error);
         });
     }
@@ -522,6 +528,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   useEffect(() => {
     typingActiveRef.current = false;
+    lastTypingUpdateRef.current = 0;
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = null;
     return () => {
@@ -531,6 +538,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
           .catch((error) => console.error('Unable to clear typing status:', error));
       }
       typingActiveRef.current = false;
+      lastTypingUpdateRef.current = 0;
     };
   }, [activeChat?.id, user?.uid]);
 
