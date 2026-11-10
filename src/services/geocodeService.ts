@@ -5,8 +5,27 @@
  * - localStorage cache (offline/performance)
  */
 
+interface GeocodeCacheEntry {
+  coords: [number, number];
+  timestamp: number;
+}
+
 interface GeocodeCache {
-  [address: string]: [number, number];
+  [address: string]: GeocodeCacheEntry;
+}
+
+interface NominatimSearchResult {
+  lat: string;
+  lon: string;
+}
+
+interface NominatimReverseResult {
+  display_name?: string;
+}
+
+interface GeocodableItem {
+  location?: string;
+  latlng?: [number, number];
 }
 
 const GEOCODE_CACHE_KEY = 'campusfind_geocode_cache_v1';
@@ -17,14 +36,19 @@ const getCache = (): GeocodeCache => {
   try {
     const cached = localStorage.getItem(GEOCODE_CACHE_KEY);
     if (cached) {
-      const parsed = JSON.parse(cached);
-      // Clean expired entries
+      const parsed: unknown = JSON.parse(cached);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
       const now = Date.now();
-      return Object.fromEntries(
-        Object.entries(parsed).filter(([_, value]: [string, any]) => {
-          return now - value.timestamp < CACHE_TTL_MS;
-        })
-      ) as GeocodeCache;
+      const validEntries = Object.entries(parsed).filter((entry): entry is [string, GeocodeCacheEntry] => {
+        const value = entry[1];
+        return !!value && typeof value === 'object' &&
+          'timestamp' in value && typeof value.timestamp === 'number' &&
+          now - value.timestamp < CACHE_TTL_MS &&
+          'coords' in value && Array.isArray(value.coords) &&
+          value.coords.length === 2 &&
+          value.coords.every((coordinate) => typeof coordinate === 'number' && Number.isFinite(coordinate));
+      });
+      return Object.fromEntries(validEntries);
     }
   } catch {
     // Invalid cache, ignore
@@ -36,11 +60,8 @@ const getCache = (): GeocodeCache => {
 const saveToCache = (address: string, coords: [number, number]) => {
   try {
     const cache = getCache();
-    cache[address] = coords;
-    localStorage.setItem(GEOCODE_CACHE_KEY, JSON.stringify({
-      ...cache,
-      [address]: { coords, timestamp: Date.now() }
-    }));
+    cache[address] = { coords, timestamp: Date.now() };
+    localStorage.setItem(GEOCODE_CACHE_KEY, JSON.stringify(cache));
   } catch {
     // Ignore cache errors
   }
@@ -57,7 +78,7 @@ export const geocodeAddress = async (address: string): Promise<[number, number] 
   const cache = getCache();
   if (cache[address]) {
     console.log(`📍 Cache hit: ${address}`);
-    return cache[address];
+    return cache[address].coords;
   }
 
   try {
@@ -78,7 +99,7 @@ export const geocodeAddress = async (address: string): Promise<[number, number] 
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-    const results = await response.json() as any[];
+    const results = await response.json() as NominatimSearchResult[];
     
     if (results.length === 0) {
       console.warn(`No geocoding results for: ${address}`);
@@ -86,8 +107,8 @@ export const geocodeAddress = async (address: string): Promise<[number, number] 
     }
 
     const coords: [number, number] = [
-      parseFloat(results[0].lat),
-      parseFloat(results[0].lon)
+      Number.parseFloat(results[0].lat),
+      Number.parseFloat(results[0].lon)
     ];
 
     // Cache result
@@ -140,7 +161,10 @@ export const reverseGeocode = async (latlng: [number, number]): Promise<string> 
   const [lat, lng] = latlng;
     // Separate string cache for reverse geocoding
     const revCacheKey = `rev_${lat.toFixed(5)}_${lng.toFixed(5)}`;
-    const revCache = JSON.parse(localStorage.getItem('campusfind_rev_cache_v1') || '{}');
+    const cachedReverse: unknown = JSON.parse(localStorage.getItem('campusfind_rev_cache_v1') || '{}');
+    const revCache = cachedReverse && typeof cachedReverse === 'object' && !Array.isArray(cachedReverse)
+      ? cachedReverse as Record<string, string>
+      : {};
     
     if (revCache[revCacheKey]) return revCache[revCacheKey];
 
@@ -161,8 +185,10 @@ export const reverseGeocode = async (latlng: [number, number]): Promise<string> 
         }
       );
 
-      const result = await response.json() as any;
-      const address = result.display_name || `Lat ${lat.toFixed(4)}, Lng ${lng.toFixed(4)}`;
+      const result = await response.json() as NominatimReverseResult;
+      const address = typeof result.display_name === 'string'
+        ? result.display_name
+        : `Lat ${lat.toFixed(4)}, Lng ${lng.toFixed(4)}`;
       
       // Cache reverse result
       localStorage.setItem('campusfind_rev_cache_v1', JSON.stringify({
@@ -180,9 +206,10 @@ export const reverseGeocode = async (latlng: [number, number]): Promise<string> 
 /**
  * Ensure item has latlng (geocode if missing)
  */
-export const ensureItemLocation = async (item: any): Promise<[number, number] | null> => {
-  if (item.latlng) return item.latlng;
-  
+export const ensureItemLocation = async (item: GeocodableItem): Promise<[number, number] | null> => {
+  if (item.latlng && item.latlng.length === 2) return item.latlng;
+
+  if (typeof item.location !== 'string' || !item.location.trim()) return null;
   const coords = await geocodeAddress(item.location);
   if (coords) {
     item.latlng = coords; // Mutate for convenience
