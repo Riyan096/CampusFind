@@ -335,11 +335,11 @@ The longer-term goals include:
 - [x] Curated sticker picker and sticker messages
 - [x] GIPHY GIF search, previews, and GIF messages
 - [x] Higher-quality GIF picker previews
+- [x] Per-user block/unblock from chat with Firestore-enforced messaging restrictions
 - [ ] Continue chat security review and add regression tests
 
 ### Planned
 
-- [x] Per-user block/unblock from chat with Firestore-enforced messaging restrictions
 - [ ] Report user workflow and blocked-user management screen
 - [ ] Stronger privacy controls
 - [ ] Video attachments (deferred)
