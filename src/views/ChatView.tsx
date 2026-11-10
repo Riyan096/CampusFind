@@ -21,8 +21,7 @@ import {
   type Chat,
   type Message,
   type StickerMessage,
-  type GifMessage,
-  type ReplyPreview
+   type ReplyPreview
 } from '../services/chatService';
 import { Button, Input } from '../components/UI';
 import { LIMITS, sanitizeFirestoreDocId, sanitizePlainText } from '../utils/sanitize';
@@ -137,7 +136,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [imageError, setImageError] = useState('');
-  const [sendingImage, setSendingImage] = useState(false);
   const [showStickerPicker, setShowStickerPicker] = useState(false);
   const [stickerCategory, setStickerCategory] = useState<(typeof STICKER_CATEGORIES)[number]>('All');
   const [recentStickerIds, setRecentStickerIds] = useState<string[]>([]);
