@@ -85,20 +85,30 @@ export const subscribeToTypingUsers = (
   chatId: string,
   currentUserId: string,
   callback: (typingUsers: string[]) => void
-) => onSnapshot(
-  collection(db, 'chats', chatId, 'typing'),
-  (snapshot) => {
+) => {
+  let latestEntries: Array<{ id: string; data: Record<string, any> }> = [];
+  const publishFreshTypingUsers = () => {
     const now = Date.now();
-    callback(snapshot.docs
-      .filter((entry) => {
-        const data = entry.data();
-        return entry.id !== currentUserId && data.isTyping === true &&
-          now - toMillis(data.updatedAt) < 10000;
-      })
-      .map((entry) => typeof entry.data().displayName === 'string' ? entry.data().displayName : 'Someone'));
-  },
-  (error) => console.error('Unable to load typing status:', error)
-);
+    callback(latestEntries
+      .filter(({ id, data }) => id !== currentUserId && data.isTyping === true &&
+        now - toMillis(data.updatedAt) < 10000)
+      .map(({ data }) => typeof data.displayName === 'string' ? data.displayName : 'Someone'));
+  };
+  const unsubscribe = onSnapshot(
+    collection(db, 'chats', chatId, 'typing'),
+    (snapshot) => {
+      latestEntries = snapshot.docs.map((entry) => ({ id: entry.id, data: entry.data() }));
+      publishFreshTypingUsers();
+    },
+    (error) => console.error('Unable to load typing status:', error)
+  );
+  // Expire abandoned presence locally if a browser closes before it can clear its document.
+  const expiryTimer = setInterval(publishFreshTypingUsers, 2000);
+  return () => {
+    clearInterval(expiryTimer);
+    unsubscribe();
+  };
+};
 
 /** Publish or clear the current participant's short-lived typing status. */
 export const setTypingStatus = async (
