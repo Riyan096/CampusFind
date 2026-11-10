@@ -84,7 +84,7 @@ export const MapView: React.FC<MapViewProps> = ({ items }) => {
 
   useEffect(() => {
     const initMap = async () => {
-      const L = (window as any).L;
+      const L = window.L;
       if (!L || !mapContainerRef.current) return;
 
       if (mapInstanceRef.current) return;
