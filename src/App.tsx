@@ -9,6 +9,7 @@ import { LoginView } from './views/LoginView';
 import { ChatView } from './views/ChatView';
 import { AdminView } from './views/AdminView';
 import { ProfileView } from './views/ProfileView';
+import { BlockedUsersView } from './views/BlockedUsersView';
 import { LeaderboardView } from './views/LeaderboardView';
 import { ToastContainer } from './components/Toast';
 import { useToast } from './hooks/useToast';
@@ -157,6 +158,8 @@ const AppContent: React.FC = () => {
                 return <AdminView />;
             case 'profile':
                 return <ProfileView onToastSuccess={success} onToastError={error} />;
+            case 'blocked-users':
+                return <BlockedUsersView onToastSuccess={success} onToastError={error} />;
             case 'leaderboard':
                 return <LeaderboardView />;
             default:
