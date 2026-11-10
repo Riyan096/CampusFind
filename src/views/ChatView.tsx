@@ -104,6 +104,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
   const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
   const [blockActionLoading, setBlockActionLoading] = useState(false);
+  const [blockMuteChat, setBlockMuteChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -628,30 +629,34 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
-  const handleToggleBlock = async () => {
-    if (!user || !activeOtherUserId || blockActionLoading) return;
-    const currentlyBlocked = blockedUserIds.has(activeOtherUserId);
-    const confirmation = currentlyBlocked
-      ? 'Unblock this user? They will be able to message you again if they have not blocked you.'
-      : 'Block this user? Neither of you will be able to send new messages to the other. Your existing conversation history will remain visible.';
-    if (!confirm(confirmation)) return;
+  const handleBlockFromActionMenu = async () => {
+    if (!user || !blockMuteChat || blockActionLoading) return;
+    const otherUserId = blockMuteChat.participantIds.find((participantId) => participantId !== user.uid);
+    if (!otherUserId) return;
 
     setBlockActionLoading(true);
     try {
-      if (currentlyBlocked) {
-        await unblockUser(user.uid, activeOtherUserId);
-        setBlockedUserIds((current) => {
-          const next = new Set(current);
-          next.delete(activeOtherUserId);
-          return next;
-        });
-      } else {
-        await blockUser(user.uid, activeOtherUserId);
-        setBlockedUserIds((current) => new Set(current).add(activeOtherUserId));
-      }
+      await blockUser(user.uid, otherUserId);
+      setBlockedUserIds((current) => new Set(current).add(otherUserId));
+      setBlockMuteChat(null);
     } catch (error) {
-      console.error('Unable to update blocked user:', error);
-      alert(error instanceof Error ? error.message : 'Unable to update this block. Please try again.');
+      console.error('Unable to block user:', error);
+      alert(error instanceof Error ? error.message : 'Unable to block this user. Please try again.');
+    } finally {
+      setBlockActionLoading(false);
+    }
+  };
+
+  const handleMuteFromActionMenu = async () => {
+    if (!user || !blockMuteChat?.id || blockActionLoading) return;
+    const currentlyMuted = blockMuteChat.userSettings?.[user.uid]?.muted === true;
+    setBlockActionLoading(true);
+    try {
+      await updateChatUserSettings(blockMuteChat.id, user.uid, { muted: !currentlyMuted });
+      setBlockMuteChat(null);
+    } catch (error) {
+      console.error('Unable to update chat mute setting:', error);
+      alert('Unable to update this chat. Please try again.');
     } finally {
       setBlockActionLoading(false);
     }
@@ -870,14 +875,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
                       </button>
                       <button
                         role="menuitem"
-                        onClick={(e) => {
-                          void handleChatSettingToggle(chat, 'muted', !chatSettings.muted, e);
+                        onClick={() => {
+                          setBlockMuteChat(chat);
                           setOpenChatMenuId(null);
                         }}
                         className="w-full px-3 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
                       >
-                        <span className="material-icons text-base text-indigo-600">{chatSettings.muted ? 'notifications' : 'notifications_off'}</span>
-                        {chatSettings.muted ? 'Unmute chat' : 'Mute chat'}
+                        <span className="material-icons text-base text-indigo-600">notifications_off</span>
+                        Block or mute user…
                       </button>
                       <button
                         role="menuitem"
@@ -928,16 +933,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                {activeOtherUserId && (
-                  <button
-                    type="button"
-                    onClick={() => void handleToggleBlock()}
-                    disabled={blockActionLoading}
-                    className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50 ${isActiveUserBlocked ? 'border-green-300 bg-green-50 text-green-700 hover:bg-green-100' : 'border-red-200 bg-white text-red-600 hover:bg-red-50'}`}
-                  >
-                    {blockActionLoading ? 'Please wait…' : isActiveUserBlocked ? 'Unblock' : 'Block'}
-                  </button>
-                )}
                 {onClose && (
                 <button 
                   onClick={onClose}
@@ -1301,6 +1296,53 @@ export const ChatView: React.FC<ChatViewProps> = ({
           </div>
         )}
       </div>
+      {blockMuteChat && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !blockActionLoading) setBlockMuteChat(null);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="block-mute-dialog-title"
+            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl"
+          >
+            <h3 id="block-mute-dialog-title" className="text-lg font-semibold text-gray-900">Block or mute this user?</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Muting turns off notifications for this conversation. Blocking prevents both of you from sending new messages to each other. Your existing chat history will remain.
+            </p>
+            <div className="mt-5 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => void handleBlockFromActionMenu()}
+                disabled={blockActionLoading || Boolean(blockMuteChat.participantIds.find((participantId) => participantId !== user?.uid) && blockedUserIds.has(blockMuteChat.participantIds.find((participantId) => participantId !== user?.uid)!))}
+                className="w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {blockActionLoading ? 'Please wait…' : 'Block user'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleMuteFromActionMenu()}
+                disabled={blockActionLoading}
+                className="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                {blockMuteChat.userSettings?.[user?.uid || '']?.muted ? 'Unmute chat' : 'Mute chat'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setBlockMuteChat(null)}
+                disabled={blockActionLoading}
+                className="w-full px-4 py-2 text-sm text-gray-500 hover:text-gray-800 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 };
