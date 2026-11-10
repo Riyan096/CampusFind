@@ -35,6 +35,15 @@ async function clearItems() {
   }
 }
 
+async function clearBlockedUsers() {
+  const snapshot = await adminDb.collectionGroup('blockedUsers').get();
+  if (!snapshot.empty) {
+    const batch = adminDb.batch();
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+  }
+}
+
 async function clearUsers() {
   const snapshot = await adminDb.collection('users').get();
   if (!snapshot.empty) {
@@ -99,11 +108,11 @@ test.before(async () => {
 });
 
 test.beforeEach(async () => {
-  await Promise.all([clearItems(), clearUsers(), clearPublicProfiles(), clearPointAwards()]);
+  await Promise.all([clearItems(), clearBlockedUsers(), clearUsers(), clearPublicProfiles(), clearPointAwards()]);
 });
 
 test.afterEach(async () => {
-  await Promise.all([clearItems(), clearUsers(), clearPublicProfiles(), clearPointAwards()]);
+  await Promise.all([clearItems(), clearBlockedUsers(), clearUsers(), clearPublicProfiles(), clearPointAwards()]);
 });
 
 test.after(async () => {
@@ -287,4 +296,96 @@ test('normal user cannot tamper with point awards', async () => {
   await assertFails(award.set({points: 9999, reason: 'fake'}));
   await assertFails(award.update({points: 9999}));
   await assertFails(award.delete());
+});
+
+
+async function seedBlock(blockerId, blockedId) {
+  await adminDb.collection('users').doc(blockerId).collection('blockedUsers').doc(blockedId).set({
+    blockedUserId: blockedId,
+    createdAt: firebase.firestore.Timestamp.now()
+  });
+}
+
+async function seedChat(chatId, firstUserId, secondUserId, itemId) {
+  await adminDb.collection('chats').doc(chatId).set({
+    itemId,
+    itemTitle: 'Test item',
+    createdBy: firstUserId,
+    participantIds: [firstUserId, secondUserId],
+    participants: {
+      [firstUserId]: {name: 'First user', joinedAt: firebase.firestore.Timestamp.now()},
+      [secondUserId]: {name: 'Second user', joinedAt: firebase.firestore.Timestamp.now()}
+    },
+    createdAt: firebase.firestore.Timestamp.now()
+  });
+}
+
+function validChatMessage(senderId) {
+  return {
+    senderId,
+    senderName: 'Test sender',
+    content: 'Hello',
+    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+    read: false,
+    status: 'sent',
+    readBy: {}
+  };
+}
+
+test('users can create and remove blocks only in their own private block list', async () => {
+  await seedUser('blocker');
+  await seedUser('blocked');
+  const db = testEnv.authenticatedContext('blocker').firestore();
+  const ownBlock = db.collection('users').doc('blocker').collection('blockedUsers').doc('blocked');
+
+  await assertSucceeds(ownBlock.set({
+    blockedUserId: 'blocked',
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }));
+  await assertFails(db.collection('users').doc('blocked').collection('blockedUsers').doc('blocker').get());
+  await assertFails(db.collection('users').doc('blocked').collection('blockedUsers').doc('blocker').set({
+    blockedUserId: 'blocker',
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }));
+  await assertFails(ownBlock.update({blockedUserId: 'another-user'}));
+  await assertSucceeds(ownBlock.delete());
+});
+
+test('a block in either direction prevents creating a new chat', async () => {
+  await seedUser('blocker');
+  await seedUser('blocked');
+  await seedBlock('blocker', 'blocked');
+  await seedItem('blocked-item', {reportedBy: 'blocked'});
+  await seedItem('blocker-item', {reportedBy: 'blocker'});
+
+  const blockerDb = testEnv.authenticatedContext('blocker').firestore();
+  const blockedDb = testEnv.authenticatedContext('blocked').firestore();
+  const chatData = (creator, owner) => ({
+    itemId: creator === 'blocker' ? 'blocked-item' : 'blocker-item',
+    itemTitle: 'Test item',
+    createdBy: creator,
+    participantIds: [creator, owner],
+    participants: {
+      [creator]: {name: 'Creator', joinedAt: firebase.firestore.FieldValue.serverTimestamp()},
+      [owner]: {name: 'Owner', joinedAt: firebase.firestore.FieldValue.serverTimestamp()}
+    },
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+
+  await assertFails(blockerDb.collection('chats').doc('blocked-chat-a').set(chatData('blocker', 'blocked')));
+  await assertFails(blockedDb.collection('chats').doc('blocked-chat-b').set(chatData('blocked', 'blocker')));
+});
+
+test('a block in either direction prevents both participants from sending new messages', async () => {
+  await seedUser('blocker');
+  await seedUser('blocked');
+  await seedItem('blocked-item');
+  await seedBlock('blocker', 'blocked');
+  await seedChat('blocked-chat', 'blocker', 'blocked', 'blocked-item');
+
+  const blockerDb = testEnv.authenticatedContext('blocker').firestore();
+  const blockedDb = testEnv.authenticatedContext('blocked').firestore();
+
+  await assertFails(blockerDb.collection('chats').doc('blocked-chat').collection('messages').doc('from-blocker').set(validChatMessage('blocker')));
+  await assertFails(blockedDb.collection('chats').doc('blocked-chat').collection('messages').doc('from-blocked').set(validChatMessage('blocked')));
 });
