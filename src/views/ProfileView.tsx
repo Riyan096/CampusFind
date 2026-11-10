@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Button, Input } from '../components/UI';
 import { useToast } from '../hooks/useToast';
@@ -9,11 +9,18 @@ import { getDefaultStreakInfo } from '../services/gamificationService';
 import type { UserStats } from '../types';
 import { LIMITS, sanitizePhoneInput, sanitizePlainText } from '../utils/sanitize';
 import { IMAGE_FILE_ACCEPT_PROFILE, validateImageFile } from '../utils/imageUploadValidation';
+import { unblockUser } from '../services/chatService';
 
 export interface ProfileViewProps {
   /** Prefer App-level toast so messages appear in ToastContainer. */
   onToastSuccess?: (message: string) => void;
   onToastError?: (message: string) => void;
+}
+
+interface BlockedUserProfile {
+  uid: string;
+  displayName: string;
+  photoURL: string | null;
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({
@@ -50,6 +57,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [photoURL, setPhotoURL] = useState<string>('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [blockedUsers, setBlockedUsers] = useState<BlockedUserProfile[]>([]);
+  const [blockedUsersLoading, setBlockedUsersLoading] = useState(true);
+  const [unblockingUserId, setUnblockingUserId] = useState<string | null>(null);
 
   // Load user data
 
@@ -77,6 +87,83 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
     void loadUserProfile();
   }, [user]);
+
+  // Keep the user's private block list in sync and resolve public display details.
+  useEffect(() => {
+    if (!user) {
+      setBlockedUsers([]);
+      setBlockedUsersLoading(false);
+      return;
+    }
+
+    setBlockedUsersLoading(true);
+    let active = true;
+    let latestRequest = 0;
+    const unsubscribe = onSnapshot(
+      collection(db, 'users', user.uid, 'blockedUsers'),
+      async (snapshot) => {
+        const requestId = ++latestRequest;
+        try {
+          const profiles = await Promise.all(snapshot.docs.map(async (blockedDoc) => {
+            try {
+              const profileSnapshot = await getDoc(doc(db, 'publicProfiles', blockedDoc.id));
+              const data = profileSnapshot.exists() ? profileSnapshot.data() : {};
+              return {
+                uid: blockedDoc.id,
+                displayName: typeof data.displayName === 'string' && data.displayName.trim()
+                  ? data.displayName
+                  : 'CampusFind user',
+                photoURL: typeof data.photoURL === 'string' ? data.photoURL : null,
+              };
+            } catch (profileError) {
+              console.warn('Unable to load a blocked user profile:', profileError);
+              return { uid: blockedDoc.id, displayName: 'CampusFind user', photoURL: null };
+            }
+          }));
+
+          if (active && requestId === latestRequest) {
+            setBlockedUsers(profiles);
+            setBlockedUsersLoading(false);
+          }
+        } catch (blockedUsersError) {
+          console.error('Unable to load blocked users:', blockedUsersError);
+          if (active && requestId === latestRequest) {
+            setBlockedUsersLoading(false);
+            error('Unable to load your blocked users');
+          }
+        }
+      },
+      (blockedUsersError) => {
+        console.error('Unable to subscribe to blocked users:', blockedUsersError);
+        if (active) {
+          setBlockedUsersLoading(false);
+          error('Unable to load your blocked users');
+        }
+      }
+    );
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [user, error]);
+
+  const handleUnblockUser = async (blockedUser: BlockedUserProfile) => {
+    if (!user || unblockingUserId) return;
+    if (!confirm(`Unblock ${blockedUser.displayName}? They may be able to message you again if they have not blocked you.`)) return;
+
+    setUnblockingUserId(blockedUser.uid);
+    try {
+      await unblockUser(user.uid, blockedUser.uid);
+      setBlockedUsers((current) => current.filter((entry) => entry.uid !== blockedUser.uid));
+      success(`${blockedUser.displayName} was unblocked`);
+    } catch (unblockError) {
+      console.error('Unable to unblock user:', unblockError);
+      error(unblockError instanceof Error ? unblockError.message : 'Unable to unblock this user');
+    } finally {
+      setUnblockingUserId(null);
+    }
+  };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -402,6 +489,60 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 )}
               </form>
             </div>
+
+            {/* Blocked Users */}
+            <section className="bg-white rounded-xl shadow-soft p-6" aria-labelledby="blocked-users-title">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <h3 id="blocked-users-title" className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                  <span className="material-icons text-primary">block</span>
+                  Blocked Users
+                </h3>
+                <span className="text-xs text-gray-500">{blockedUsers.length} blocked</span>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                People you block cannot start new conversations with you or send messages in existing chats. Unblocking does not restore messages that were prevented while blocked.
+              </p>
+
+              {blockedUsersLoading ? (
+                <div className="flex items-center justify-center gap-2 py-6 text-sm text-gray-500">
+                  <span className="material-icons animate-spin text-base">refresh</span>
+                  Loading blocked users…
+                </div>
+              ) : blockedUsers.length === 0 ? (
+                <div className="rounded-lg bg-gray-50 px-4 py-6 text-center">
+                  <span className="material-icons text-3xl text-gray-400">person_off</span>
+                  <p className="mt-2 text-sm text-gray-600">You haven't blocked anyone.</p>
+                </div>
+              ) : (
+                <ul className="divide-y divide-gray-100">
+                  {blockedUsers.map((blockedUser) => (
+                    <li key={blockedUser.uid} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                      <div className="flex min-w-0 items-center gap-3">
+                        {blockedUser.photoURL ? (
+                          <img src={blockedUser.photoURL} alt="" className="h-10 w-10 rounded-full object-cover" />
+                        ) : (
+                          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                            <span className="material-icons">person</span>
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-gray-800">{blockedUser.displayName}</p>
+                          <p className="text-xs text-gray-500">Blocked account</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleUnblockUser(blockedUser)}
+                        disabled={unblockingUserId !== null}
+                        className="shrink-0 rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {unblockingUserId === blockedUser.uid ? 'Unblocking…' : 'Unblock'}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
 
             {/* Change Password Form */}
             <div className="bg-white rounded-xl shadow-soft p-6">
