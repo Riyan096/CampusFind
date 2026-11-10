@@ -389,3 +389,27 @@ test('a block in either direction prevents both participants from sending new me
   await assertFails(blockerDb.collection('chats').doc('blocked-chat').collection('messages').doc('from-blocker').set(validChatMessage('blocker')));
   await assertFails(blockedDb.collection('chats').doc('blocked-chat').collection('messages').doc('from-blocked').set(validChatMessage('blocked')));
 });
+
+
+test('participants can use custom single and compound emoji reactions', async () => {
+  await seedUser('reaction-user');
+  await seedUser('other-user');
+  await seedItem('reaction-item');
+  await seedChat('reaction-chat', 'reaction-user', 'other-user', 'reaction-item');
+  await adminDb.collection('chats').doc('reaction-chat').collection('messages').doc('reaction-message').set({
+    senderId: 'other-user',
+    senderName: 'Other user',
+    content: 'React to this',
+    timestamp: firebase.firestore.Timestamp.now(),
+    read: false,
+    status: 'sent',
+    readBy: {},
+    reactions: {}
+  });
+
+  const db = testEnv.authenticatedContext('reaction-user').firestore();
+  const message = db.collection('chats').doc('reaction-chat').collection('messages').doc('reaction-message');
+
+  await assertSucceeds(message.update({reactions: {'reaction-user': '😍'}}));
+  await assertSucceeds(message.update({reactions: {'reaction-user': '👨‍👩‍👧‍👦'}}));
+});
