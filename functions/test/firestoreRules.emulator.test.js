@@ -26,6 +26,15 @@ const baseItem = {
   location: 'Student Center'
 };
 
+async function clearReports() {
+  const snapshot = await adminDb.collection('userReports').get();
+  if (!snapshot.empty) {
+    const batch = adminDb.batch();
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+  }
+}
+
 async function clearItems() {
   const snapshot = await adminDb.collection('items').get();
   if (!snapshot.empty) {
@@ -108,7 +117,7 @@ test.before(async () => {
 });
 
 test.beforeEach(async () => {
-  await Promise.all([clearItems(), clearBlockedUsers(), clearUsers(), clearPublicProfiles(), clearPointAwards()]);
+  await Promise.all([clearItems(), clearReports(), clearBlockedUsers(), clearUsers(), clearPublicProfiles(), clearPointAwards()]);
 });
 
 test.afterEach(async () => {
@@ -390,6 +399,92 @@ test('a block in either direction prevents both participants from sending new me
   await assertFails(blockedDb.collection('chats').doc('blocked-chat').collection('messages').doc('from-blocked').set(validChatMessage('blocked')));
 });
 
+
+async function validUserReport(overrides = {}) {
+  return {
+    reporterId: 'reporter',
+    reportedUserId: 'target',
+    chatId: 'report-chat',
+    itemId: 'report-item',
+    reason: 'harassment',
+    details: 'Repeated unwanted messages',
+    status: 'new',
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    ...overrides
+  };
+}
+
+test('chat participants can submit private, valid user reports', async () => {
+  await seedUser('reporter');
+  await seedUser('target');
+  await seedItem('report-item', {reportedBy: 'target'});
+  await seedChat('report-chat', 'reporter', 'target', 'report-item');
+
+  const reporterDb = testEnv.authenticatedContext('reporter').firestore();
+  const reportRef = reporterDb.collection('userReports').doc('private-report');
+  await assertSucceeds(reportRef.set(await validUserReport()));
+
+  await assertSucceeds(reportRef.get());
+  await assertFails(testEnv.authenticatedContext('target').firestore().collection('userReports').doc('private-report').get());
+  await assertFails(testEnv.authenticatedContext('stranger').firestore().collection('userReports').doc('private-report').get());
+});
+
+test('user report creation rejects nonparticipants, self-reports, invalid reasons, and forged fields', async () => {
+  await seedUser('reporter');
+  await seedUser('target');
+  await seedItem('report-item', {reportedBy: 'target'});
+  await seedChat('report-chat', 'reporter', 'target', 'report-item');
+
+  const reporterDb = testEnv.authenticatedContext('reporter').firestore();
+  await assertFails(reporterDb.collection('userReports').doc('not-a-participant').set(
+    await validUserReport({chatId: 'missing-chat'})
+  ));
+  await assertFails(reporterDb.collection('userReports').doc('self-report').set(
+    await validUserReport({reportedUserId: 'reporter'})
+  ));
+  await assertFails(reporterDb.collection('userReports').doc('bad-reason').set(
+    await validUserReport({reason: 'not-a-reason'})
+  ));
+  await assertFails(reporterDb.collection('userReports').doc('extra-field').set(
+    await validUserReport({admin: true})
+  ));
+});
+
+test('only admins can review reports and reports cannot be deleted', async () => {
+  await seedUser('reporter');
+  await seedUser('target');
+  await seedUser('moderator', {isAdmin: true});
+  await seedItem('report-item', {reportedBy: 'target'});
+  await seedChat('report-chat', 'reporter', 'target', 'report-item');
+  await adminDb.collection('userReports').doc('reviewable-report').set({
+    reporterId: 'reporter',
+    reportedUserId: 'target',
+    chatId: 'report-chat',
+    itemId: 'report-item',
+    reason: 'spam',
+    details: '',
+    status: 'new',
+    createdAt: Timestamp.now(),
+    updatedAt: Timestamp.now()
+  });
+
+  const reportRef = testEnv.authenticatedContext('reporter').firestore().collection('userReports').doc('reviewable-report');
+  const adminReportRef = testEnv.authenticatedContext('moderator').firestore().collection('userReports').doc('reviewable-report');
+  const reviewUpdate = {
+    status: 'reviewing',
+    reviewNote: 'Reviewing the conversation context',
+    reviewedBy: 'moderator',
+    reviewedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+
+  await assertFails(reportRef.update(reviewUpdate));
+  await assertFails(reportRef.delete());
+  await assertSucceeds(adminReportRef.update(reviewUpdate));
+  await assertSucceeds(adminReportRef.get());
+  await assertFails(adminReportRef.delete());
+});
 
 test('participants can use custom single and compound emoji reactions', async () => {
   await seedUser('reaction-user');
