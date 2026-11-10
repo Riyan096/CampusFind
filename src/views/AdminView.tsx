@@ -54,7 +54,8 @@ const formatReportDate = (value: unknown): string => {
   if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
     return (value.toDate as () => Date)().toLocaleString();
   }
-  if (typeof value === 'string' || value instanceof Date) {
+  if (value instanceof Date) return value.toLocaleString();
+  if (typeof value === 'string') {
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? 'Date unavailable' : date.toLocaleString();
   }
@@ -575,7 +576,8 @@ export const AdminView: React.FC = () => {
                   <div className="mt-3 rounded-lg bg-gray-50 p-3">
                     <p className="text-xs font-medium text-gray-500">Additional details</p>
                     <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">{report.details || 'No additional details provided.'}</p>
-                    <p className="mt-2 text-xs text-gray-500">Conversation ID: {report.chatId}</p>
+                    <p className="mt-2 text-xs text-gray-500">Related item: {items.find(item => item.id === report.itemId)?.title || report.itemId}</p>
+                    <p className="mt-1 text-xs text-gray-500">Conversation ID: {report.chatId}</p>
                   </div>
                   {report.reviewNote && (
                     <p className="mt-3 text-sm text-gray-600"><strong>Previous review note:</strong> {report.reviewNote}</p>
