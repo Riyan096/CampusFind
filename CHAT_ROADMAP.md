@@ -132,6 +132,15 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 6. **Video attachments:** optional and deferred because of larger storage and bandwidth costs.
 7. **Report and block:** chat-level blocking, blocked-account management, private user reports, and admin review are implemented on `feature/block-users`; complete local verification and rules deployment before merge.
 
+### 8. Message replies
+- [x] Add a Reply action to each message.
+- [x] Store a compact quoted snapshot (message ID, sender, preview text, and content type) on the reply.
+- [x] Support replies to text, photos, GIFs, and stickers.
+- [x] Let users cancel a reply before sending and clear reply context after a successful send.
+- [x] Make quoted previews jump to and briefly highlight the original message.
+- [x] Validate that reply references point to a real message in the same conversation and that preview fields match the original message.
+- [ ] Run the local build and Firestore emulator tests, deploy the updated rules, and test replies with two accounts.
+
 ## Definition of done for each feature
 
 - [ ] Works on desktop and mobile layouts.
