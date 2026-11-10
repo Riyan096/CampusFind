@@ -399,3 +399,9 @@ CampusFind is a continuously evolving portfolio project. Features, security rule
 Built by **Mohammad Bhuyia** as a software engineering portfolio project focused on modern web development, Firebase architecture, security engineering, real-time systems, and practical AI integration.
 ---
 
+
+
+### Chat safety and moderation
+- Users can block accounts, manage their blocked list, and submit private reports from a conversation's action menu.
+- Reports are stored in a protected Firestore collection and can be reviewed by admins in the Admin Dashboard. The reported user cannot view the report.
+- Reporting does not automatically suspend or block an account; admins choose a review status and can leave internal notes.
