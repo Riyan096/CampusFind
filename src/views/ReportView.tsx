@@ -8,7 +8,7 @@ import {
   type Achievement,
   type Item,
 } from '../types';
-import { geocodeAddress, getCurrentLocation } from '../services/geocodeService';
+import { getCurrentLocation } from '../services/geocodeService';
 
 
 import { Button, Input, Select, Card } from '../components/UI';
@@ -229,7 +229,7 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
     
     try {
       setMatchSourceItemId(null);
-      const newItem: any = {
+      const newItem: Omit<Item, 'id'> = {
         type,
         title,
         description,
@@ -266,10 +266,14 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
       }
       
       onSuccess({ newAchievements });
-    } catch (err: any) {
+    } catch (err: unknown) {
 
       console.error('Error saving item:', err);
-      const errorMessage = err?.message || err?.code || 'Unknown error';
+      const errorMessage = err instanceof Error
+        ? err.message
+        : err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
+          ? err.code
+          : 'Unknown error';
       alert(`Failed to save item: ${errorMessage}`);
     }
 
