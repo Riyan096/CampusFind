@@ -64,6 +64,7 @@ export const findSmartMatches = async (
   itemsJson: string,
   _userId?: string
 ): Promise<string[]> => {
+  void _userId; // Retained as an optional compatibility parameter for existing callers.
   try {
     const response = await smartMatchesCallable({ query, itemsJson });
     return response.data;
