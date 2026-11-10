@@ -155,3 +155,10 @@ The following are **not implemented yet**. Build and test them incrementally, ke
   ```powershell
   firebase deploy --only firestore:rules
   ```
+
+
+## Blocked users management
+- Added a dedicated Blocked Users navigation page with a live private block-list subscription, public profile display details, empty/loading states, and confirmation before unblocking.
+- Removed the duplicate block-list panel from Profile; blocking preferences now have their own destination.
+- Uses existing Firestore `/users/{uid}/blockedUsers` records and existing `unblockUser` service. No new database schema or Firebase Functions required.
+- Local build and browser testing are still required before merge.
