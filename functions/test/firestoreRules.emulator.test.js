@@ -668,3 +668,66 @@ test('message replies reject missing, cross-chat, and forged original references
     replyTo: {...baseReply, content: 'Forged preview'}
   }));
 });
+
+
+test('unrelated user cannot read another pair\'s chat or messages', async () => {
+  await seedUser('private-chat-a');
+  await seedUser('private-chat-b');
+  await seedUser('private-chat-outsider');
+  await seedItem('private-chat-item');
+  await seedChat('private-chat-isolation', 'private-chat-a', 'private-chat-b', 'private-chat-item');
+  await adminDb.collection('chats').doc('private-chat-isolation').collection('messages').doc('private-message').set(
+    validChatMessage('private-chat-a')
+  );
+
+  const outsiderDb = testEnv.authenticatedContext('private-chat-outsider').firestore();
+  const chatRef = outsiderDb.collection('chats').doc('private-chat-isolation');
+  const messageRef = chatRef.collection('messages').doc('private-message');
+
+  await assertFails(chatRef.get());
+  await assertFails(messageRef.get());
+});
+
+test('unrelated user cannot send a message into another pair\'s chat', async () => {
+  await seedUser('send-chat-a');
+  await seedUser('send-chat-b');
+  await seedUser('send-chat-outsider');
+  await seedItem('send-chat-item');
+  await seedChat('send-chat-isolation', 'send-chat-a', 'send-chat-b', 'send-chat-item');
+
+  const outsiderDb = testEnv.authenticatedContext('send-chat-outsider').firestore();
+  const messageRef = outsiderDb.collection('chats').doc('send-chat-isolation')
+    .collection('messages').doc('outsider-message');
+
+  await assertFails(messageRef.set(validChatMessage('send-chat-outsider')));
+});
+
+test('chat creator cannot add an unrelated third user to an existing conversation', async () => {
+  await seedUser('membership-a');
+  await seedUser('membership-b');
+  await seedUser('membership-outsider');
+  await seedItem('membership-item');
+  await seedChat('membership-isolation', 'membership-a', 'membership-b', 'membership-item');
+
+  const creatorDb = testEnv.authenticatedContext('membership-a').firestore();
+  const chatRef = creatorDb.collection('chats').doc('membership-isolation');
+
+  await assertFails(chatRef.update({
+    participantIds: ['membership-a', 'membership-b', 'membership-outsider'],
+    participants: {
+      'membership-a': {name: 'First user', joinedAt: Timestamp.now()},
+      'membership-b': {name: 'Second user', joinedAt: Timestamp.now()},
+      'membership-outsider': {name: 'Outsider', joinedAt: Timestamp.now()}
+    }
+  }));
+});
+
+test('normal user cannot promote themselves to admin', async () => {
+  await seedUser('self-promotion-user', {isAdmin: false});
+  const db = testEnv.authenticatedContext('self-promotion-user').firestore();
+  const userRef = db.collection('users').doc('self-promotion-user');
+
+  await assertFails(userRef.update({isAdmin: true}));
+  const unchangedUser = await assertSucceeds(userRef.get());
+  assert.equal(unchangedUser.data().isAdmin, false);
+});
