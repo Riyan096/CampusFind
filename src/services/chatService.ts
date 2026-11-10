@@ -105,12 +105,10 @@ export const unblockUser = async (userId: string, blockedUserId: string): Promis
   await deleteDoc(doc(db, 'users', safeUserId, 'blockedUsers', safeBlockedUserId));
 };
 
-const hasBlockBetween = async (firstUserId: string, secondUserId: string): Promise<boolean> => {
-  const [firstBlocksSecond, secondBlocksFirst] = await Promise.all([
-    getDoc(doc(db, 'users', firstUserId, 'blockedUsers', secondUserId)),
-    getDoc(doc(db, 'users', secondUserId, 'blockedUsers', firstUserId)),
-  ]);
-  return firstBlocksSecond.exists() || secondBlocksFirst.exists();
+const hasCurrentUserBlocked = async (userId: string, otherUserId: string): Promise<boolean> => {
+  // Block lists are private: clients may read only their own blockedUsers subcollection.
+  const blockSnapshot = await getDoc(doc(db, 'users', userId, 'blockedUsers', otherUserId));
+  return blockSnapshot.exists();
 };
 
 export interface Chat {
@@ -234,7 +232,7 @@ export const createChat = async (
   if (ownerId === userId) {
     throw new Error('You cannot start a conversation about your own item.');
   }
-  if (await hasBlockBetween(userId, ownerId)) {
+  if (await hasCurrentUserBlocked(userId, ownerId)) {
     throw new Error('This conversation is unavailable because one of the users has blocked the other.');
   }
 
@@ -364,7 +362,7 @@ export const sendMessage = async (
   }
 
   const recipientId = chatData.participantIds.find((participantId: string) => participantId !== senderId);
-  if (!recipientId || await hasBlockBetween(senderId, recipientId)) {
+  if (!recipientId || await hasCurrentUserBlocked(senderId, recipientId)) {
     throw new Error('This message cannot be sent because one of the users has blocked the other.');
   }
   const messageRef = doc(collection(chatRef, 'messages'));
