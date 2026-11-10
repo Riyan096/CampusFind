@@ -3,6 +3,7 @@ import type { Item } from '../types';
 import { ItemType } from '../types';
 import { ensureItemLocation } from '../services/geocodeService';
 import { Card, Badge } from '../components/UI';
+import type { LeafletMapLike } from '../types/leaflet';
 
 
 
@@ -49,9 +50,16 @@ interface MapViewProps {
 //   [CampusLocation.DETROIT_OPERA_HOUSE]: [0,0], // Placeholder, not on campus
 // };
 
+const offsetCoordinates = (coords: [number, number], itemId: string): [number, number] => {
+  const hash = Array.from(itemId).reduce((value, character) => (value * 31 + character.charCodeAt(0)) >>> 0, 0);
+  const latitudeOffset = ((hash % 1000) / 1000 - 0.5) * 0.0005;
+  const longitudeOffset = (((Math.floor(hash / 1000) % 1000) / 1000) - 0.5) * 0.0005;
+  return [coords[0] + latitudeOffset, coords[1] + longitudeOffset];
+};
+
 export const MapView: React.FC<MapViewProps> = ({ items }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
+  const mapInstanceRef = useRef<LeafletMapLike | null>(null);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
@@ -60,14 +68,13 @@ export const MapView: React.FC<MapViewProps> = ({ items }) => {
 
   // Navigate to item location (dynamic)
   const navigateToItem = async (item: Item) => {
-    const L = (window as any).L;
+    const L = window.L;
     const map = mapInstanceRef.current;
     if (!L || !map) return;
 
         let coords = item.latlng || (await ensureItemLocation(item)) || undefined;
         if (coords) {
-      const jitterLat = coords[0] + (Math.random() - 0.5) * 0.0005;
-      const jitterLng = coords[1] + (Math.random() - 0.5) * 0.0005;
+      const [jitterLat, jitterLng] = offsetCoordinates(coords, item.id);
       
       setSelectedItem(item);
       map.setView([jitterLat, jitterLng], 17, { animate: true });
@@ -108,13 +115,12 @@ export const MapView: React.FC<MapViewProps> = ({ items }) => {
       items.forEach(async (item) => {
     let coords = item.latlng || (await ensureItemLocation(item)) || undefined;
     if (coords) {
-          const jitterLat = coords[0] + (Math.random() - 0.5) * 0.0005;
-          const jitterLng = coords[1] + (Math.random() - 0.5) * 0.0005;
+          const [jitterLat, jitterLng] = offsetCoordinates(coords, item.id);
 
           const icon = item.type === ItemType.LOST ? lostIcon : foundIcon;
           const marker = L.marker([jitterLat, jitterLng], { icon }).addTo(map);
 
-          marker.on('click', (e: any) => {
+          marker.on('click', (e) => {
             L.DomEvent.stopPropagation(e.originalEvent);
             setSelectedItem(item);
             map.setView([jitterLat, jitterLng], 17, { animate: true });
