@@ -8,13 +8,34 @@ export const LoginView: React.FC = () => {
   const [isSignup, setIsSignup] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { login, signup } = useAuth();
+  const { login, signup, resetPassword } = useAuth();
+
+  const handleResetPassword = async () => {
+    setError('');
+    setNotice('');
+    if (!email.trim()) {
+      setError('Enter your email address first.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await resetPassword(email);
+      setNotice('If an account exists for that email, a password reset link will be sent.');
+    } catch {
+      setError('Unable to send a password reset email. Check the address and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setNotice('');
     setLoading(true);
 
     try {
@@ -43,6 +64,12 @@ export const LoginView: React.FC = () => {
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-6">
             {error}
+          </div>
+        )}
+
+        {notice && (
+          <div role="status" className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-lg mb-6">
+            {notice}
           </div>
         )}
 
@@ -92,6 +119,19 @@ export const LoginView: React.FC = () => {
             />
           </div>
 
+          {!isSignup && (
+            <div className="text-right">
+              <button
+                type="button"
+                onClick={handleResetPassword}
+                disabled={loading}
+                className="text-sm text-primary font-medium hover:underline disabled:opacity-50"
+              >
+                Forgot password?
+              </button>
+            </div>
+          )}
+
           <Button
             type="submit"
             disabled={loading}
@@ -116,6 +156,7 @@ export const LoginView: React.FC = () => {
               onClick={() => {
                 setIsSignup(!isSignup);
                 setError('');
+                setNotice('');
               }}
               className="text-primary font-medium hover:underline"
             >
