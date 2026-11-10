@@ -1,0 +1,68 @@
+name: CampusFind CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, security/predeployment-readiness]
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend lint and build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Lint frontend
+        run: npm run lint
+      - name: Build frontend
+        run: npm run build
+
+  functions:
+    name: Functions lint, build, and Firebase rules tests
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+      GCLOUD_PROJECT: campusfind
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - name: Set up Java for Firebase emulators
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci
+      - name: Lint Functions
+        working-directory: functions
+        run: npm run lint
+      - name: Build Functions
+        working-directory: functions
+        run: npm run build
+      - name: Test Firestore rules
+        working-directory: functions
+        run: npm run test:rules
+      - name: Test Realtime Database rules
+        working-directory: functions
+        run: npm run test:database-rules
+      - name: Test Storage rules
+        working-directory: functions
+        run: npm run test:storage-rules
