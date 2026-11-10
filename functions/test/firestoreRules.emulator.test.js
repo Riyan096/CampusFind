@@ -676,9 +676,10 @@ test('unrelated user cannot read another pair\'s chat or messages', async () => 
   await seedUser('private-chat-outsider');
   await seedItem('private-chat-item');
   await seedChat('private-chat-isolation', 'private-chat-a', 'private-chat-b', 'private-chat-item');
-  await adminDb.collection('chats').doc('private-chat-isolation').collection('messages').doc('private-message').set(
-    validChatMessage('private-chat-a')
-  );
+  await adminDb.collection('chats').doc('private-chat-isolation').collection('messages').doc('private-message').set({
+    ...validChatMessage('private-chat-a'),
+    timestamp: Timestamp.now()
+  });
 
   const outsiderDb = testEnv.authenticatedContext('private-chat-outsider').firestore();
   const chatRef = outsiderDb.collection('chats').doc('private-chat-isolation');
@@ -715,9 +716,9 @@ test('chat creator cannot add an unrelated third user to an existing conversatio
   await assertFails(chatRef.update({
     participantIds: ['membership-a', 'membership-b', 'membership-outsider'],
     participants: {
-      'membership-a': {name: 'First user', joinedAt: Timestamp.now()},
-      'membership-b': {name: 'Second user', joinedAt: Timestamp.now()},
-      'membership-outsider': {name: 'Outsider', joinedAt: Timestamp.now()}
+      'membership-a': {name: 'First user', joinedAt: firebase.firestore.Timestamp.now()},
+      'membership-b': {name: 'Second user', joinedAt: firebase.firestore.Timestamp.now()},
+      'membership-outsider': {name: 'Outsider', joinedAt: firebase.firestore.Timestamp.now()}
     }
   }));
 });
