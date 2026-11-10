@@ -80,6 +80,42 @@ export interface Message {
   deletedAt?: number;
 }
 
+/** Listen for the other participant's live typing status in a conversation. */
+export const subscribeToTypingUsers = (
+  chatId: string,
+  currentUserId: string,
+  callback: (typingUsers: string[]) => void
+) => onSnapshot(
+  collection(db, 'chats', chatId, 'typing'),
+  (snapshot) => {
+    const now = Date.now();
+    callback(snapshot.docs
+      .filter((entry) => {
+        const data = entry.data();
+        return entry.id !== currentUserId && data.isTyping === true &&
+          now - toMillis(data.updatedAt) < 10000;
+      })
+      .map((entry) => typeof entry.data().displayName === 'string' ? entry.data().displayName : 'Someone'));
+  },
+  (error) => console.error('Unable to load typing status:', error)
+);
+
+/** Publish or clear the current participant's short-lived typing status. */
+export const setTypingStatus = async (
+  chatId: string,
+  userId: string,
+  displayName: string,
+  isTyping: boolean
+): Promise<void> => {
+  const safeName = sanitizePlainText(displayName, LIMITS.displayName, { multiline: false }) || 'Someone';
+  const typingRef = doc(db, 'chats', chatId, 'typing', userId);
+  if (!isTyping) {
+    await deleteDoc(typingRef);
+    return;
+  }
+  await setDoc(typingRef, { isTyping: true, displayName: safeName, updatedAt: serverTimestamp() });
+};
+
 /** Subscribe to the signed-in user's private blocked-user list. */
 export const subscribeToBlockedUsers = (
   userId: string,
