@@ -41,7 +41,7 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ items, stats: use
       LostItemStatus.RECOVERED,
       FoundItemStatus.RETURNED
     ];
-    const resolvedItems = items.filter(item => resolvedStatuses.includes(item.status as any));
+    const resolvedItems = items.filter(item => resolvedStatuses.some((status) => status === item.status));
     const returnRate = items.length > 0 ? Math.round((resolvedItems.length / items.length) * 100) : 0;
     
     // Category breakdown
