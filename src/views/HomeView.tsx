@@ -72,8 +72,8 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ items, stats: use
       return itemDate >= fourteenDaysAgo && itemDate < sevenDaysAgo;
     });
     
-    const lastWeekResolved = lastWeekItems.filter(item => resolvedStatuses.includes(item.status as any)).length;
-    const previousWeekResolved = previousWeekItems.filter(item => resolvedStatuses.includes(item.status as any)).length;
+    const lastWeekResolved = lastWeekItems.filter(item => resolvedStatuses.includes(item.status)).length;
+    const previousWeekResolved = previousWeekItems.filter(item => resolvedStatuses.includes(item.status)).length;
     
     const lastWeekRate = lastWeekItems.length > 0 ? (lastWeekResolved / lastWeekItems.length) * 100 : 0;
     const previousWeekRate = previousWeekItems.length > 0 ? (previousWeekResolved / previousWeekItems.length) * 100 : 0;
