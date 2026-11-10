@@ -9,7 +9,7 @@ This checklist separates repository work from settings that must be completed in
 - Firestore rules are version-controlled in `firestore.rules`.
 - Realtime Database rules are version-controlled in `database.rules.json`.
 - Firebase Storage rules are version-controlled in `storage.rules`.
-- Local secrets are excluded by the root `.gitignore`; Cloudflare `.dev.vars*` and Wrangler state are excluded.
+- Local `.env*` files are excluded by the root `.gitignore` (with `.env.example` explicitly allowed); Cloudflare `.dev.vars*` and Wrangler state are excluded.
 - Firebase Web API configuration is public client configuration. It must not be treated as authorization; rules and App Check provide protection.
 - Gemini is documented as a server-side Firebase Functions secret, not a Vite variable.
 
