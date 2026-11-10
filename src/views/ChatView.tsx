@@ -1173,7 +1173,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
             {/* Message Input */}
             {isActiveUserBlocked || messagingUnavailableChatId === activeChat.id ? (
               <div className="border-t border-gray-200 bg-gray-50 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-100 bg-red-50 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3">
                   <div className="flex items-start gap-2">
                     <span className="material-icons mt-0.5 text-gray-500" aria-hidden="true">info</span>
                     <div>
