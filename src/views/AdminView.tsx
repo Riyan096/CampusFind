@@ -361,7 +361,7 @@ export const AdminView: React.FC = () => {
           ].map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as 'dashboard' | 'users' | 'items' | 'reports' | 'notifications')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
                 activeTab === tab.id
                   ? 'bg-primary text-white'
@@ -661,7 +661,7 @@ export const AdminView: React.FC = () => {
                 </label>
                 <select
                   value={notificationType}
-                  onChange={(e) => setNotificationType(e.target.value as any)}
+                  onChange={(e) => setNotificationType(e.target.value as 'info' | 'success' | 'warning')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 outline-none"
                 >
                   <option value="info">Info</option>
