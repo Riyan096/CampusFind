@@ -5,6 +5,7 @@ This checklist separates repository work from settings that must be completed in
 ## Current verified status
 
 - Firestore rules emulator suite: 35/35 passed on `main` (reported by the project owner on 2026-11-10).
+- Realtime Database and Storage rule emulator test files are present; the RTDB suite now has a dedicated npm script and explicit emulator port. These suites still need to be run on the current branch.
 - Firestore rules are version-controlled in `firestore.rules`.
 - Realtime Database rules are version-controlled in `database.rules.json`.
 - Firebase Storage rules are version-controlled in `storage.rules`.
@@ -53,8 +54,10 @@ This checklist separates repository work from settings that must be completed in
 - Set `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` after App Check registration.
 - Set `VITE_MEDIA_WORKER_URL` only if the worker is actually integrated and deployed; otherwise leave the app on its current Firebase Storage path.
 - Set a dedicated GIPHY public client key only if GIF search is enabled. Assume it is visible to every visitor and apply provider-side restrictions/quotas where available.
+- Do not configure `VITE_EMAIL_API_KEY`: the current email service is a demo logger, not a real email provider. It is explicitly disabled until a server-side email integration exists.
 - Never set `GEMINI_API_KEY`, Cloudinary API secret, Firebase service-account JSON, or other private credentials as `VITE_*` variables.
 - Run `npm ci`, `npm run lint`, and `npm run build` from the repository root in a clean checkout.
+- From `functions/`, run `npm run test:rules`, `npm run test:database-rules`, and `npm run test:storage-rules`.
 - Verify the host is configured for a Vite SPA fallback to `index.html` if client-side routes are introduced.
 
 ## Functional smoke tests
@@ -62,7 +65,7 @@ This checklist separates repository work from settings that must be completed in
 Run these against the deployed staging/preview site before public launch:
 
 - Sign up with a new email, sign in, sign out, and sign in again.
-- Verify password reset is implemented and works. The current AuthContext exposes login/signup/logout but no password-reset method; add this feature or remove it from the launch test scope.
+- Verify the password-reset flow added to the sign-in screen works end-to-end using Firebase Authentication.
 - Test protected pages while signed out and signed in.
 - Create, edit, search, and report an item; verify image upload, image read, and image deletion behavior.
 - Test item status transitions with the reporter account and a second account.
