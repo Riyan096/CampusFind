@@ -475,10 +475,26 @@ export const ChatView: React.FC<ChatViewProps> = ({
     setEditMessageDraft('');
   }, [activeChat?.id]);
 
-  // Scroll to bottom when messages change
+  // Keep the message pane at the bottom when a chat opens or its messages load.
+  // Scroll the pane itself rather than scrollIntoView, which can move the whole page.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    const container = messagesContainerRef.current;
+    if (!container || !activeChat?.id) return;
+
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+      // A second frame accounts for the message list finishing its layout.
+      secondFrame = window.requestAnimationFrame(() => {
+        container.scrollTop = container.scrollHeight;
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [activeChat?.id, messages]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
