@@ -23,6 +23,9 @@
 - [x] Added an Active / Archived chat view and a three-dot conversation menu for Pin/Unpin, Mute/Unmute, and Archive/Unarchive.
 - [x] Added menu dismissal that supports multiple conversation rows without intercepting the selected menu action.
 - [x] Added visual unread conversation highlighting and status indicators for pinned/muted chats.
+- [x] Added live typing indicators using participant-only Firestore presence documents; typing status clears after a short idle period and abandoned status expires locally.
+- [x] Added a floating jump-to-latest button when a user scrolls away from the newest messages.
+- [x] Kept automatic scrolling enabled only while the reader is near the bottom, so incoming messages do not pull someone away from older messages.
 
 ### Notifications
 - [x] Added in-app notifications for incoming chat messages using a separate notification write after the message is committed. A notification-write failure should not undo or block a successfully sent message.
@@ -54,19 +57,25 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 - [ ] Add an attachment button and image picker to the message composer.
 - [ ] Support image preview before sending, cancel/remove, upload progress, retry, and clear failure states.
 - [ ] Render image messages inline with a tap/click-to-expand viewer.
-- [ ] Store attachment metadata with the message (storage reference/path, content type, file size, dimensions, uploader, and created timestamp); do not trust client-supplied metadata without validation.
+- [x] Define a typed image attachment on chat messages (`type`, Cloudinary `publicId`, format, byte size, width, and height); sender and timestamp are inherited from the message document.
+- [x] Validate attachment metadata in Firestore rules, including chat-scoped Cloudinary public IDs, supported formats, file-size limits, and dimension limits.
 - [ ] Enforce allowed image MIME types and conservative file-size limits; validate actual file content where the chosen storage service permits it.
-- [ ] Decide on a media-storage approach that works with the project's Firebase Spark plan before implementation. Verify current Firebase Storage plan requirements and quotas first; do not assume Storage uploads are available on Spark.
-- [ ] Restrict media access to conversation participants and avoid public, guessable download URLs where possible.
+- [x] Choose Cloudinary authenticated delivery behind a Cloudflare Worker for the Firebase Spark-compatible media path; Cloudinary credentials remain server-side.
+- [x] Restrict Worker upload and media retrieval to authenticated chat participants; media retrieval also verifies the exact message document contains the requested attachment reference.
 - [ ] Define retention and deletion behavior when a message or conversation is deleted.
 
 ### 2. Emoji reactions
-- [ ] Add a reaction picker to each message.
-- [ ] Support a small useful default emoji set plus a searchable/expandable picker if appropriate.
-- [ ] Allow one user to add, change, or remove their reaction to a message.
-- [ ] Show reaction counts and the current user's selected reaction.
-- [ ] Prevent non-participants from reacting and prevent users from modifying another user's reactions.
-- [ ] Keep reaction writes small and avoid rewriting the entire message document for every reaction.
+- [x] Add a compact reaction picker to each message.
+- [x] Add six quick reactions: 👍, ❤️, 😂, 😮, 😢, and 🙏.
+- [x] Add a searchable full emoji picker behind a `+` button, alongside the quick-reaction row.
+- [x] Let each user customize up to eight quick reactions, remove favorites, and reset the defaults.
+- [x] Save quick-reaction preferences per signed-in user in local browser storage; preferences remain separate between accounts on the same device.
+- [x] Validate selected custom reactions as short emoji strings in the service and bound their stored length in Firestore rules.
+- [x] Allow one user to add, change, or remove their reaction to a message.
+- [x] Show reaction counts and highlight the current user's selected reaction.
+- [x] Enforce chat participation and per-user-only reaction changes in Firestore rules.
+- [x] Update only the current user's nested reaction field instead of rewriting the entire message document.
+- [ ] Run `npm install` to refresh the lockfile, run the local build, and test emoji selection/customization with two accounts. This feature does not require a Firestore rules deployment because quick-reaction preferences are stored locally.
 
 ### 3. Video attachments
 - [ ] Add video selection and preview to the composer.
@@ -77,38 +86,42 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 - [ ] Verify free-tier feasibility and quotas before choosing a provider; video should follow photo attachments, not precede them.
 
 ### 4. Stickers
-- [ ] Add a sticker button and a curated starter sticker pack.
-- [ ] Create a sticker picker with categories and a recently-used section.
-- [ ] Store a stable sticker identifier/pack reference in the message rather than embedding large image data.
-- [ ] Render stickers as distinct message content with accessible labels.
-- [ ] Decide whether custom/user-uploaded sticker packs are in scope; start with a curated set to control storage and moderation.
+- [x] Add a sticker button and an original curated starter pack (12 stickers).
+- [x] Create a sticker picker with All / Reactions / Campus / Everyday categories and a recently-used section.
+- [x] Store a stable sticker ID in the message rather than embedding image data.
+- [x] Render stickers as distinct message content with accessible labels.
+- [x] Keep the starter pack local and curated; custom/user-uploaded sticker packs remain out of scope for the MVP.
+- [ ] Run the local build and deploy the updated Firestore rules before testing with two accounts.
 
 ### 5. GIF search
-- [ ] Add a GIF button and searchable GIF picker.
-- [ ] Select a GIF provider only after reviewing API terms, attribution requirements, content-safety controls, rate limits, and free-tier limits.
-- [ ] Debounce search and paginate results to limit API usage.
-- [ ] Show a preview before sending.
-- [ ] Store the provider's stable media identifier and the required source/attribution metadata; avoid copying GIF binaries into Firestore.
-- [ ] Add safe-search/content filtering and a way to report inappropriate GIF content.
+- [x] Add a GIF button and searchable GIF picker with trending results when the search field is empty.
+- [x] Select GIPHY after reviewing its current API requirements: client-side search, required Powered by GIPHY attribution, and beta-key rate limit of 100 API calls per hour.
+- [x] Debounce text search and paginate results in batches of 24.
+- [x] Show a selected-GIF preview before sending; allow removal before send.
+- [x] Store only the stable GIPHY GIF ID and provider metadata in Firestore; resolve media URLs directly from GIPHY on the client and never cache/store media URLs or GIF binaries.
+- [x] Request PG-rated results and validate the provider and stable GIF ID in Firestore rules.
+- [ ] Add an in-app report action for inappropriate GIF content when the broader moderation/report workflow is implemented.
+- [ ] Add a local GIPHY API key to `.env` and test search, pagination, sending, and receiving with two accounts.
 
 ### 6. Report user
-- [ ] Add a Report user action in the conversation menu or user profile.
-- [ ] Provide clear report reasons (for example: harassment, threats, spam, impersonation, inappropriate content, or other) and an optional description.
-- [ ] Allow a reporter to submit a report without exposing the report to the reported user.
-- [ ] Store reports in a protected moderation collection with reporter, reported user, relevant conversation/message references, reason, details, status, and timestamps.
-- [ ] Prevent users from reading or changing reports they did not submit; restrict moderation review to authorized admins.
-- [ ] Add an admin review workflow with statuses such as New, Reviewing, Actioned, and Dismissed.
-- [ ] Avoid automatically suspending a user solely from an unreviewed report.
+- [x] Add a Report user action to each conversation's action menu.
+- [x] Provide structured report reasons (harassment, threats, spam, impersonation, inappropriate content, scam, or other) and optional details.
+- [x] Submit reports privately without notifying or exposing the report to the reported user.
+- [x] Store reporter, reported user, conversation and item references, reason, details, status, and server timestamps in `/userReports`.
+- [x] Restrict report reads to the submitting user and admins; only admins can review/update reports, and reports cannot be deleted by clients.
+- [x] Add an admin Reports tab with New, Reviewing, Actioned, and Dismissed statuses plus internal review notes.
+- [x] Do not automatically suspend users from an unreviewed report.
+- [ ] Run the local build and Firestore emulator tests, deploy updated rules, and test submission/review with two accounts.
 
 ### 7. Block user
-- [ ] Add Block / Unblock user actions and a confirmation step.
-- [ ] Persist blocks per blocking user; blocking must not silently block the user for everyone else.
-- [ ] Prevent new chats and message sending between users when either direction of the relationship requires it under the chosen product policy.
-- [ ] Define what happens to existing conversations after a block (hide, archive, disable composer, and/or preserve history).
-- [ ] Prevent blocked users from bypassing the restriction by starting a new item chat.
-- [ ] Ensure Firestore rules enforce the block, not just the UI.
-- [ ] Add a blocked-users management screen so users can review and unblock accounts.
-- [ ] Decide how blocking interacts with reports, notifications, and admin moderation.
+- [x] Add Block / Unblock user actions in the active chat with a confirmation step.
+- [x] Persist each block privately under the blocking user's `/users/{uid}/blockedUsers/{blockedUid}` subcollection.
+- [x] Enforce blocks in Firestore rules for new chats and message creation in either direction; UI checks provide clearer feedback but are not the security boundary.
+- [x] Preserve existing conversation history after a block while disabling the blocker's composer and preventing either side from sending new messages.
+- [x] Check blocks before creating a new item chat so a user cannot bypass a block by opening another item conversation.
+- [x] Add a Blocked Users section to the profile page so users can review public profile names/photos and unblock accounts outside an active chat.
+- [x] Suppress new chat-message notifications when either participant has blocked the other; existing history remains visible.
+- [ ] Decide how blocking interacts with reports and admin moderation.
 
 ---
 
@@ -117,10 +130,19 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 1. **Data model and security design:** define message types, attachment metadata, reactions, blocks, and reports; update Firestore rules and tests before exposing controls.
 2. **Photo attachments:** first media feature; validate the storage provider and Spark compatibility before coding the upload flow.
 3. **Emoji reactions:** self-contained message interaction with relatively small media/storage requirements.
-4. **Stickers:** start with a small curated pack and stable sticker IDs.
-5. **GIF search:** integrate a provider after reviewing policy, safety, attribution, and quotas.
-6. **Video attachments:** last among media features because of larger storage and bandwidth costs.
-7. **Report and block:** build protected reporting and enforcement, including admin review, before expanding the chat community.
+4. **Stickers:** implemented as a local curated pack; verify with a local build and two accounts.
+5. **GIF search:** implemented with GIPHY client-side search, PG-rated results, attribution, debouncing, pagination, preview, and Firestore validation; local API-key setup and two-account testing remain.
+6. **Video attachments:** optional and deferred because of larger storage and bandwidth costs.
+7. **Report and block:** chat-level blocking, blocked-account management, private user reports, and admin review are implemented on `feature/block-users`; complete local verification and rules deployment before merge.
+
+### 8. Message replies
+- [x] Add a Reply action to each message.
+- [x] Store a compact quoted snapshot (message ID, sender, preview text, and content type) on the reply.
+- [x] Support replies to text, photos, GIFs, and stickers.
+- [x] Let users cancel a reply before sending and clear reply context after a successful send.
+- [x] Make quoted previews jump to and briefly highlight the original message.
+- [x] Validate that reply references point to a real message in the same conversation and that preview fields match the original message.
+- [ ] Run the local build and Firestore emulator tests, deploy the updated rules, and test replies with two accounts.
 
 ## Definition of done for each feature
 
@@ -135,10 +157,10 @@ The following are **not implemented yet**. Build and test them incrementally, ke
 
 ## Development notes
 
-- Active working branch: `fix/free-tier-firestore-chat`.
+- Active working branch for blocking: `feature/block-users` (based on `feature/chat-photo-media-worker`).
 - Local verification commands:
   ```powershell
-  git pull origin fix/free-tier-firestore-chat
+  git pull origin feature/block-users
   npm run build
   npm run dev
   ```
@@ -146,3 +168,27 @@ The following are **not implemented yet**. Build and test them incrementally, ke
   ```powershell
   firebase deploy --only firestore:rules
   ```
+
+
+## Blocked users management
+- Added a dedicated Blocked Users navigation page with a live private block-list subscription, public profile display details, empty/loading states, and confirmation before unblocking.
+- Removed the duplicate block-list panel from Profile; blocking preferences now have their own destination.
+- Uses existing Firestore `/users/{uid}/blockedUsers` records and existing `unblockUser` service. No new database schema or Firebase Functions required.
+- Local build and browser testing are still required before merge.
+
+
+## User reporting workflow
+- Added a private report form to the conversation action menu and a protected `/userReports` collection.
+- Reports are scoped to an existing conversation shared by reporter and reported user; self-reports and arbitrary user-targeted reports are rejected by rules.
+- Added admin-only review controls for status and internal notes. Reporting does not automatically block, suspend, or notify the reported account.
+- Local build, emulator tests, Firestore rules deployment, and two-account browser testing remain required.
+
+
+## Message editing and deletion
+- [x] Allow authors to edit their own text-only messages with an Edited label.
+- [x] Allow authors to soft-delete their own messages, replacing content with a neutral deleted-message placeholder.
+- [x] Remove attachment metadata on deletion so deleted photo media can no longer be fetched through the authenticated media worker.
+- [x] Preserve message documents and reply references when deleting; replies remain readable.
+- [x] Enforce ownership, allowed field changes, and server timestamps in Firestore rules.
+- [x] Add emulator tests for owner-only editing and soft deletion.
+- [ ] Run local build and Firestore emulator tests, deploy updated rules, and verify with two accounts.

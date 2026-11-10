@@ -1,0 +1,4 @@
+# Copy this file to .dev.vars and fill in your Cloudinary values.
+# Never commit .dev.vars or paste its contents into chat.
+CLOUDINARY_API_KEY="replace-with-your-cloudinary-api-key"
+CLOUDINARY_API_SECRET="replace-with-your-cloudinary-api-secret"

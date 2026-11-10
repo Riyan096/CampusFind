@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const { initializeApp } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
+const { getFirestore, Timestamp } = require('firebase-admin/firestore');
 const firebase = require('firebase/compat/app');
 require('firebase/compat/firestore');
 const { readFileSync } = require('node:fs');
@@ -26,8 +26,26 @@ const baseItem = {
   location: 'Student Center'
 };
 
+async function clearReports() {
+  const snapshot = await adminDb.collection('userReports').get();
+  if (!snapshot.empty) {
+    const batch = adminDb.batch();
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+  }
+}
+
 async function clearItems() {
   const snapshot = await adminDb.collection('items').get();
+  if (!snapshot.empty) {
+    const batch = adminDb.batch();
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+  }
+}
+
+async function clearBlockedUsers() {
+  const snapshot = await adminDb.collectionGroup('blockedUsers').get();
   if (!snapshot.empty) {
     const batch = adminDb.batch();
     snapshot.docs.forEach(doc => batch.delete(doc.ref));
@@ -99,11 +117,11 @@ test.before(async () => {
 });
 
 test.beforeEach(async () => {
-  await Promise.all([clearItems(), clearUsers(), clearPublicProfiles(), clearPointAwards()]);
+  await Promise.all([clearItems(), clearReports(), clearBlockedUsers(), clearUsers(), clearPublicProfiles(), clearPointAwards()]);
 });
 
 test.afterEach(async () => {
-  await Promise.all([clearItems(), clearUsers(), clearPublicProfiles(), clearPointAwards()]);
+  await Promise.all([clearItems(), clearReports(), clearBlockedUsers(), clearUsers(), clearPublicProfiles(), clearPointAwards()]);
 });
 
 test.after(async () => {
@@ -287,4 +305,429 @@ test('normal user cannot tamper with point awards', async () => {
   await assertFails(award.set({points: 9999, reason: 'fake'}));
   await assertFails(award.update({points: 9999}));
   await assertFails(award.delete());
+});
+
+
+async function seedBlock(blockerId, blockedId) {
+  await adminDb.collection('users').doc(blockerId).collection('blockedUsers').doc(blockedId).set({
+    blockedUserId: blockedId,
+    createdAt: Timestamp.now()
+  });
+}
+
+async function seedChat(chatId, firstUserId, secondUserId, itemId) {
+  await adminDb.collection('chats').doc(chatId).set({
+    itemId,
+    itemTitle: 'Test item',
+    createdBy: firstUserId,
+    participantIds: [firstUserId, secondUserId],
+    participants: {
+      [firstUserId]: {name: 'First user', joinedAt: Timestamp.now()},
+      [secondUserId]: {name: 'Second user', joinedAt: Timestamp.now()}
+    },
+    createdAt: Timestamp.now()
+  });
+}
+
+function validChatMessage(senderId) {
+  return {
+    senderId,
+    senderName: 'Test sender',
+    content: 'Hello',
+    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+    read: false,
+    status: 'sent',
+    readBy: {}
+  };
+}
+
+test('users can create and remove blocks only in their own private block list', async () => {
+  await seedUser('blocker');
+  await seedUser('blocked');
+  const db = testEnv.authenticatedContext('blocker').firestore();
+  const ownBlock = db.collection('users').doc('blocker').collection('blockedUsers').doc('blocked');
+
+  await assertSucceeds(ownBlock.set({
+    blockedUserId: 'blocked',
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }));
+  await assertFails(db.collection('users').doc('blocked').collection('blockedUsers').doc('blocker').get());
+  await assertFails(db.collection('users').doc('blocked').collection('blockedUsers').doc('blocker').set({
+    blockedUserId: 'blocker',
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  }));
+  await assertFails(ownBlock.update({blockedUserId: 'another-user'}));
+  await assertSucceeds(ownBlock.delete());
+});
+
+test('a block in either direction prevents creating a new chat', async () => {
+  await seedUser('blocker');
+  await seedUser('blocked');
+  await seedBlock('blocker', 'blocked');
+  await seedItem('blocked-item', {reportedBy: 'blocked'});
+  await seedItem('blocker-item', {reportedBy: 'blocker'});
+
+  const blockerDb = testEnv.authenticatedContext('blocker').firestore();
+  const blockedDb = testEnv.authenticatedContext('blocked').firestore();
+  const chatData = (creator, owner) => ({
+    itemId: creator === 'blocker' ? 'blocked-item' : 'blocker-item',
+    itemTitle: 'Test item',
+    createdBy: creator,
+    participantIds: [creator, owner],
+    participants: {
+      [creator]: {name: 'Creator', joinedAt: firebase.firestore.FieldValue.serverTimestamp()},
+      [owner]: {name: 'Owner', joinedAt: firebase.firestore.FieldValue.serverTimestamp()}
+    },
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+
+  await assertFails(blockerDb.collection('chats').doc('blocked-chat-a').set(chatData('blocker', 'blocked')));
+  await assertFails(blockedDb.collection('chats').doc('blocked-chat-b').set(chatData('blocked', 'blocker')));
+});
+
+test('a block in either direction prevents both participants from sending new messages', async () => {
+  await seedUser('blocker');
+  await seedUser('blocked');
+  await seedItem('blocked-item');
+  await seedBlock('blocker', 'blocked');
+  await seedChat('blocked-chat', 'blocker', 'blocked', 'blocked-item');
+
+  const blockerDb = testEnv.authenticatedContext('blocker').firestore();
+  const blockedDb = testEnv.authenticatedContext('blocked').firestore();
+
+  await assertFails(blockerDb.collection('chats').doc('blocked-chat').collection('messages').doc('from-blocker').set(validChatMessage('blocker')));
+  await assertFails(blockedDb.collection('chats').doc('blocked-chat').collection('messages').doc('from-blocked').set(validChatMessage('blocked')));
+});
+
+
+async function validUserReport(overrides = {}) {
+  return {
+    reporterId: 'reporter',
+    reportedUserId: 'target',
+    chatId: 'report-chat',
+    itemId: 'report-item',
+    reason: 'harassment',
+    details: 'Repeated unwanted messages',
+    status: 'new',
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    ...overrides
+  };
+}
+
+test('chat participants can submit private, valid user reports', async () => {
+  await seedUser('reporter');
+  await seedUser('target');
+  await seedItem('report-item', {reportedBy: 'target'});
+  await seedChat('report-chat', 'reporter', 'target', 'report-item');
+
+  const reporterDb = testEnv.authenticatedContext('reporter').firestore();
+  const reportRef = reporterDb.collection('userReports').doc('private-report');
+  await assertSucceeds(reportRef.set(await validUserReport()));
+
+  await assertSucceeds(reportRef.get());
+  await assertFails(testEnv.authenticatedContext('target').firestore().collection('userReports').doc('private-report').get());
+  await assertFails(testEnv.authenticatedContext('stranger').firestore().collection('userReports').doc('private-report').get());
+});
+
+test('user report creation rejects nonparticipants, self-reports, invalid reasons, and forged fields', async () => {
+  await seedUser('reporter');
+  await seedUser('target');
+  await seedItem('report-item', {reportedBy: 'target'});
+  await seedChat('report-chat', 'reporter', 'target', 'report-item');
+
+  const reporterDb = testEnv.authenticatedContext('reporter').firestore();
+  await assertFails(reporterDb.collection('userReports').doc('not-a-participant').set(
+    await validUserReport({chatId: 'missing-chat'})
+  ));
+  await assertFails(reporterDb.collection('userReports').doc('self-report').set(
+    await validUserReport({reportedUserId: 'reporter'})
+  ));
+  await assertFails(reporterDb.collection('userReports').doc('bad-reason').set(
+    await validUserReport({reason: 'not-a-reason'})
+  ));
+  await assertFails(reporterDb.collection('userReports').doc('extra-field').set(
+    await validUserReport({admin: true})
+  ));
+});
+
+test('only admins can review reports and reports cannot be deleted', async () => {
+  await seedUser('reporter');
+  await seedUser('target');
+  await seedUser('moderator', {isAdmin: true});
+  await seedItem('report-item', {reportedBy: 'target'});
+  await seedChat('report-chat', 'reporter', 'target', 'report-item');
+  await adminDb.collection('userReports').doc('reviewable-report').set({
+    reporterId: 'reporter',
+    reportedUserId: 'target',
+    chatId: 'report-chat',
+    itemId: 'report-item',
+    reason: 'spam',
+    details: '',
+    status: 'new',
+    createdAt: Timestamp.now(),
+    updatedAt: Timestamp.now()
+  });
+
+  const reportRef = testEnv.authenticatedContext('reporter').firestore().collection('userReports').doc('reviewable-report');
+  const adminReportRef = testEnv.authenticatedContext('moderator').firestore().collection('userReports').doc('reviewable-report');
+  const reviewUpdate = {
+    status: 'reviewing',
+    reviewNote: 'Reviewing the conversation context',
+    reviewedBy: 'moderator',
+    reviewedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+
+  await assertFails(reportRef.update(reviewUpdate));
+  await assertFails(reportRef.delete());
+  await assertSucceeds(adminReportRef.update(reviewUpdate));
+  await assertSucceeds(adminReportRef.get());
+  await assertFails(adminReportRef.delete());
+});
+
+test('participants can use custom single and compound emoji reactions', async () => {
+  await seedUser('reaction-user');
+  await seedUser('other-user');
+  await seedItem('reaction-item');
+  await seedChat('reaction-chat', 'reaction-user', 'other-user', 'reaction-item');
+  await adminDb.collection('chats').doc('reaction-chat').collection('messages').doc('reaction-message').set({
+    senderId: 'other-user',
+    senderName: 'Other user',
+    content: 'React to this',
+    timestamp: Timestamp.now(),
+    read: false,
+    status: 'sent',
+    readBy: {},
+    reactions: {}
+  });
+
+  const db = testEnv.authenticatedContext('reaction-user').firestore();
+  const message = db.collection('chats').doc('reaction-chat').collection('messages').doc('reaction-message');
+
+  await assertSucceeds(message.update({reactions: {'reaction-user': '😍'}}));
+  await assertSucceeds(message.update({reactions: {'reaction-user': '👨‍👩‍👧‍👦'}}));
+});
+
+test('only the sender can edit their own text messages', async () => {
+  await seedUser('message-author');
+  await seedUser('message-recipient');
+  await seedItem('edit-item');
+  await seedChat('edit-chat', 'message-author', 'message-recipient', 'edit-item');
+  await adminDb.collection('chats').doc('edit-chat').collection('messages').doc('text-message').set({
+    senderId: 'message-author', senderName: 'Message author', content: 'Original text',
+    timestamp: Timestamp.now(), read: false, status: 'sent', readBy: {}
+  });
+  const authorDb = testEnv.authenticatedContext('message-author').firestore();
+  const recipientDb = testEnv.authenticatedContext('message-recipient').firestore();
+  const authorMessage = authorDb.collection('chats').doc('edit-chat').collection('messages').doc('text-message');
+  const recipientMessage = recipientDb.collection('chats').doc('edit-chat').collection('messages').doc('text-message');
+  await assertSucceeds(authorMessage.update({content: 'Corrected text', edited: true, editedAt: firebase.firestore.FieldValue.serverTimestamp()}));
+  await assertFails(recipientMessage.update({content: 'Tampered text', edited: true, editedAt: firebase.firestore.FieldValue.serverTimestamp()}));
+  await assertFails(authorMessage.update({senderId: 'message-recipient'}));
+});
+
+test('message owners can soft-delete messages while preserving the message document', async () => {
+  await seedUser('message-author');
+  await seedUser('message-recipient');
+  await seedItem('delete-item');
+  await seedChat('delete-chat', 'message-author', 'message-recipient', 'delete-item');
+  await adminDb.collection('chats').doc('delete-chat').collection('messages').doc('photo-message').set({
+    senderId: 'message-author', senderName: 'Message author', content: 'Photo',
+    timestamp: Timestamp.now(), read: false, status: 'sent', readBy: {},
+    attachment: {type: 'image', publicId: 'campusfind/chats/delete-chat/12345678-1234-1234-1234-123456789012', format: 'jpg', bytes: 1024, width: 100, height: 100}
+  });
+  const authorDb = testEnv.authenticatedContext('message-author').firestore();
+  const recipientDb = testEnv.authenticatedContext('message-recipient').firestore();
+  const authorMessage = authorDb.collection('chats').doc('delete-chat').collection('messages').doc('photo-message');
+  const recipientMessage = recipientDb.collection('chats').doc('delete-chat').collection('messages').doc('photo-message');
+  const deleteUpdate = {
+    content: 'This message was deleted', deleted: true,
+    deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    attachment: firebase.firestore.FieldValue.delete(),
+    sticker: firebase.firestore.FieldValue.delete(),
+    gif: firebase.firestore.FieldValue.delete(),
+    reactions: firebase.firestore.FieldValue.delete()
+  };
+  await assertFails(recipientMessage.update(deleteUpdate));
+  await assertSucceeds(authorMessage.update(deleteUpdate));
+  const deleted = await assertSucceeds(recipientMessage.get());
+  assert.equal(deleted.data().deleted, true);
+  assert.equal(deleted.data().content, 'This message was deleted');
+  assert.equal('attachment' in deleted.data(), false);
+});
+
+test('chat participants can publish and read only their own typing status', async () => {
+  await seedUser('typing-a');
+  await seedUser('typing-b');
+  await seedChat('typing-chat', 'typing-a', 'typing-b', 'typing-item');
+
+  const firstDb = testEnv.authenticatedContext('typing-a').firestore();
+  const secondDb = testEnv.authenticatedContext('typing-b').firestore();
+  const firstTyping = firstDb.collection('chats').doc('typing-chat').collection('typing').doc('typing-a');
+  const secondTyping = secondDb.collection('chats').doc('typing-chat').collection('typing').doc('typing-b');
+
+  await assertSucceeds(firstTyping.set({
+    isTyping: true,
+    displayName: 'First user',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }));
+  await assertSucceeds(secondTyping.get());
+  // User A must not be able to publish typing status under user B's document ID.
+  const forgedTyping = firstDb.collection('chats').doc('typing-chat').collection('typing').doc('typing-b');
+  await assertFails(forgedTyping.set({
+    isTyping: true,
+    displayName: 'Forged identity',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }));
+  await assertSucceeds(firstTyping.delete());
+});
+
+test('nonparticipants cannot read or publish chat typing status', async () => {
+  await seedUser('typing-a');
+  await seedUser('typing-b');
+  await seedUser('typing-outsider');
+  await seedChat('typing-chat-private', 'typing-a', 'typing-b', 'typing-item');
+
+  const outsiderDb = testEnv.authenticatedContext('typing-outsider').firestore();
+  const typingRef = outsiderDb.collection('chats').doc('typing-chat-private').collection('typing').doc('typing-outsider');
+  await assertFails(typingRef.get());
+  await assertFails(typingRef.set({
+    isTyping: true,
+    displayName: 'Outsider',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }));
+});
+
+test('participants can reply to an existing message in the same conversation', async () => {
+  await seedUser('reply-sender');
+  await seedUser('reply-recipient');
+  await seedItem('reply-item');
+  await seedChat('reply-chat', 'reply-sender', 'reply-recipient', 'reply-item');
+  await adminDb.collection('chats').doc('reply-chat').collection('messages').doc('original-message').set({
+    senderId: 'reply-recipient',
+    senderName: 'Reply recipient',
+    content: 'Where did you last see the keys?',
+    timestamp: Timestamp.now(),
+    read: false,
+    status: 'sent',
+    readBy: {}
+  });
+
+  const db = testEnv.authenticatedContext('reply-sender').firestore();
+  const replies = db.collection('chats').doc('reply-chat').collection('messages');
+  await assertSucceeds(replies.doc('valid-reply').set({
+    ...validChatMessage('reply-sender'),
+    replyTo: {
+      messageId: 'original-message',
+      senderId: 'reply-recipient',
+      senderName: 'Reply recipient',
+      content: 'Where did you last see the keys?',
+      type: 'text'
+    }
+  }));
+});
+
+test('message replies reject missing, cross-chat, and forged original references', async () => {
+  await seedUser('reply-sender');
+  await seedUser('reply-recipient');
+  await seedItem('reply-item');
+  await seedItem('other-reply-item');
+  await seedChat('reply-chat', 'reply-sender', 'reply-recipient', 'reply-item');
+  await seedChat('other-reply-chat', 'reply-sender', 'reply-recipient', 'other-reply-item');
+  await adminDb.collection('chats').doc('reply-chat').collection('messages').doc('original-message').set({
+    senderId: 'reply-recipient',
+    senderName: 'Reply recipient',
+    content: 'Original text',
+    timestamp: Timestamp.now(),
+    read: false,
+    status: 'sent',
+    readBy: {}
+  });
+
+  const db = testEnv.authenticatedContext('reply-sender').firestore();
+  const messages = db.collection('chats').doc('reply-chat').collection('messages');
+  const baseReply = {
+    messageId: 'original-message',
+    senderId: 'reply-recipient',
+    senderName: 'Reply recipient',
+    content: 'Original text',
+    type: 'text'
+  };
+
+  await assertFails(messages.doc('missing-reply').set({
+    ...validChatMessage('reply-sender'),
+    replyTo: {...baseReply, messageId: 'does-not-exist'}
+  }));
+  await assertFails(db.collection('chats').doc('other-reply-chat').collection('messages').doc('cross-chat-reply').set({
+    ...validChatMessage('reply-sender'),
+    replyTo: baseReply
+  }));
+  await assertFails(messages.doc('forged-reply').set({
+    ...validChatMessage('reply-sender'),
+    replyTo: {...baseReply, content: 'Forged preview'}
+  }));
+});
+
+
+test('unrelated user cannot read another pair\'s chat or messages', async () => {
+  await seedUser('private-chat-a');
+  await seedUser('private-chat-b');
+  await seedUser('private-chat-outsider');
+  await seedItem('private-chat-item');
+  await seedChat('private-chat-isolation', 'private-chat-a', 'private-chat-b', 'private-chat-item');
+  await adminDb.collection('chats').doc('private-chat-isolation').collection('messages').doc('private-message').set(
+    validChatMessage('private-chat-a')
+  );
+
+  const outsiderDb = testEnv.authenticatedContext('private-chat-outsider').firestore();
+  const chatRef = outsiderDb.collection('chats').doc('private-chat-isolation');
+  const messageRef = chatRef.collection('messages').doc('private-message');
+
+  await assertFails(chatRef.get());
+  await assertFails(messageRef.get());
+});
+
+test('unrelated user cannot send a message into another pair\'s chat', async () => {
+  await seedUser('send-chat-a');
+  await seedUser('send-chat-b');
+  await seedUser('send-chat-outsider');
+  await seedItem('send-chat-item');
+  await seedChat('send-chat-isolation', 'send-chat-a', 'send-chat-b', 'send-chat-item');
+
+  const outsiderDb = testEnv.authenticatedContext('send-chat-outsider').firestore();
+  const messageRef = outsiderDb.collection('chats').doc('send-chat-isolation')
+    .collection('messages').doc('outsider-message');
+
+  await assertFails(messageRef.set(validChatMessage('send-chat-outsider')));
+});
+
+test('chat creator cannot add an unrelated third user to an existing conversation', async () => {
+  await seedUser('membership-a');
+  await seedUser('membership-b');
+  await seedUser('membership-outsider');
+  await seedItem('membership-item');
+  await seedChat('membership-isolation', 'membership-a', 'membership-b', 'membership-item');
+
+  const creatorDb = testEnv.authenticatedContext('membership-a').firestore();
+  const chatRef = creatorDb.collection('chats').doc('membership-isolation');
+
+  await assertFails(chatRef.update({
+    participantIds: ['membership-a', 'membership-b', 'membership-outsider'],
+    participants: {
+      'membership-a': {name: 'First user', joinedAt: Timestamp.now()},
+      'membership-b': {name: 'Second user', joinedAt: Timestamp.now()},
+      'membership-outsider': {name: 'Outsider', joinedAt: Timestamp.now()}
+    }
+  }));
+});
+
+test('normal user cannot promote themselves to admin', async () => {
+  await seedUser('self-promotion-user', {isAdmin: false});
+  const db = testEnv.authenticatedContext('self-promotion-user').firestore();
+  const userRef = db.collection('users').doc('self-promotion-user');
+
+  await assertFails(userRef.update({isAdmin: true}));
+  const unchangedUser = await assertSucceeds(userRef.get());
+  assert.equal(unchangedUser.data().isAdmin, false);
 });

@@ -63,7 +63,7 @@ AI suggestions are treated as assistance rather than an authoritative decision, 
 
 The chat system uses Firebase Realtime Database for low-latency communication. Conversations contain participant information, messages, timestamps, delivery/read state, and recent-message metadata.
 
-The active chat implementation uses Cloud Firestore for Spark-plan compatibility, with participant-based access rules, per-user read state, and per-user conversation settings. Existing Realtime Database chat data is preserved; see [CHAT_ROADMAP.md](./CHAT_ROADMAP.md) for the implementation log and detailed feature plan.
+The active chat implementation uses Cloud Firestore for Spark-plan compatibility, with participant-based access rules, per-user read state, and per-user conversation settings. Existing Realtime Database chat data is preserved; see [CHAT_ROADMAP.md](./CHAT_ROADMAP.md) for the implementation log and detailed feature plan. It also supports quoted replies to text messages, photos, GIFs, and stickers; each reply links back to its original message, and Firestore rules verify that the referenced message belongs to the same conversation.
 
 ### Gamification
 
@@ -329,16 +329,21 @@ The longer-term goals include:
 - [x] Chat workflow moved to Firestore for Firebase Spark compatibility
 - [x] Chat participant rules, unread state, and per-user conversation settings
 - [x] Chat notification center and conversation management controls
+- [x] Authenticated chat photo attachments using Cloudinary and a Cloudflare Worker
+- [x] Per-user emoji reactions with Firestore rule validation
+- [x] Searchable full emoji picker with a `+` button and customizable per-user quick reactions
+- [x] Curated sticker picker and sticker messages
+- [x] GIPHY GIF search, previews, and GIF messages
+- [x] Higher-quality GIF picker previews
+- [x] Per-user block/unblock from chat with Firestore-enforced messaging restrictions
 - [ ] Continue chat security review and add regression tests
 
 ### Planned
 
-- [ ] Chat photo attachments, emoji reactions, stickers, GIF search, and video attachments
-- [ ] Report user and block user workflows
+- [ ] Report user workflow and blocked-user management screen
 - [ ] Stronger privacy controls
-- [ ] Storage security hardening
-- [ ] Chat media and interaction features (photos, emoji reactions, stickers, GIF search, video)
-- [ ] User safety tools (report and block)
+- [ ] Video attachments (deferred)
+- [ ] Storage and media security review
 - [ ] Improved chat UX and moderation
 - [ ] More advanced item matching
 - [ ] Better campus search and filtering
@@ -352,7 +357,9 @@ The longer-term goals include:
 
 ## Chat Development Notes
 
-See **[CHAT_ROADMAP.md](./CHAT_ROADMAP.md)** for a detailed record of completed chat work, Firebase Spark constraints, known limitations, and the implementation plan for photo/video attachments, emoji reactions, stickers, GIF search, reporting, and blocking.
+Chat now supports authenticated photo attachments (Cloudinary delivery through a local Cloudflare Worker), a searchable emoji picker with customizable quick reactions, a curated sticker pack, and GIPHY GIF search with higher-quality picker previews. These features are implemented on the active feature branch and are designed to avoid Firebase Storage / Cloud Functions dependencies for chat media under the Firebase Spark plan. Video attachments remain deferred. User blocking is implemented on its feature branch; reporting, a blocked-user management screen, and further security regression testing remain planned.
+
+See **[CHAT_ROADMAP.md](./CHAT_ROADMAP.md)** for implementation details, Firebase Spark constraints, known limitations, and the remaining chat roadmap.
 
 ---
 
@@ -392,3 +399,13 @@ CampusFind is a continuously evolving portfolio project. Features, security rule
 Built by **Mohammad Bhuyia** as a software engineering portfolio project focused on modern web development, Firebase architecture, security engineering, real-time systems, and practical AI integration.
 ---
 
+
+
+### Chat safety and moderation
+- Users can block accounts, manage their blocked list, and submit private reports from a conversation's action menu.
+- Reports are stored in a protected Firestore collection and can be reviewed by admins in the Admin Dashboard. The reported user cannot view the report.
+- Reporting does not automatically suspend or block an account; admins choose a review status and can leave internal notes.
+
+
+### Message controls
+- Authors can edit text-only messages and delete their own messages. Deleted messages remain as neutral placeholders so conversation order and existing reply references are preserved.

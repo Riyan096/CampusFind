@@ -37,13 +37,42 @@ interface ItemData {
   location?: string;
 }
 
+interface UserReportData {
+  id: string;
+  reporterId: string;
+  reportedUserId: string;
+  chatId: string;
+  itemId: string;
+  reason: string;
+  details: string;
+  status: 'new' | 'reviewing' | 'actioned' | 'dismissed';
+  createdAt: unknown;
+  reviewNote?: string;
+}
+
+const formatReportDate = (value: unknown): string => {
+  if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
+    return (value.toDate as () => Date)().toLocaleString();
+  }
+  if (value instanceof Date) return value.toLocaleString();
+  if (typeof value === 'string') {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'Date unavailable' : date.toLocaleString();
+  }
+  return 'Date unavailable';
+};
+
 
 export const AdminView: React.FC = () => {
   const { isAdmin, user } = useAuth();
   const { success, error } = useToast();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'items' | 'notifications'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'items' | 'reports' | 'notifications'>('dashboard');
   const [users, setUsers] = useState<UserData[]>([]);
   const [items, setItems] = useState<ItemData[]>([]);
+  const [reports, setReports] = useState<UserReportData[]>([]);
+  const [reportStatusDrafts, setReportStatusDrafts] = useState<Record<string, UserReportData['status']>>({});
+  const [reportNoteDrafts, setReportNoteDrafts] = useState<Record<string, string>>({});
+  const [savingReportId, setSavingReportId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -84,6 +113,15 @@ export const AdminView: React.FC = () => {
         ...doc.data()
       })) as ItemData[];
       setItems(itemsData);
+
+      const reportsSnapshot = await getDocs(query(collection(db, 'userReports'), orderBy('createdAt', 'desc')));
+      const reportsData = reportsSnapshot.docs.map(reportDoc => ({
+        id: reportDoc.id,
+        ...reportDoc.data()
+      })) as UserReportData[];
+      setReports(reportsData);
+      setReportStatusDrafts(Object.fromEntries(reportsData.map(report => [report.id, report.status])));
+      setReportNoteDrafts(Object.fromEntries(reportsData.map(report => [report.id, report.reviewNote || ''])));
 
       // Calculate stats
       setStats({
@@ -190,6 +228,38 @@ export const AdminView: React.FC = () => {
 
 
 
+  const handleSaveReportReview = async (report: UserReportData) => {
+    if (!user || savingReportId) return;
+    const status = reportStatusDrafts[report.id] || report.status;
+    if (status === 'new') {
+      error('Choose Reviewing, Actioned, or Dismissed before saving.');
+      return;
+    }
+
+    setSavingReportId(report.id);
+    try {
+      const reviewNote = sanitizePlainText(reportNoteDrafts[report.id] || '', 1000, { multiline: true });
+      await updateDoc(doc(db, 'userReports', report.id), {
+        status,
+        reviewNote,
+        reviewedBy: user.uid,
+        reviewedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      setReports(current => current.map(entry => entry.id === report.id
+        ? { ...entry, status, reviewNote }
+        : entry
+      ));
+      success('Report review saved');
+    } catch (reviewError) {
+      console.error('Unable to save report review:', reviewError);
+      error('Unable to save report review');
+    } finally {
+      setSavingReportId(null);
+    }
+  };
+
+
   const handleSendGlobalNotification = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -286,6 +356,7 @@ export const AdminView: React.FC = () => {
             { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
             { id: 'users', label: 'Users', icon: 'people' },
             { id: 'items', label: 'Items', icon: 'inventory_2' },
+            { id: 'reports', label: 'Reports', icon: 'flag' },
             { id: 'notifications', label: 'Notifications', icon: 'campaign' }
           ].map(tab => (
             <button
@@ -464,6 +535,90 @@ export const AdminView: React.FC = () => {
                 <p className="p-8 text-center text-gray-500">No items found</p>
               )}
             </div>
+          </div>
+        )}
+
+        {/* User Reports Tab */}
+        {activeTab === 'reports' && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">User reports</h3>
+                <p className="text-sm text-gray-500">Review reports privately submitted by CampusFind users.</p>
+              </div>
+              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">{reports.filter(report => report.status === 'new').length} new</span>
+            </div>
+            {reports.length === 0 ? (
+              <div className="rounded-xl bg-white p-10 text-center shadow-soft">
+                <span className="material-icons text-4xl text-gray-400">flag</span>
+                <p className="mt-2 font-medium text-gray-700">No user reports yet</p>
+                <p className="mt-1 text-sm text-gray-500">Submitted reports will appear here for admin review.</p>
+              </div>
+            ) : reports.map(report => {
+              const reporterName = users.find(entry => entry.uid === report.reporterId)?.displayName || 'CampusFind user';
+              const reportedName = users.find(entry => entry.uid === report.reportedUserId)?.displayName || 'CampusFind user';
+              const status = reportStatusDrafts[report.id] || report.status;
+              return (
+                <article key={report.id} className="rounded-xl bg-white p-5 shadow-soft">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{report.reason.replace(/_/g, ' ')}</p>
+                      <h4 className="mt-1 text-base font-semibold text-gray-900">{reportedName}</h4>
+                      <p className="text-sm text-gray-500">Reported by {reporterName} · {formatReportDate(report.createdAt)}</p>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${
+                      report.status === 'new' ? 'bg-red-50 text-red-700' :
+                      report.status === 'reviewing' ? 'bg-amber-50 text-amber-700' :
+                      report.status === 'actioned' ? 'bg-green-50 text-green-700' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>{report.status}</span>
+                  </div>
+                  <div className="mt-3 rounded-lg bg-gray-50 p-3">
+                    <p className="text-xs font-medium text-gray-500">Additional details</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800">{report.details || 'No additional details provided.'}</p>
+                    <p className="mt-2 text-xs text-gray-500">Related item: {items.find(item => item.id === report.itemId)?.title || report.itemId}</p>
+                    <p className="mt-1 text-xs text-gray-500">Conversation ID: {report.chatId}</p>
+                  </div>
+                  {report.reviewNote && (
+                    <p className="mt-3 text-sm text-gray-600"><strong>Previous review note:</strong> {report.reviewNote}</p>
+                  )}
+                  <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] sm:items-end">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Review status
+                      <select
+                        value={status}
+                        onChange={event => setReportStatusDrafts(current => ({ ...current, [report.id]: event.target.value as UserReportData['status'] }))}
+                        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      >
+                        <option value="new">New</option>
+                        <option value="reviewing">Reviewing</option>
+                        <option value="actioned">Actioned</option>
+                        <option value="dismissed">Dismissed</option>
+                      </select>
+                    </label>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Internal review note
+                      <input
+                        type="text"
+                        maxLength={1000}
+                        value={reportNoteDrafts[report.id] ?? ''}
+                        onChange={event => setReportNoteDrafts(current => ({ ...current, [report.id]: event.target.value.slice(0, 1000) }))}
+                        placeholder="Optional note for other admins"
+                        className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveReportReview(report)}
+                      disabled={savingReportId !== null || status === 'new'}
+                      className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {savingReportId === report.id ? 'Saving…' : 'Save review'}
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
 

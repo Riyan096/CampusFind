@@ -25,6 +25,40 @@ import {
 import { db } from './firebase';
 import { LIMITS, sanitizeFirestoreDocId, sanitizePlainText } from '../utils/sanitize';
 
+export interface ImageAttachment {
+  type: 'image';
+  publicId: string;
+  format: 'jpg' | 'png' | 'webp';
+  bytes: number;
+  width: number;
+  height: number;
+}
+
+export interface StickerMessage {
+  type: 'sticker';
+  stickerId: string;
+}
+
+export interface GifMessage {
+  type: 'gif';
+  provider: 'giphy';
+  gifId: string;
+}
+
+export const CHAT_STICKER_IDS = [
+  'happy-cat', 'love-birds', 'you-got-this', 'thank-you',
+  'oops', 'thinking', 'study-mode', 'found-it',
+  'coffee-break', 'good-luck', 'wave-hello', 'celebrate',
+] as const;
+
+export interface ReplyPreview {
+  messageId: string;
+  senderId: string;
+  senderName: string;
+  content: string;
+  type: 'text' | 'photo' | 'sticker' | 'gif';
+}
+
 export interface Message {
   id?: string;
   chatId: string;
@@ -35,7 +69,106 @@ export interface Message {
   read: boolean;
   status?: 'sending' | 'sent' | 'delivered' | 'read';
   readBy?: { [userId: string]: number };
+  attachment?: ImageAttachment;
+  sticker?: StickerMessage;
+  gif?: GifMessage;
+  replyTo?: ReplyPreview;
+  reactions?: { [userId: string]: string };
+  edited?: boolean;
+  editedAt?: number;
+  deleted?: boolean;
+  deletedAt?: number;
 }
+
+/** Listen for the other participant's live typing status in a conversation. */
+export const subscribeToTypingUsers = (
+  chatId: string,
+  currentUserId: string,
+  callback: (typingUsers: string[]) => void
+) => {
+  let latestEntries: Array<{ id: string; data: Record<string, any> }> = [];
+  const publishFreshTypingUsers = () => {
+    const now = Date.now();
+    callback(latestEntries
+      .filter(({ id, data }) => id !== currentUserId && data.isTyping === true &&
+        now - toMillis(data.updatedAt) < 10000)
+      .map(({ data }) => typeof data.displayName === 'string' ? data.displayName : 'Someone'));
+  };
+  const unsubscribe = onSnapshot(
+    collection(db, 'chats', chatId, 'typing'),
+    (snapshot) => {
+      latestEntries = snapshot.docs.map((entry) => ({ id: entry.id, data: entry.data() }));
+      publishFreshTypingUsers();
+    },
+    (error) => console.error('Unable to load typing status:', error)
+  );
+  // Expire abandoned presence locally if a browser closes before it can clear its document.
+  const expiryTimer = setInterval(publishFreshTypingUsers, 2000);
+  return () => {
+    clearInterval(expiryTimer);
+    unsubscribe();
+  };
+};
+
+/** Publish or clear the current participant's short-lived typing status. */
+export const setTypingStatus = async (
+  chatId: string,
+  userId: string,
+  displayName: string,
+  isTyping: boolean
+): Promise<void> => {
+  const safeName = sanitizePlainText(displayName, LIMITS.displayName, { multiline: false }) || 'Someone';
+  const typingRef = doc(db, 'chats', chatId, 'typing', userId);
+  if (!isTyping) {
+    await deleteDoc(typingRef);
+    return;
+  }
+  await setDoc(typingRef, { isTyping: true, displayName: safeName, updatedAt: serverTimestamp() });
+};
+
+/** Subscribe to the signed-in user's private blocked-user list. */
+export const subscribeToBlockedUsers = (
+  userId: string,
+  callback: (blockedUserIds: string[]) => void
+) => onSnapshot(
+  collection(db, 'users', userId, 'blockedUsers'),
+  (snapshot) => callback(snapshot.docs.map((entry) => entry.id)),
+  (error) => console.error('Unable to load blocked users:', error)
+);
+
+/** Block another account for the current user only. */
+export const blockUser = async (userId: string, blockedUserId: string): Promise<void> => {
+  const safeUserId = sanitizeFirestoreDocId(userId);
+  const safeBlockedUserId = sanitizeFirestoreDocId(blockedUserId);
+  if (!safeUserId || !safeBlockedUserId || safeUserId === safeBlockedUserId) {
+    throw new Error('Choose a valid user to block.');
+  }
+
+  const blockRef = doc(db, 'users', safeUserId, 'blockedUsers', safeBlockedUserId);
+  const existing = await getDoc(blockRef);
+  if (existing.exists()) return;
+
+  await setDoc(blockRef, {
+    blockedUserId: safeBlockedUserId,
+    createdAt: serverTimestamp(),
+  });
+};
+
+/** Remove a block created by the signed-in user. */
+export const unblockUser = async (userId: string, blockedUserId: string): Promise<void> => {
+  const safeUserId = sanitizeFirestoreDocId(userId);
+  const safeBlockedUserId = sanitizeFirestoreDocId(blockedUserId);
+  if (!safeUserId || !safeBlockedUserId || safeUserId === safeBlockedUserId) {
+    throw new Error('Choose a valid user to unblock.');
+  }
+  await deleteDoc(doc(db, 'users', safeUserId, 'blockedUsers', safeBlockedUserId));
+};
+
+const hasCurrentUserBlocked = async (userId: string, otherUserId: string): Promise<boolean> => {
+  // Block lists are private: clients may read only their own blockedUsers subcollection.
+  const blockSnapshot = await getDoc(doc(db, 'users', userId, 'blockedUsers', otherUserId));
+  return blockSnapshot.exists();
+};
 
 export interface Chat {
   id?: string;
@@ -121,6 +254,23 @@ const normalizeMessage = (id: string, chatId: string, data: Record<string, any>)
     read: data.read === true,
     status: data.status,
     readBy,
+    ...(data.reactions && typeof data.reactions === 'object' ? { reactions: data.reactions as { [userId: string]: string } } : {}),
+    ...(data.attachment && typeof data.attachment.publicId === 'string'
+      ? { attachment: data.attachment as ImageAttachment }
+      : {}),
+    ...(data.sticker?.type === 'sticker' && typeof data.sticker.stickerId === 'string'
+      ? { sticker: data.sticker as StickerMessage }
+      : {}),
+    ...(data.gif?.type === 'gif' && data.gif.provider === 'giphy' && typeof data.gif.gifId === 'string'
+      ? { gif: data.gif as GifMessage }
+      : {}),
+    ...(data.replyTo && typeof data.replyTo.messageId === 'string' && typeof data.replyTo.senderId === 'string'
+      ? { replyTo: data.replyTo as ReplyPreview }
+      : {}),
+    ...(data.edited === true ? { edited: true } : {}),
+    ...(data.editedAt ? { editedAt: toMillis(data.editedAt) } : {}),
+    ...(data.deleted === true ? { deleted: true } : {}),
+    ...(data.deletedAt ? { deletedAt: toMillis(data.deletedAt) } : {}),
   };
 };
 
@@ -147,6 +297,9 @@ export const createChat = async (
   }
   if (ownerId === userId) {
     throw new Error('You cannot start a conversation about your own item.');
+  }
+  if (await hasCurrentUserBlocked(userId, ownerId)) {
+    throw new Error('This conversation is unavailable because one of the users has blocked the other.');
   }
 
   const existingQuery = query(
@@ -247,8 +400,21 @@ export const sendMessage = async (
   chatId: string,
   senderId: string,
   senderName: string,
-  content: string
+  content: string,
+  attachment?: ImageAttachment,
+  sticker?: StickerMessage,
+  gif?: GifMessage,
+  replyTo?: ReplyPreview
 ): Promise<string> => {
+  if (sticker && (sticker.type !== 'sticker' || !CHAT_STICKER_IDS.includes(sticker.stickerId as typeof CHAT_STICKER_IDS[number]))) {
+    throw new Error('That sticker is not available. Please refresh and try again.');
+  }
+  if (attachment && sticker) throw new Error('A message can contain either a photo or a sticker, not both.');
+  if (gif && (gif.type !== 'gif' || gif.provider !== 'giphy' || !/^[A-Za-z0-9_-]{1,128}$/.test(gif.gifId))) {
+    throw new Error('That GIF could not be sent. Please choose another result.');
+  }
+  if ([attachment, sticker, gif].filter(Boolean).length > 1) throw new Error('A message can contain only one attachment.');
+
   const safeName = sanitizePlainText(senderName, LIMITS.displayName, { multiline: false });
   const safeContent = sanitizePlainText(content, LIMITS.chatMessage, { multiline: true });
   if (!safeContent) throw new Error('Message cannot be empty.');
@@ -263,6 +429,32 @@ export const sendMessage = async (
   }
 
   const recipientId = chatData.participantIds.find((participantId: string) => participantId !== senderId);
+  if (!recipientId || await hasCurrentUserBlocked(senderId, recipientId)) {
+    throw new Error('This message cannot be sent because one of the users has blocked the other.');
+  }
+
+  let safeReplyTo: ReplyPreview | undefined;
+  if (replyTo) {
+    const safeReplyMessageId = sanitizeFirestoreDocId(replyTo.messageId);
+    if (!safeReplyMessageId) throw new Error('The message you are replying to is invalid.');
+    const originalSnapshot = await getDoc(doc(db, 'chats', chatId, 'messages', safeReplyMessageId));
+    if (!originalSnapshot.exists()) throw new Error('The original message is no longer available.');
+    const original = originalSnapshot.data();
+    if (!chatData.participantIds.includes(original.senderId)) {
+      throw new Error('You can only reply to messages in this conversation.');
+    }
+    const replyType: ReplyPreview['type'] = original.attachment ? 'photo'
+      : original.sticker ? 'sticker'
+      : original.gif ? 'gif'
+      : 'text';
+    safeReplyTo = {
+      messageId: safeReplyMessageId,
+      senderId: original.senderId,
+      senderName: sanitizePlainText(original.senderName, LIMITS.displayName, { multiline: false }) || 'Anonymous',
+      content: sanitizePlainText(original.content, LIMITS.chatMessage, { multiline: true }),
+      type: replyType,
+    };
+  }
   const messageRef = doc(collection(chatRef, 'messages'));
   const batch = writeBatch(db);
 
@@ -274,6 +466,10 @@ export const sendMessage = async (
     read: false,
     status: 'sent',
     readBy: {},
+    ...(attachment ? { attachment } : {}),
+    ...(sticker ? { sticker } : {}),
+    ...(gif ? { gif } : {}),
+    ...(safeReplyTo ? { replyTo: safeReplyTo } : {}),
   });
   batch.update(chatRef, {
     lastMessage: {
@@ -308,6 +504,84 @@ export const sendMessage = async (
   }
 
   return messageRef.id;
+};
+
+/** Edit a text-only message authored by the current participant. */
+export const editMessage = async (
+  chatId: string,
+  messageId: string,
+  userId: string,
+  content: string
+): Promise<void> => {
+  const safeContent = sanitizePlainText(content, LIMITS.chatMessage, { multiline: true });
+  if (!safeContent) throw new Error('Message cannot be empty.');
+  const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+  const snapshot = await getDoc(messageRef);
+  if (!snapshot.exists()) throw new Error('This message no longer exists.');
+  const message = snapshot.data();
+  if (message.senderId !== userId) throw new Error('You can only edit your own messages.');
+  if (message.deleted === true) throw new Error('Deleted messages cannot be edited.');
+  if (message.attachment || message.sticker || message.gif) {
+    throw new Error('Only text messages can be edited.');
+  }
+  await updateDoc(messageRef, { content: safeContent, edited: true, editedAt: serverTimestamp() });
+};
+
+/** Soft-delete a message authored by the current participant, preserving reply references. */
+export const deleteMessage = async (
+  chatId: string,
+  messageId: string,
+  userId: string
+): Promise<void> => {
+  const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+  const snapshot = await getDoc(messageRef);
+  if (!snapshot.exists()) throw new Error('This message no longer exists.');
+  const message = snapshot.data();
+  if (message.senderId !== userId) throw new Error('You can only delete your own messages.');
+  if (message.deleted === true) return;
+  await updateDoc(messageRef, {
+    content: 'This message was deleted',
+    deleted: true,
+    deletedAt: serverTimestamp(),
+    attachment: deleteField(),
+    sticker: deleteField(),
+    gif: deleteField(),
+    reactions: deleteField(),
+  });
+};
+
+/** Add, change, or remove only the current user's reaction on a message. */
+export const setMessageReaction = async (
+  chatId: string,
+  messageId: string,
+  userId: string,
+  emoji: string
+): Promise<void> => {
+  const allowedReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+  const hasEmojiCharacter = /\p{Extended_Pictographic}|\p{Regional_Indicator}{2}|[#*0-9]\uFE0F?\u20E3/u.test(emoji);
+  const isShortSingleReaction = emoji.length > 0 && Array.from(emoji).length <= 16 && !/\s/u.test(emoji);
+  if (!isShortSingleReaction || (!allowedReactions.includes(emoji) && !hasEmojiCharacter)) {
+    throw new Error('Choose a single emoji for your reaction.');
+  }
+
+  const messageRef = doc(db, 'chats', chatId, 'messages', messageId);
+  const messageSnapshot = await getDoc(messageRef);
+  if (!messageSnapshot.exists()) throw new Error('This message no longer exists.');
+
+  const message = messageSnapshot.data();
+  const chatSnapshot = await getDoc(doc(db, 'chats', chatId));
+  if (
+    !chatSnapshot.exists() ||
+    !Array.isArray(chatSnapshot.data().participantIds) ||
+    !chatSnapshot.data().participantIds.includes(userId)
+  ) {
+    throw new Error('You are not a participant in this conversation.');
+  }
+
+  const currentReaction = message.reactions?.[userId];
+  await updateDoc(messageRef, {
+    [`reactions.${userId}`]: currentReaction === emoji ? deleteField() : emoji,
+  });
 };
 
 /** Mark messages from other participants as read by the current user. */

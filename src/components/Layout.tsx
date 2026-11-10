@@ -99,6 +99,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
     { id: 'map', label: 'Campus Map', icon: 'map' },
     { id: 'leaderboard', label: 'Leaderboard', icon: 'emoji_events' },
     { id: 'profile', label: 'Profile', icon: 'person' },
+    { id: 'blocked-users', label: 'Blocked Users', icon: 'block' },
     { id: 'info', label: 'App Info', icon: 'info' },
     ...(user?.isAdmin ? [{ id: 'admin', label: 'Admin', icon: 'admin_panel_settings' }] : []),
   ];
