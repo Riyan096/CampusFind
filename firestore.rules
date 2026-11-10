@@ -283,6 +283,51 @@ service cloud.firestore {
     }
 
 
+    // User reports are private to the reporter and authorized admins.
+    match /userReports/{reportId} {
+      function validReportCreate() {
+        let d = request.resource.data;
+        let chatPath = /databases/$(database)/documents/chats/$(d.chatId);
+        return isSignedIn() &&
+          d.keys().hasOnly([
+            'reporterId', 'reportedUserId', 'chatId', 'itemId',
+            'reason', 'details', 'status', 'createdAt', 'updatedAt'
+          ]) &&
+          d.reporterId == request.auth.uid &&
+          d.reportedUserId is string &&
+          d.reportedUserId != request.auth.uid &&
+          d.chatId is string &&
+          d.itemId is string &&
+          exists(chatPath) &&
+          get(chatPath).data.itemId == d.itemId &&
+          get(chatPath).data.participantIds.hasAll([d.reporterId, d.reportedUserId]) &&
+          d.reason in [
+            'harassment', 'threats', 'spam', 'impersonation',
+            'inappropriate_content', 'scam', 'other'
+          ] &&
+          d.details is string &&
+          d.details.size() <= 1000 &&
+          d.status == 'new' &&
+          d.createdAt == request.time &&
+          d.updatedAt == request.time;
+      }
+
+      allow create: if validReportCreate();
+      allow read: if isAdmin() ||
+        (isSignedIn() && resource.data.reporterId == request.auth.uid);
+      allow update: if isAdmin() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'reviewNote', 'reviewedBy', 'reviewedAt', 'updatedAt'
+        ]) &&
+        request.resource.data.status in ['reviewing', 'actioned', 'dismissed'] &&
+        request.resource.data.reviewNote is string &&
+        request.resource.data.reviewNote.size() <= 1000 &&
+        request.resource.data.reviewedBy == request.auth.uid &&
+        request.resource.data.reviewedAt == request.time &&
+        request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+
     // Firestore chat: users can discover only chats whose participantIds include them.
     match /chats/{chatId} {
       function isChatParticipant() {
