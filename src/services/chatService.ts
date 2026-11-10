@@ -51,6 +51,14 @@ export const CHAT_STICKER_IDS = [
   'coffee-break', 'good-luck', 'wave-hello', 'celebrate',
 ] as const;
 
+export interface ReplyPreview {
+  messageId: string;
+  senderId: string;
+  senderName: string;
+  content: string;
+  type: 'text' | 'photo' | 'sticker' | 'gif';
+}
+
 export interface Message {
   id?: string;
   chatId: string;
@@ -64,6 +72,7 @@ export interface Message {
   attachment?: ImageAttachment;
   sticker?: StickerMessage;
   gif?: GifMessage;
+  replyTo?: ReplyPreview;
   reactions?: { [userId: string]: string };
 }
 
@@ -205,6 +214,9 @@ const normalizeMessage = (id: string, chatId: string, data: Record<string, any>)
     ...(data.gif?.type === 'gif' && data.gif.provider === 'giphy' && typeof data.gif.gifId === 'string'
       ? { gif: data.gif as GifMessage }
       : {}),
+    ...(data.replyTo && typeof data.replyTo.messageId === 'string' && typeof data.replyTo.senderId === 'string'
+      ? { replyTo: data.replyTo as ReplyPreview }
+      : {}),
   };
 };
 
@@ -337,7 +349,8 @@ export const sendMessage = async (
   content: string,
   attachment?: ImageAttachment,
   sticker?: StickerMessage,
-  gif?: GifMessage
+  gif?: GifMessage,
+  replyTo?: ReplyPreview
 ): Promise<string> => {
   if (sticker && (sticker.type !== 'sticker' || !CHAT_STICKER_IDS.includes(sticker.stickerId as typeof CHAT_STICKER_IDS[number]))) {
     throw new Error('That sticker is not available. Please refresh and try again.');
@@ -365,6 +378,29 @@ export const sendMessage = async (
   if (!recipientId || await hasCurrentUserBlocked(senderId, recipientId)) {
     throw new Error('This message cannot be sent because one of the users has blocked the other.');
   }
+
+  let safeReplyTo: ReplyPreview | undefined;
+  if (replyTo) {
+    const safeReplyMessageId = sanitizeFirestoreDocId(replyTo.messageId);
+    if (!safeReplyMessageId) throw new Error('The message you are replying to is invalid.');
+    const originalSnapshot = await getDoc(doc(db, 'chats', chatId, 'messages', safeReplyMessageId));
+    if (!originalSnapshot.exists()) throw new Error('The original message is no longer available.');
+    const original = originalSnapshot.data();
+    if (!chatData.participantIds.includes(original.senderId)) {
+      throw new Error('You can only reply to messages in this conversation.');
+    }
+    const replyType: ReplyPreview['type'] = original.attachment ? 'photo'
+      : original.sticker ? 'sticker'
+      : original.gif ? 'gif'
+      : 'text';
+    safeReplyTo = {
+      messageId: safeReplyMessageId,
+      senderId: original.senderId,
+      senderName: sanitizePlainText(original.senderName, LIMITS.displayName, { multiline: false }) || 'Anonymous',
+      content: sanitizePlainText(original.content, LIMITS.chatMessage, { multiline: true }),
+      type: replyType,
+    };
+  }
   const messageRef = doc(collection(chatRef, 'messages'));
   const batch = writeBatch(db);
 
@@ -379,6 +415,7 @@ export const sendMessage = async (
     ...(attachment ? { attachment } : {}),
     ...(sticker ? { sticker } : {}),
     ...(gif ? { gif } : {}),
+    ...(safeReplyTo ? { replyTo: safeReplyTo } : {}),
   });
   batch.update(chatRef, {
     lastMessage: {
