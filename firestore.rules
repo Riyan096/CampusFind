@@ -460,7 +460,7 @@ service cloud.firestore {
                 request.auth.uid in newReactions &&
                 newReactions[request.auth.uid] is string &&
                 newReactions[request.auth.uid].size() > 0 &&
-                newReactions[request.auth.uid].size() <= 16
+                newReactions[request.auth.uid].size() <= 64
               ) ||
               (
                 !(request.auth.uid in newReactions) &&
