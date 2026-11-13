@@ -558,6 +558,57 @@ test('message owners can soft-delete messages while preserving the message docum
 });
 
 
+
+test('chat creation requires authentic participant display names', async () => {
+  await seedUser('chat-create-a', {displayName: 'First user'});
+  await seedUser('chat-create-b', {displayName: 'Second user'});
+  await seedItem('chat-create-item', {reportedBy: 'chat-create-b'});
+
+  const db = testEnv.authenticatedContext('chat-create-a').firestore();
+  const chat = {
+    itemId: 'chat-create-item',
+    itemTitle: 'Test item',
+    createdBy: 'chat-create-a',
+    participantIds: ['chat-create-a', 'chat-create-b'],
+    participants: {
+      'chat-create-a': {name: 'First user', joinedAt: firebase.firestore.FieldValue.serverTimestamp()},
+      'chat-create-b': {name: 'Second user', joinedAt: firebase.firestore.FieldValue.serverTimestamp()}
+    },
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+
+  await assertSucceeds(db.collection('chats').doc('valid-chat-create').set(chat));
+  await assertFails(db.collection('chats').doc('forged-chat-create').set({
+    ...chat,
+    participants: {
+      ...chat.participants,
+      'chat-create-b': {name: 'CampusFind Admin', joinedAt: firebase.firestore.FieldValue.serverTimestamp()}
+    }
+  }));
+});
+
+test('leaving a chat cannot modify the remaining participant profile', async () => {
+  await seedUser('leave-a');
+  await seedUser('leave-b');
+  await seedItem('leave-item');
+  await seedChat('leave-chat', 'leave-a', 'leave-b', 'leave-item');
+
+  const db = testEnv.authenticatedContext('leave-a').firestore();
+  await assertFails(db.collection('chats').doc('leave-chat').update({
+    participantIds: ['leave-b'],
+    participants: {
+      'leave-b': {name: 'Impersonated admin', joinedAt: Timestamp.now()}
+    }
+  }));
+
+  await assertSucceeds(db.collection('chats').doc('leave-chat').update({
+    participantIds: ['leave-b'],
+    participants: {
+      'leave-b': {name: 'Second user', joinedAt: Timestamp.now()}
+    }
+  }));
+});
+
 test('chat participants cannot impersonate another user in messages', async () => {
   await seedUser('message-name-a');
   await seedUser('message-name-b');
