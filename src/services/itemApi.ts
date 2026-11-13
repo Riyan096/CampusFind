@@ -1,6 +1,6 @@
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app } from './firebase';
-import type { Achievement, Item, UserStats } from '../types';
+import type { Achievement, Item } from '../types';
 import type { LostItemStatus, FoundItemStatus } from '../types';
 
 const functions = getFunctions(app);
@@ -14,7 +14,6 @@ interface ResolveItemRequest {
 
 interface ResolveItemResponse {
   item: Item;
-  stats: UserStats;
   newAchievements: Achievement[];
   pointsAwarded: number;
   alreadyResolved?: boolean;
