@@ -366,16 +366,20 @@ service cloud.firestore {
       }
 
       function validChatLeave() {
-        let participantDiff = resource.data.participants.diff(request.resource.data.participants);
         let updatedIds = request.resource.data.participantIds;
+        let remainingUserId = updatedIds[0];
+        let oldParticipants = resource.data.participants;
+        let newParticipants = request.resource.data.participants;
         return updatedIds is list &&
+          updatedIds.size() == 1 &&
+          resource.data.participantIds.size() == 2 &&
           resource.data.participantIds.hasAll(updatedIds) &&
-          updatedIds.size() == resource.data.participantIds.size() - 1 &&
           !(request.auth.uid in updatedIds) &&
-          participantDiff.removedKeys().hasOnly([request.auth.uid]) &&
-          participantDiff.removedKeys().size() == 1 &&
-          participantDiff.addedKeys().size() == 0 &&
-          participantDiff.changedKeys().size() == 0;
+          newParticipants is map &&
+          newParticipants.keys().hasAll(updatedIds) &&
+          newParticipants.keys().hasOnly(updatedIds) &&
+          newParticipants[remainingUserId] == oldParticipants[remainingUserId] &&
+          !(request.auth.uid in newParticipants);
       }
 
       function validChatCreate() {
