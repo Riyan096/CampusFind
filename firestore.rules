@@ -443,7 +443,7 @@ service cloud.firestore {
             request.resource.data.isTyping == true &&
             request.resource.data.displayName is string &&
             request.resource.data.displayName.size() > 0 &&
-            request.resource.data.displayName.size() <= 100 &&
+            matchesOwnDisplayName(request.resource.data.displayName) &&
             request.resource.data.updatedAt == request.time;
         }
 
