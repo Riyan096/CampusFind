@@ -539,6 +539,29 @@ export const resolveItem = onCall({enforceAppCheck: true}, async (request) => {
       const isAlreadyRewardedFinalStatus = newStatus === item.status &&
         ((item.type === "LOST" && item.status === "CLAIMED") ||
           (item.type === "FOUND" && item.status === "RETURNED"));
+
+      // A non-reporter may confirm a return only if they initiated a
+      // Firestore conversation about this item. Merely being signed in must
+      // never authorize a third party to resolve someone else's listing.
+      if (!isAdmin && reporterId !== uid &&
+          (isRewardedFinalTransition || isAlreadyRewardedFinalStatus)) {
+        const itemChats = await transaction.get(
+          db.collection("chats").where("itemId", "==", itemId)
+        );
+        const callerStartedConversation = itemChats.docs.some((chatDoc) => {
+          const chat = chatDoc.data();
+          return chat.createdBy === uid &&
+            Array.isArray(chat.participantIds) &&
+            chat.participantIds.includes(uid);
+        });
+        if (!callerStartedConversation) {
+          throw new HttpsError(
+            "permission-denied",
+            "Only the item reporter or the person who started a conversation about the item can confirm its return."
+          );
+        }
+      }
+
       if (!isAdmin && (
         (reporterId !== uid && !isRewardedFinalTransition &&
           !isAlreadyRewardedFinalStatus) ||
@@ -578,7 +601,6 @@ export const resolveItem = onCall({enforceAppCheck: true}, async (request) => {
         );
         return {
           item: {...item, id: itemId},
-          stats: reporterStats,
           newAchievements: [],
           pointsAwarded: 0,
           alreadyResolved: true,
@@ -602,7 +624,6 @@ export const resolveItem = onCall({enforceAppCheck: true}, async (request) => {
         );
         return {
           item: {...item, id: itemId, status: newStatus},
-          stats: reporterStats,
           newAchievements: [],
           pointsAwarded: 0,
           alreadyResolved: false,
@@ -618,7 +639,6 @@ export const resolveItem = onCall({enforceAppCheck: true}, async (request) => {
         );
         return {
           item: {...item, id: itemId},
-          stats: reporterStats,
           newAchievements: [],
           pointsAwarded: 0,
           alreadyResolved: true,
@@ -650,8 +670,7 @@ export const resolveItem = onCall({enforceAppCheck: true}, async (request) => {
       });
       return {
         item: {...item, id: itemId, status: newStatus},
-        stats: reward.stats,
-        newAchievements: reward.newAchievements,
+        newAchievements: uid === reporterId || isAdmin ? reward.newAchievements : [],
         pointsAwarded: reward.pointsAwarded,
         streakIncreased: reward.streakIncreased,
         alreadyResolved: false,
