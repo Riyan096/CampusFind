@@ -120,6 +120,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   onClose 
 }) => {
   const { user } = useAuth();
+  const userId = user?.uid;
+  const userDisplayName = user?.displayName || 'Anonymous';
   const [chats, setChats] = useState<Chat[]>([]);
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
   const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
@@ -158,12 +160,12 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const mediaWorkerUrl = (import.meta.env.VITE_MEDIA_WORKER_URL || 'http://localhost:8787').replace(/\/$/, '');
 
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       setRecentStickerIds([]);
       return;
     }
     try {
-      const stored = localStorage.getItem(`campusfind:chat-stickers:${user.uid}`);
+      const stored = localStorage.getItem(`campusfind:chat-stickers:${userId}`);
       const parsed: unknown = stored ? JSON.parse(stored) : [];
       setRecentStickerIds(
         Array.isArray(parsed)
@@ -173,15 +175,15 @@ export const ChatView: React.FC<ChatViewProps> = ({
     } catch {
       setRecentStickerIds([]);
     }
-  }, [user?.uid]);
+  }, [userId]);
 
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       setQuickReactionOptions(DEFAULT_CHAT_REACTION_OPTIONS);
       return;
     }
     try {
-      const stored = localStorage.getItem(`campusfind:quick-reactions:${user.uid}`);
+      const stored = localStorage.getItem(`campusfind:quick-reactions:${userId}`);
       const parsed: unknown = stored ? JSON.parse(stored) : null;
       const validOptions = Array.isArray(parsed)
         ? parsed.filter(isValidQuickReaction).filter((emoji, index, values) => values.indexOf(emoji) === index).slice(0, MAX_QUICK_REACTIONS)
@@ -190,7 +192,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     } catch {
       setQuickReactionOptions(DEFAULT_CHAT_REACTION_OPTIONS);
     }
-  }, [user?.uid]);
+  }, [userId]);
 
   useEffect(() => {
     return () => {
@@ -390,21 +392,21 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   // Subscribe only to the active conversation's other participant typing status.
   useEffect(() => {
-    if (!activeChat?.id || !user) {
+    if (!activeChat?.id || !userId) {
       setTypingNames([]);
       return;
     }
-    return subscribeToTypingUsers(activeChat.id, user.uid, setTypingNames);
-  }, [activeChat?.id, user?.uid]);
+    return subscribeToTypingUsers(activeChat.id, userId, setTypingNames);
+  }, [activeChat?.id, userId]);
 
   // Keep the signed-in user's private block list synchronized across chats.
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       setBlockedUserIds(new Set());
       return;
     }
-    return subscribeToBlockedUsers(user.uid, (ids) => setBlockedUserIds(new Set(ids)));
-  }, [user?.uid]);
+    return subscribeToBlockedUsers(userId, (ids) => setBlockedUserIds(new Set(ids)));
+  }, [userId]);
 
   // Load user's chats
   useEffect(() => {
@@ -537,14 +539,14 @@ export const ChatView: React.FC<ChatViewProps> = ({
     typingTimeoutRef.current = null;
     return () => {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      if (activeChat?.id && user?.uid) {
-        void setTypingStatus(activeChat.id, user.uid, user.displayName || 'Anonymous', false)
+      if (activeChat?.id && userId) {
+        void setTypingStatus(activeChat.id, userId, userDisplayName, false)
           .catch((error) => console.error('Unable to clear typing status:', error));
       }
       typingActiveRef.current = false;
       lastTypingUpdateRef.current = 0;
     };
-  }, [activeChat?.id, user?.uid]);
+  }, [activeChat?.id, userId, userDisplayName]);
 
   useEffect(() => {
     shouldAutoScrollRef.current = true;
