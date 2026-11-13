@@ -83,7 +83,7 @@ jobs:
   refresh-security-lockfiles:
     name: Refresh dependency lockfiles after security updates
     if: github.event_name == 'push' && github.ref == 'refs/heads/security/predeployment-readiness'
-    needs: [frontend, functions]
+    # Run independently so it can repair lockfiles even when npm ci rejects a manifest/lock mismatch.
     runs-on: ubuntu-24.04
     permissions:
       contents: write
