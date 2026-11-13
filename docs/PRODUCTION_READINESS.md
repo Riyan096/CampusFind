@@ -27,6 +27,7 @@ This checklist separates repository work from settings that must be completed in
 - Chat message sender and typing display names are checked against the authenticated user's private profile.
 - Item-resolution responses no longer expose the reporter's private gamification statistics to the other participant.
 - Callable chat and match notification endpoints respect blocks in either direction.
+- The unused root-level Firebase Admin SDK dependency was removed; the frontend uses the Firebase Web SDK (`12.19.0`) and Functions use Firebase Admin (`14.5.1`).
 - Configure `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` in the hosting environment after registering the web app in Firebase App Check. The site key is public. Never put a reCAPTCHA secret, Cloudinary API secret, Gemini key, or service-account credential in a `VITE_*` variable.
 - If the site key is missing, the production app throws during Firebase initialization rather than continuing without App Check. Local development may omit the key.
 
@@ -39,10 +40,10 @@ This checklist separates repository work from settings that must be completed in
    - `firebase deploy --only firestore:rules`
    - `firebase deploy --only database`
    - `firebase deploy --only storage`
-5. In App Check metrics, monitor valid/invalid/unknown requests for each supported product before enabling enforcement. Enforce only after confirming legitimate production traffic is receiving valid App Check tokens. Do not enable enforcement blindly.
+5. In App Check metrics, monitor valid/invalid/unknown requests for Firestore, Realtime Database, and Storage before enabling their enforcement. Callable Functions already require valid App Check tokens in code. Enforce the Firebase data services only after confirming legitimate production traffic is receiving valid tokens.
 6. Verify Firestore, RTDB, and Storage deployed rules in the Firebase console match the committed files. Rules in one Firebase product do not protect another product.
 7. Configure usage monitoring and budget alerts. Firebase usage quotas and Google Cloud billing alerts are separate concerns; a budget alert is not a hard spending cap.
-8. Test with two independent accounts and confirm private user documents, chats, messages, typing state, and user-specific data cannot be read by the other account.
+8. Test with two independent accounts and confirm private user documents, chats, messages, typing state, and user-specific data cannot be read by the other account. Confirm the legacy RTDB chat history is readable only by participants and cannot be modified by clients.
 
 ## Cloudflare and Cloudinary tasks
 
