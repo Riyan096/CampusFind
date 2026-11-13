@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy, writeBatch, serverTimestamp } from 'firebase/firestore';
 
 import { db } from '../services/firebase';
 import { Button } from '../components/UI';
@@ -88,13 +88,7 @@ export const AdminView: React.FC = () => {
   const [notificationMessage, setNotificationMessage] = useState('');
   const [notificationType, setNotificationType] = useState<'info' | 'success' | 'warning'>('info');
 
-  useEffect(() => {
-    if (isAdmin) {
-      fetchData();
-    }
-  }, [isAdmin]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -140,8 +134,12 @@ export const AdminView: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [error]);
 
+
+  useEffect(() => {
+    if (isAdmin) void fetchData();
+  }, [isAdmin, fetchData]);
 
   const handleToggleAdmin = async (userId: string, currentStatus: boolean) => {
     try {
@@ -150,7 +148,7 @@ export const AdminView: React.FC = () => {
       });
       success(`Admin status ${!currentStatus ? 'granted' : 'revoked'}`);
       fetchData();
-    } catch (err) {
+    } catch {
       error('Failed to update admin status');
     }
   };
@@ -361,7 +359,7 @@ export const AdminView: React.FC = () => {
           ].map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as 'dashboard' | 'users' | 'items' | 'reports' | 'notifications')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
                 activeTab === tab.id
                   ? 'bg-primary text-white'
@@ -661,7 +659,7 @@ export const AdminView: React.FC = () => {
                 </label>
                 <select
                   value={notificationType}
-                  onChange={(e) => setNotificationType(e.target.value as any)}
+                  onChange={(e) => setNotificationType(e.target.value as 'info' | 'success' | 'warning')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 outline-none"
                 >
                   <option value="info">Info</option>

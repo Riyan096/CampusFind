@@ -5,18 +5,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { ItemType, ItemCategory, LostItemStatus, FoundItemStatus } from '../types';
-
-interface FilterState {
-  dateRange: 'all' | 'today' | 'week' | 'month';
-  startDate: string;
-  endDate: string;
-  locations: string[];
-  status: (LostItemStatus | FoundItemStatus)[];
-  categories: ItemCategory[];
-  type: ItemType | 'ALL';
-  sortBy: 'newest' | 'oldest' | 'alphabetical';
-}
-
+import type { FilterState } from './advancedSearchFilters.constants';
 
 interface AdvancedSearchFiltersProps {
   filters: FilterState;
@@ -24,17 +13,6 @@ interface AdvancedSearchFiltersProps {
   onReset: () => void;
   itemCount: number;
 }
-
-const defaultFilters: FilterState = {
-  dateRange: 'all',
-  startDate: '',
-  endDate: '',
-  locations: [],
-  status: [],
-  categories: [],
-  type: 'ALL',
-  sortBy: 'newest'
-};
 
 export const AdvancedSearchFilters: React.FC<AdvancedSearchFiltersProps> = ({
   filters,
@@ -54,18 +32,20 @@ export const AdvancedSearchFilters: React.FC<AdvancedSearchFiltersProps> = ({
         startDate = today.toISOString().split('T')[0];
         endDate = startDate;
         break;
-      case 'week':
+      case 'week': {
         const weekAgo = new Date(today);
         weekAgo.setDate(weekAgo.getDate() - 7);
         startDate = weekAgo.toISOString().split('T')[0];
         endDate = today.toISOString().split('T')[0];
         break;
-      case 'month':
+      }
+      case 'month': {
         const monthAgo = new Date(today);
         monthAgo.setMonth(monthAgo.getMonth() - 1);
         startDate = monthAgo.toISOString().split('T')[0];
         endDate = today.toISOString().split('T')[0];
         break;
+      }
     }
 
     onChange({
@@ -410,5 +390,3 @@ export const AdvancedSearchFilters: React.FC<AdvancedSearchFiltersProps> = ({
   );
 };
 
-export { defaultFilters };
-export type { FilterState };

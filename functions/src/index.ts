@@ -191,7 +191,7 @@ export const cleanupReplacedItemImage = onDocumentUpdated("items/{itemId}", asyn
   );
 });
 
-export const awardPoints = onCall(async (request) => {
+export const awardPoints = onCall({enforceAppCheck: true}, async (request) => {
   if (!request.auth) {
     throw new HttpsError(
       "unauthenticated",
@@ -235,6 +235,14 @@ export const awardPoints = onCall(async (request) => {
   }
 });
 
+const areUsersBlocked = async (userA: string, userB: string): Promise<boolean> => {
+  const [aBlocksB, bBlocksA] = await Promise.all([
+    db.collection("users").doc(userA).collection("blockedUsers").doc(userB).get(),
+    db.collection("users").doc(userB).collection("blockedUsers").doc(userA).get(),
+  ]);
+  return aBlocksB.exists || bBlocksA.exists;
+};
+
 const writeNotificationOnce = async (
   id: string,
   data: FirebaseFirestore.DocumentData,
@@ -247,7 +255,7 @@ const writeNotificationOnce = async (
 };
 
 /** Create a chat notification only for a real message in a shared chat. */
-export const notifyChatMessage = onCall(async (request) => {
+export const notifyChatMessage = onCall({enforceAppCheck: true}, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
@@ -276,6 +284,9 @@ export const notifyChatMessage = onCall(async (request) => {
       typeof message.content !== "string") {
     throw new HttpsError("permission-denied", "Message was not sent by you.");
   }
+  if (await areUsersBlocked(request.auth.uid, recipientId)) {
+    throw new HttpsError("permission-denied", "Notifications are disabled between blocked users.");
+  }
 
   await writeNotificationOnce(`chat_${chatId}_${messageId}_${recipientId}`, {
     userId: recipientId,
@@ -292,7 +303,7 @@ export const notifyChatMessage = onCall(async (request) => {
 });
 
 /** Notify an item's owner about a complementary item reported by the caller. */
-export const notifyPotentialMatch = onCall(async (request) => {
+export const notifyPotentialMatch = onCall({enforceAppCheck: true}, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
@@ -322,6 +333,9 @@ export const notifyPotentialMatch = onCall(async (request) => {
       target.reportedBy === request.auth.uid) {
     throw new HttpsError("permission-denied", "These items cannot be matched by you.");
   }
+  if (await areUsersBlocked(request.auth.uid, target.reportedBy as string)) {
+    throw new HttpsError("permission-denied", "Notifications are disabled between blocked users.");
+  }
   const foundTitle = typeof source.title === "string" ? source.title.slice(0, 200) : "a found item";
   await writeNotificationOnce(`match_${sourceItemId}_${targetItemId}`, {
     userId: target.reportedBy,
@@ -344,7 +358,7 @@ export const notifyPotentialMatch = onCall(async (request) => {
  * One-time backfill for chats created before the private user index existed.
  * The caller receives no other users' chat data; only their own index is built.
  */
-export const rebuildUserChatIndex = onCall(async (request) => {
+export const rebuildUserChatIndex = onCall({enforceAppCheck: true}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "You must be signed in.");
   const uid = request.auth.uid;
   const userIndexRef = getDatabase().ref(`userChats/${uid}`);
@@ -376,7 +390,7 @@ export const rebuildUserChatIndex = onCall(async (request) => {
   return {ok: true, chatCount: Object.keys(index).length - 1};
 });
 
-export const joinItemChat = onCall(async (request) => {
+export const joinItemChat = onCall({enforceAppCheck: true}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "You must be signed in.");
   const chatId = request.data?.chatId;
   if (typeof chatId !== "string" || !/^[-\w]{1,128}$/.test(chatId)) {
@@ -399,6 +413,10 @@ export const joinItemChat = onCall(async (request) => {
   const callerIsOwner = ownerId === request.auth.uid;
   if (!callerIsCreator && !callerIsOwner) {
     throw new HttpsError("permission-denied", "Only the chat creator or item owner can join.");
+  }
+  const otherUserId = callerIsCreator ? ownerId : chat.createdBy;
+  if (await areUsersBlocked(request.auth.uid, otherUserId)) {
+    throw new HttpsError("permission-denied", "Blocked users cannot join this conversation.");
   }
   const participantId = callerIsCreator ? ownerId : request.auth.uid;
   if (chat.participants?.[participantId]) return {ok: true};
@@ -486,7 +504,7 @@ const writePublicProfile = (
   }, {merge: true});
 };
 
-export const resolveItem = onCall(async (request) => {
+export const resolveItem = onCall({enforceAppCheck: true}, async (request) => {
   if (!request.auth) {
     throw new HttpsError(
       "unauthenticated",
@@ -539,6 +557,30 @@ export const resolveItem = onCall(async (request) => {
       const isAlreadyRewardedFinalStatus = newStatus === item.status &&
         ((item.type === "LOST" && item.status === "CLAIMED") ||
           (item.type === "FOUND" && item.status === "RETURNED"));
+
+      // A non-reporter may confirm a return only if they initiated a
+      // Firestore conversation about this item. Merely being signed in must
+      // never authorize a third party to resolve someone else's listing.
+      if (!isAdmin && reporterId !== uid &&
+          (isRewardedFinalTransition || isAlreadyRewardedFinalStatus)) {
+        const itemChats = await transaction.get(
+          db.collection("chats").where("itemId", "==", itemId)
+        );
+        const callerStartedConversation = itemChats.docs.some((chatDoc) => {
+          const chat = chatDoc.data();
+          return chat.createdBy === uid &&
+            Array.isArray(chat.participantIds) &&
+            chat.participantIds.includes(uid);
+        });
+        if (!callerStartedConversation) {
+          throw new HttpsError(
+            "permission-denied",
+            "Only the item reporter or the person who started a conversation " +
+            "about the item can confirm its return."
+          );
+        }
+      }
+
       if (!isAdmin && (
         (reporterId !== uid && !isRewardedFinalTransition &&
           !isAlreadyRewardedFinalStatus) ||
@@ -578,7 +620,6 @@ export const resolveItem = onCall(async (request) => {
         );
         return {
           item: {...item, id: itemId},
-          stats: reporterStats,
           newAchievements: [],
           pointsAwarded: 0,
           alreadyResolved: true,
@@ -602,7 +643,6 @@ export const resolveItem = onCall(async (request) => {
         );
         return {
           item: {...item, id: itemId, status: newStatus},
-          stats: reporterStats,
           newAchievements: [],
           pointsAwarded: 0,
           alreadyResolved: false,
@@ -618,7 +658,6 @@ export const resolveItem = onCall(async (request) => {
         );
         return {
           item: {...item, id: itemId},
-          stats: reporterStats,
           newAchievements: [],
           pointsAwarded: 0,
           alreadyResolved: true,
@@ -650,8 +689,7 @@ export const resolveItem = onCall(async (request) => {
       });
       return {
         item: {...item, id: itemId, status: newStatus},
-        stats: reward.stats,
-        newAchievements: reward.newAchievements,
+        newAchievements: uid === reporterId || isAdmin ? reward.newAchievements : [],
         pointsAwarded: reward.pointsAwarded,
         streakIncreased: reward.streakIncreased,
         alreadyResolved: false,

@@ -18,8 +18,9 @@ class EmailService {
   private fromEmail: string = 'noreply@campusfind.edu';
 
   constructor() {
-    // Check if email service is configured
-    this.emailEnabled = !!import.meta.env.VITE_EMAIL_API_KEY;
+    // No email provider is integrated yet. Do not set a VITE_EMAIL_API_KEY:
+    // this client-side service only records demo logs and does not send email.
+    this.emailEnabled = false;
   }
 
   /**
@@ -137,7 +138,7 @@ CampusFind Team
   <div style="background: #f5f5f5; padding: 15px; border-left: 4px solid #0C5449; margin: 15px 0;">
     "${htmlPreview}"
   </div>
-  <p><a href="${window.location.origin}/chat" style="background: #0C5449; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Message</a></p>
+  <p><a href="${window.location.origin}/chat?chatId=${encodeURIComponent(chatId)}" style="background: #0C5449; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Message</a></p>
   <br>
   <p>Best regards,<br>CampusFind Team</p>
 </div>
@@ -310,8 +311,16 @@ CampusFind Team
   /**
    * Get email logs (for admin)
    */
-  getEmailLogs(): any[] {
-    return JSON.parse(localStorage.getItem('email_logs') || '[]');
+  getEmailLogs(): Array<{ to: string; subject: string; sentAt: string; status: string }> {
+    const stored: unknown = JSON.parse(localStorage.getItem('email_logs') || '[]');
+    if (!Array.isArray(stored)) return [];
+    return stored.filter((entry): entry is { to: string; subject: string; sentAt: string; status: string } =>
+      !!entry && typeof entry === 'object' &&
+      'to' in entry && typeof entry.to === 'string' &&
+      'subject' in entry && typeof entry.subject === 'string' &&
+      'sentAt' in entry && typeof entry.sentAt === 'string' &&
+      'status' in entry && typeof entry.status === 'string'
+    );
   }
 
   /**

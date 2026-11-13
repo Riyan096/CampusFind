@@ -1,14 +1,12 @@
-import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import {
   ItemType,
   ItemCategory,
-  ItemStatus,
   LostItemStatus,
   FoundItemStatus,
   type Achievement,
   type Item,
 } from '../types';
-import { geocodeAddress, getCurrentLocation } from '../services/geocodeService';
 
 
 import { Button, Input, Select, Card } from '../components/UI';
@@ -46,9 +44,6 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<ItemCategory>(ItemCategory.OTHER);
   const [location, setLocation] = useState('Campus Center'); // Generic default
-  const [locationLatLng, setLocationLatLng] = useState<[number, number] | null>(null);
-  const [geocodingLocation, setGeocodingLocation] = useState(false);
-  const [locationSearch, setLocationSearch] = useState('');
   const [aiTags, setAiTags] = useState<string[]>([]);
   const [useAI, setUseAI] = useState<boolean>(() => {
     const saved = localStorage.getItem('campusfind_use_ai');
@@ -202,10 +197,6 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
     setCategory(e.target.value as ItemCategory);
   }, []);
 
-  const handleLocationChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    setLocation(e.target.value as string);
-  }, []);
-
   const handleNotifyOwner = useCallback(async (match: PotentialMatch) => {
     const sourceItemId = matchSourceItemId;
     if (!user || !match.item.reportedBy || !sourceItemId) return;
@@ -229,7 +220,7 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
     
     try {
       setMatchSourceItemId(null);
-      const newItem: any = {
+      const newItem: Omit<Item, 'id'> = {
         type,
         title,
         description,
@@ -266,10 +257,14 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
       }
       
       onSuccess({ newAchievements });
-    } catch (err: any) {
+    } catch (err: unknown) {
 
       console.error('Error saving item:', err);
-      const errorMessage = err?.message || err?.code || 'Unknown error';
+      const errorMessage = err instanceof Error
+        ? err.message
+        : err && typeof err === 'object' && 'code' in err && typeof err.code === 'string'
+          ? err.code
+          : 'Unknown error';
       alert(`Failed to save item: ${errorMessage}`);
     }
 

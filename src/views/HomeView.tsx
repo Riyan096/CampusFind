@@ -1,20 +1,23 @@
 import React, { useEffect, useRef, useCallback, useMemo, useState } from "react";
-import type { Item } from '../types';
+import type { Item, UserStats } from '../types';
+import type { LeafletMapLike } from '../types/leaflet';
 import { ItemType, ItemCategory, LostItemStatus, FoundItemStatus } from '../types';
 import { StreakDisplay } from '../components/StreakDisplay';
 import { AchievementsPanel } from '../components/AchievementsPanel';
 
 
 
+type HomeUserStats = UserStats;
+
 interface HomeViewProps {
   items: Item[];
-  stats: any;
+  stats: HomeUserStats | null;
   onChangeTab: (tab: string) => void;
 }
 
 export const HomeView: React.FC<HomeViewProps> = React.memo(({ items, stats: userStats, onChangeTab }) => {
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstance = useRef<any>(null);
+  const mapInstance = useRef<LeafletMapLike | null>(null);
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
 
@@ -36,18 +39,18 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ items, stats: use
     const itemsLostToday = todayItems.filter(item => item.type === ItemType.LOST).length;
     
     // Enhanced return rate calculation - includes all resolved statuses
-    const resolvedStatuses = [
+    const resolvedStatuses: string[] = [
       LostItemStatus.CLAIMED, 
       LostItemStatus.RECOVERED,
       FoundItemStatus.RETURNED
     ];
-    const resolvedItems = items.filter(item => resolvedStatuses.includes(item.status as any));
+    const resolvedItems = items.filter(item => resolvedStatuses.some((status) => status === item.status));
     const returnRate = items.length > 0 ? Math.round((resolvedItems.length / items.length) * 100) : 0;
     
     // Category breakdown
     const categoryStats = Object.values(ItemCategory).map(category => {
       const categoryItems = items.filter(item => item.category === category);
-      const resolved = categoryItems.filter(item => resolvedStatuses.includes(item.status as any));
+      const resolved = categoryItems.filter(item => resolvedStatuses.includes(item.status));
       return {
         category,
         total: categoryItems.length,
@@ -71,8 +74,8 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ items, stats: use
       return itemDate >= fourteenDaysAgo && itemDate < sevenDaysAgo;
     });
     
-    const lastWeekResolved = lastWeekItems.filter(item => resolvedStatuses.includes(item.status as any)).length;
-    const previousWeekResolved = previousWeekItems.filter(item => resolvedStatuses.includes(item.status as any)).length;
+    const lastWeekResolved = lastWeekItems.filter(item => resolvedStatuses.includes(item.status)).length;
+    const previousWeekResolved = previousWeekItems.filter(item => resolvedStatuses.includes(item.status)).length;
     
     const lastWeekRate = lastWeekItems.length > 0 ? (lastWeekResolved / lastWeekItems.length) * 100 : 0;
     const previousWeekRate = previousWeekItems.length > 0 ? (previousWeekResolved / previousWeekItems.length) * 100 : 0;
@@ -134,7 +137,7 @@ export const HomeView: React.FC<HomeViewProps> = React.memo(({ items, stats: use
 
   useEffect(() => {
     // Mini Map Initialization
-    const L = (window as any).L;
+    const L = window.L;
     if (!L || !mapRef.current || mapInstance.current) return;
 
     // Initialize Map centered on campus

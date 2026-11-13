@@ -74,11 +74,11 @@ async function dataUrlToImageFile(dataUrl: string): Promise<File> {
 }
 
 // Convert Firestore timestamp to ISO string
-const convertTimestamps = (data: any): any => {
+const convertTimestamps = (data: Record<string, unknown>): Record<string, unknown> => {
   const result = { ...data };
-  for (const key in result) {
-    if (result[key] instanceof Timestamp) {
-      result[key] = result[key].toDate().toISOString();
+  for (const [key, value] of Object.entries(result)) {
+    if (value instanceof Timestamp) {
+      result[key] = value.toDate().toISOString();
     }
   }
   return result;
