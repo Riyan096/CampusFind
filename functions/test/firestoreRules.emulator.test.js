@@ -332,7 +332,7 @@ async function seedChat(chatId, firstUserId, secondUserId, itemId) {
 function validChatMessage(senderId) {
   return {
     senderId,
-    senderName: 'Test sender',
+    senderName: 'Test User',
     content: 'Hello',
     timestamp: firebase.firestore.FieldValue.serverTimestamp(),
     read: false,
@@ -557,6 +557,23 @@ test('message owners can soft-delete messages while preserving the message docum
   assert.equal('attachment' in deleted.data(), false);
 });
 
+
+test('chat participants cannot impersonate another user in messages', async () => {
+  await seedUser('message-name-a');
+  await seedUser('message-name-b');
+  await seedItem('message-name-item');
+  await seedChat('message-name-chat', 'message-name-a', 'message-name-b', 'message-name-item');
+
+  const db = testEnv.authenticatedContext('message-name-a').firestore();
+  const messages = db.collection('chats').doc('message-name-chat').collection('messages');
+
+  await assertFails(messages.doc('forged-name').set({
+    ...validChatMessage('message-name-a'),
+    senderName: 'Item owner'
+  }));
+  await assertSucceeds(messages.doc('valid-name').set(validChatMessage('message-name-a')));
+});
+
 test('chat participants can publish and read only their own typing status', async () => {
   await seedUser('typing-a');
   await seedUser('typing-b');
@@ -569,7 +586,7 @@ test('chat participants can publish and read only their own typing status', asyn
 
   await assertSucceeds(firstTyping.set({
     isTyping: true,
-    displayName: 'First user',
+    displayName: 'Test User',
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }));
   await assertSucceeds(secondTyping.get());
