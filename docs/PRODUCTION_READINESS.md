@@ -4,8 +4,7 @@ This checklist separates repository work from settings that must be completed in
 
 ## Current verified status
 
-- Firestore rules emulator suite: 35/35 passed on `main` (reported by the project owner on 2026-11-10).
-- Realtime Database and Storage rule emulator test files are present; the RTDB suite now has a dedicated npm script and explicit emulator port. These suites still need to be run on the current branch.
+- Firestore, Realtime Database, and Storage rules have dedicated emulator suites and are run by CI on the current branch. Confirm the latest run is green before merging.
 - Firestore rules are version-controlled in `firestore.rules`.
 - Realtime Database rules are version-controlled in `database.rules.json`.
 - Firebase Storage rules are version-controlled in `storage.rules`.
@@ -23,14 +22,19 @@ This checklist separates repository work from settings that must be completed in
 ## Repository changes
 
 - Firebase App Check initialization is wired into `src/services/firebase.ts` using the reCAPTCHA Enterprise web provider.
+- All eight callable Cloud Functions explicitly enforce App Check (`enforceAppCheck: true`).
+- Item return confirmation requires the non-reporter to have initiated a Firestore chat for that item; unrelated signed-in users cannot resolve another user's listing.
+- Chat message sender and typing display names are checked against the authenticated user's private profile.
+- Item-resolution responses no longer expose the reporter's private gamification statistics to the other participant.
+- Callable chat and match notification endpoints respect blocks in either direction.
 - Configure `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` in the hosting environment after registering the web app in Firebase App Check. The site key is public. Never put a reCAPTCHA secret, Cloudinary API secret, Gemini key, or service-account credential in a `VITE_*` variable.
-- If the site key is missing, the app still starts but logs a production error. This is intentional for local development; a production release must not proceed until App Check is configured and verified.
+- If the site key is missing, the production app throws during Firebase initialization rather than continuing without App Check. Local development may omit the key.
 
 ## Firebase console tasks
 
 1. Confirm the Firebase project is `campusfind-app` and verify the selected billing plan.
 2. In Authentication, enable only the sign-in providers the app actually supports (currently email/password), review password policy, and add the production hosting domain under authorized domains.
-3. In App Check, register the web app with reCAPTCHA Enterprise, configure the exact production and intended preview domains in reCAPTCHA Enterprise, then copy the **site key** into the hosting variable `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`.
+3. In App Check, register the web app with reCAPTCHA Enterprise, configure the exact production and intended preview domains in reCAPTCHA Enterprise, then copy the **site key** into the hosting variable `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY`. Callable Functions reject requests without valid App Check tokens.
 4. Deploy the reviewed rules from the repository using the Firebase CLI:
    - `firebase deploy --only firestore:rules`
    - `firebase deploy --only database`
@@ -57,6 +61,7 @@ This checklist separates repository work from settings that must be completed in
 - Do not configure `VITE_EMAIL_API_KEY`: the current email service is a demo logger, not a real email provider. It is explicitly disabled until a server-side email integration exists.
 - Never set `GEMINI_API_KEY`, Cloudinary API secret, Firebase service-account JSON, or other private credentials as `VITE_*` variables.
 - Run `npm ci`, `npm run lint`, and `npm run build` from the repository root in a clean checkout.
+- CI reports `npm audit --omit=dev` results for both frontend and Functions production dependencies. Do not launch while critical or high production dependency advisories remain unresolved.
 - From `functions/`, run `npm run test:rules`, `npm run test:database-rules`, and `npm run test:storage-rules`.
 - Verify the host is configured for a Vite SPA fallback to `index.html` if client-side routes are introduced.
 
@@ -77,7 +82,8 @@ Run these against the deployed staging/preview site before public launch:
 ## Launch decision
 
 Do not call the app production-ready until:
-- App Check is registered, initialized in the production build, monitored, and then enforced for the relevant services.
+- App Check is registered, initialized in the production build, monitored, and enforced for Firestore, Realtime Database, Storage, and callable Functions.
+- Production dependency audits show no unresolved critical or high severity advisories.
 - The deployed Firestore, RTDB, and Storage rules have been verified.
 - The Firebase Spark/Cloud Functions dependency has been resolved.
 - The production domain is known and the media worker CORS configuration is intentionally set (if the worker is used).
