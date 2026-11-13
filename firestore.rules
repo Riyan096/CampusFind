@@ -13,6 +13,21 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
     }
 
+    // A participant must not be able to impersonate another account by
+    // supplying an arbitrary sender or typing display name.
+    function matchesOwnDisplayName(suppliedName) {
+      let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(userPath) &&
+        suppliedName is string &&
+        suppliedName.size() <= 100 &&
+        (
+          (get(userPath).data.get('displayName', null) is string &&
+            suppliedName == get(userPath).data.get('displayName', null)) ||
+          (get(userPath).data.get('displayName', null) == null &&
+            suppliedName == 'Anonymous')
+        );
+    }
+
     function validItemType(t) {
       return t in ['LOST', 'FOUND'];
     }
@@ -428,7 +443,7 @@ service cloud.firestore {
             request.resource.data.isTyping == true &&
             request.resource.data.displayName is string &&
             request.resource.data.displayName.size() > 0 &&
-            request.resource.data.displayName.size() <= 100 &&
+            matchesOwnDisplayName(request.resource.data.displayName) &&
             request.resource.data.updatedAt == request.time;
         }
 
@@ -535,7 +550,7 @@ service cloud.firestore {
           !('sticker' in request.resource.data && 'gif' in request.resource.data) &&
           request.resource.data.senderId == request.auth.uid &&
           request.resource.data.senderName is string &&
-          request.resource.data.senderName.size() <= 100 &&
+          matchesOwnDisplayName(request.resource.data.senderName) &&
           request.resource.data.content is string &&
           request.resource.data.content.size() > 0 &&
           request.resource.data.content.size() <= 4000 &&
