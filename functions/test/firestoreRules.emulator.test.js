@@ -623,7 +623,7 @@ test('participants can reply to an existing message in the same conversation', a
   await seedChat('reply-chat', 'reply-sender', 'reply-recipient', 'reply-item');
   await adminDb.collection('chats').doc('reply-chat').collection('messages').doc('original-message').set({
     senderId: 'reply-recipient',
-    senderName: 'Reply recipient',
+    senderName: 'Test User',
     content: 'Where did you last see the keys?',
     timestamp: Timestamp.now(),
     read: false,
@@ -638,7 +638,7 @@ test('participants can reply to an existing message in the same conversation', a
     replyTo: {
       messageId: 'original-message',
       senderId: 'reply-recipient',
-      senderName: 'Reply recipient',
+      senderName: 'Test User',
       content: 'Where did you last see the keys?',
       type: 'text'
     }
