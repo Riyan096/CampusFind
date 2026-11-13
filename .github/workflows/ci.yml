@@ -26,7 +26,7 @@ jobs:
       - name: Report frontend production dependency vulnerabilities
         run: |
           npm audit --omit=dev --json > "$RUNNER_TEMP/frontend-audit.json" || true
-          node -e 'const r=require(process.env.RUNNER_TEMP + "/frontend-audit.json"); console.log("Frontend audit totals:", r.metadata?.vulnerabilities); for (const [name, v] of Object.entries(r.vulnerabilities || {})) { const advisories=(v.via || []).filter(x => typeof x === "object").map(x => x.title + " (" + x.url + ")").join("; "); console.log(v.severity.toUpperCase(), name, "range=" + v.range, "direct=" + v.isDirect, "fix=" + JSON.stringify(v.fixAvailable), advisories); }'
+          node -e 'const r=require(process.env.RUNNER_TEMP + "/frontend-audit.json"); console.log("Frontend audit totals:", r.metadata?.vulnerabilities); for (const [name, v] of Object.entries(r.vulnerabilities || {})) { const advisories=(v.via || []).map(x => typeof x === "string" ? x : x.title + " (" + x.url + ")").join("; "); console.log(v.severity.toUpperCase(), name, "range=" + v.range, "direct=" + v.isDirect, "fix=" + JSON.stringify(v.fixAvailable), advisories); }'
       - name: Lint frontend
         run: npm run lint
       - name: Build frontend
@@ -79,3 +79,38 @@ jobs:
       - name: Test Storage rules
         working-directory: functions
         run: npm run test:storage-rules
+
+  refresh-security-lockfiles:
+    name: Refresh dependency lockfiles after security updates
+    if: github.event_name == 'push' && github.ref == 'refs/heads/security/predeployment-readiness'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Refresh frontend lockfile
+        run: npm install --package-lock-only --ignore-scripts
+      - name: Apply compatible frontend security updates
+        run: npm audit fix --package-lock-only --ignore-scripts || true
+      - name: Refresh Functions lockfile
+        working-directory: functions
+        run: npm install --package-lock-only --ignore-scripts
+      - name: Apply compatible Functions security updates
+        working-directory: functions
+        run: npm audit fix --package-lock-only --ignore-scripts || true
+      - name: Commit dependency updates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json functions/package.json functions/package-lock.json
+          if git diff --cached --quiet; then
+            echo "No dependency updates were needed."
+            exit 0
+          fi
+          git commit -m "chore: refresh Firebase and Functions dependencies"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
