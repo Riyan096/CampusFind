@@ -191,7 +191,7 @@ export const cleanupReplacedItemImage = onDocumentUpdated("items/{itemId}", asyn
   );
 });
 
-export const awardPoints = onCall(async (request) => {
+export const awardPoints = onCall({enforceAppCheck: true}, async (request) => {
   if (!request.auth) {
     throw new HttpsError(
       "unauthenticated",
@@ -247,7 +247,7 @@ const writeNotificationOnce = async (
 };
 
 /** Create a chat notification only for a real message in a shared chat. */
-export const notifyChatMessage = onCall(async (request) => {
+export const notifyChatMessage = onCall({enforceAppCheck: true}, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
@@ -292,7 +292,7 @@ export const notifyChatMessage = onCall(async (request) => {
 });
 
 /** Notify an item's owner about a complementary item reported by the caller. */
-export const notifyPotentialMatch = onCall(async (request) => {
+export const notifyPotentialMatch = onCall({enforceAppCheck: true}, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
@@ -344,7 +344,7 @@ export const notifyPotentialMatch = onCall(async (request) => {
  * One-time backfill for chats created before the private user index existed.
  * The caller receives no other users' chat data; only their own index is built.
  */
-export const rebuildUserChatIndex = onCall(async (request) => {
+export const rebuildUserChatIndex = onCall({enforceAppCheck: true}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "You must be signed in.");
   const uid = request.auth.uid;
   const userIndexRef = getDatabase().ref(`userChats/${uid}`);
@@ -376,7 +376,7 @@ export const rebuildUserChatIndex = onCall(async (request) => {
   return {ok: true, chatCount: Object.keys(index).length - 1};
 });
 
-export const joinItemChat = onCall(async (request) => {
+export const joinItemChat = onCall({enforceAppCheck: true}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "You must be signed in.");
   const chatId = request.data?.chatId;
   if (typeof chatId !== "string" || !/^[-\w]{1,128}$/.test(chatId)) {
@@ -486,7 +486,7 @@ const writePublicProfile = (
   }, {merge: true});
 };
 
-export const resolveItem = onCall(async (request) => {
+export const resolveItem = onCall({enforceAppCheck: true}, async (request) => {
   if (!request.auth) {
     throw new HttpsError(
       "unauthenticated",
