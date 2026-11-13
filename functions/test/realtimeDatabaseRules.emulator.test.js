@@ -76,7 +76,7 @@ test.after(async () => {
 test('authenticated creator can create a chat with themselves as a participant', async () => {
   const db = dbFor('creator-1');
 
-  await assertSucceeds(
+  await assertFails(
     db.ref('chats/chat-create').set({
       createdBy: 'creator-1',
       itemId: 'item-1',
@@ -134,6 +134,21 @@ test('chat member can read the conversation', async () => {
   await assertSucceeds(
     dbFor('member-1').ref('chats/chat-1').get()
   );
+});
+
+
+test('legacy RTDB chat data is readable by participants but client writes are disabled', async () => {
+  await seedChat();
+  const db = dbFor('creator-1');
+
+  await assertSucceeds(db.ref('chats/chat-1').get());
+  await assertFails(db.ref('chats/chat-1/messages/new-message').set(baseMessage));
+  await assertFails(db.ref('chats/chat-1/participants/creator-1').remove());
+  await assertFails(db.ref('chats/chat-1/lastMessage').set({
+    content: 'Forged preview',
+    timestamp: 1003,
+    senderId: 'creator-1'
+  }));
 });
 
 test('non-member cannot read the conversation', async () => {
@@ -204,7 +219,7 @@ test('non-creator cannot add themselves to a conversation', async () => {
 test('participant can leave their own conversation membership', async () => {
   await seedChat();
 
-  await assertSucceeds(
+  await assertFails(
     dbFor('member-1').ref('chats/chat-1/participants/member-1').remove()
   );
 });
@@ -220,7 +235,7 @@ test('participant cannot remove another user from the conversation', async () =>
 test('chat member can send a message with their own senderId', async () => {
   await seedChat();
 
-  await assertSucceeds(
+  await assertFails(
     dbFor('member-1').ref('chats/chat-1/messages/message-1').set({
       senderId: 'member-1',
       senderName: 'Member',
@@ -276,7 +291,7 @@ test('non-member cannot read messages from a conversation', async () => {
 test('chat member can update lastMessage only as themselves', async () => {
   await seedChat();
 
-  await assertSucceeds(
+  await assertFails(
     dbFor('member-1').ref('chats/chat-1/lastMessage').set({
       content: 'Hello!',
       timestamp: 1002,
@@ -300,7 +315,7 @@ test('message recipient can mark a message as read without changing immutable me
     }
   });
 
-  await assertSucceeds(
+  await assertFails(
     dbFor('member-1').ref('chats/chat-1/messages/message-1').update({
       read: true,
       status: 'read',
