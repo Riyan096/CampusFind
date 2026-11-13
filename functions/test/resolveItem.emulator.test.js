@@ -42,6 +42,14 @@ async function seedItem(itemId, overrides = {}) {
   });
 }
 
+async function seedChat(itemId, creatorId, participantIds) {
+  await db.collection('chats').add({
+    itemId,
+    createdBy: creatorId,
+    participantIds
+  });
+}
+
 async function callResolve(uid, itemId, newStatus) {
   return resolveItem.run({
     data: { itemId, newStatus },
@@ -79,6 +87,7 @@ test('legal found-item transitions are accepted', async () => {
   await seedUser('reporter-1');
   await seedUser('claimer-1');
   await seedItem('transition-item');
+  await seedChat('transition-item', 'claimer-1', ['claimer-1', 'reporter-1']);
 
   const pending = await callResolve('reporter-1', 'transition-item', 'PENDING_CLAIM');
   assert.equal(pending.item.status, 'PENDING_CLAIM');
@@ -177,6 +186,41 @@ test('unauthorized resolution is rejected and does not mutate data', async () =>
   const user = await db.collection('users').doc('reporter-1').get();
   assert.equal(user.data().points, 0);
   assert.equal(user.data().itemsReturned, 0);
+});
+
+
+test('unrelated signed-in user cannot confirm another users item return', async () => {
+  await seedUser('reporter-1');
+  await seedUser('attacker');
+  await seedItem('unauthorized-return', { status: 'PENDING_CLAIM' });
+
+  await assert.rejects(
+    callResolve('attacker', 'unauthorized-return', 'RETURNED'),
+    error => error.code === 'permission-denied'
+  );
+
+  const item = await db.collection('items').doc('unauthorized-return').get();
+  assert.equal(item.data().status, 'PENDING_CLAIM');
+
+  const reporter = await db.collection('users').doc('reporter-1').get();
+  assert.equal(reporter.data().points, 0);
+});
+
+test('only the user who started the item conversation can confirm its return', async () => {
+  await seedUser('reporter-1');
+  await seedUser('chat-member');
+  await seedUser('claimer-1');
+  await seedItem('creator-check', { status: 'PENDING_CLAIM' });
+  await seedChat('creator-check', 'claimer-1', ['claimer-1', 'reporter-1']);
+
+  await assert.rejects(
+    callResolve('chat-member', 'creator-check', 'RETURNED'),
+    error => error.code === 'permission-denied'
+  );
+
+  const result = await callResolve('claimer-1', 'creator-check', 'RETURNED');
+  assert.equal(result.item.status, 'RETURNED');
+  assert.equal(result.pointsAwarded, 50);
 });
 
 test('invalid resolution state is rejected', async () => {
