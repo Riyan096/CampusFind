@@ -596,16 +596,13 @@ test('leaving a chat cannot modify the remaining participant profile', async () 
   const db = testEnv.authenticatedContext('leave-a').firestore();
   await assertFails(db.collection('chats').doc('leave-chat').update({
     participantIds: ['leave-b'],
-    participants: {
-      'leave-b': {name: 'Impersonated admin', joinedAt: Timestamp.now()}
-    }
+    'participants.leave-a': firebase.firestore.FieldValue.delete(),
+    'participants.leave-b.name': 'Impersonated admin'
   }));
 
   await assertSucceeds(db.collection('chats').doc('leave-chat').update({
     participantIds: ['leave-b'],
-    participants: {
-      'leave-b': {name: 'Second user', joinedAt: Timestamp.now()}
-    }
+    'participants.leave-a': firebase.firestore.FieldValue.delete()
   }));
 });
 
