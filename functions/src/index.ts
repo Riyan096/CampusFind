@@ -557,7 +557,8 @@ export const resolveItem = onCall({enforceAppCheck: true}, async (request) => {
         if (!callerStartedConversation) {
           throw new HttpsError(
             "permission-denied",
-            "Only the item reporter or the person who started a conversation about the item can confirm its return."
+            "Only the item reporter or the person who started a conversation " +
+            "about the item can confirm its return."
           );
         }
       }
