@@ -70,7 +70,7 @@ async function clear() {
     }
   }
 
-  for (const collection of ['items', 'users']) {
+  for (const collection of ['items', 'users', 'chats']) {
     const snapshot = await db.collection(collection).get();
     if (!snapshot.empty) {
       const batch = db.batch();
