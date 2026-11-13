@@ -235,6 +235,14 @@ export const awardPoints = onCall({enforceAppCheck: true}, async (request) => {
   }
 });
 
+const areUsersBlocked = async (userA: string, userB: string): Promise<boolean> => {
+  const [aBlocksB, bBlocksA] = await Promise.all([
+    db.collection("users").doc(userA).collection("blockedUsers").doc(userB).get(),
+    db.collection("users").doc(userB).collection("blockedUsers").doc(userA).get(),
+  ]);
+  return aBlocksB.exists || bBlocksA.exists;
+};
+
 const writeNotificationOnce = async (
   id: string,
   data: FirebaseFirestore.DocumentData,
@@ -275,6 +283,9 @@ export const notifyChatMessage = onCall({enforceAppCheck: true}, async (request)
   if (message?.senderId !== request.auth.uid ||
       typeof message.content !== "string") {
     throw new HttpsError("permission-denied", "Message was not sent by you.");
+  }
+  if (await areUsersBlocked(request.auth.uid, recipientId)) {
+    throw new HttpsError("permission-denied", "Notifications are disabled between blocked users.");
   }
 
   await writeNotificationOnce(`chat_${chatId}_${messageId}_${recipientId}`, {
@@ -321,6 +332,9 @@ export const notifyPotentialMatch = onCall({enforceAppCheck: true}, async (reque
       typeof target.reportedBy !== "string" ||
       target.reportedBy === request.auth.uid) {
     throw new HttpsError("permission-denied", "These items cannot be matched by you.");
+  }
+  if (await areUsersBlocked(request.auth.uid, target.reportedBy as string)) {
+    throw new HttpsError("permission-denied", "Notifications are disabled between blocked users.");
   }
   const foundTitle = typeof source.title === "string" ? source.title.slice(0, 200) : "a found item";
   await writeNotificationOnce(`match_${sourceItemId}_${targetItemId}`, {
@@ -399,6 +413,10 @@ export const joinItemChat = onCall({enforceAppCheck: true}, async (request) => {
   const callerIsOwner = ownerId === request.auth.uid;
   if (!callerIsCreator && !callerIsOwner) {
     throw new HttpsError("permission-denied", "Only the chat creator or item owner can join.");
+  }
+  const otherUserId = callerIsCreator ? ownerId : chat.createdBy;
+  if (await areUsersBlocked(request.auth.uid, otherUserId)) {
+    throw new HttpsError("permission-denied", "Blocked users cannot join this conversation.");
   }
   const participantId = callerIsCreator ? ownerId : request.auth.uid;
   if (chat.participants?.[participantId]) return {ok: true};
