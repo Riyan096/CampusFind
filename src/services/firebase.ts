@@ -41,8 +41,8 @@ export const appCheck = appCheckSiteKey
   : null;
 
 if (import.meta.env.PROD && !appCheckSiteKey) {
-  console.error(
-    "Firebase App Check is not initialized. Set VITE_RECAPTCHA_ENTERPRISE_SITE_KEY " +
+  throw new Error(
+    "Firebase App Check is required in production. Set VITE_RECAPTCHA_ENTERPRISE_SITE_KEY " +
     "after registering this web app with reCAPTCHA Enterprise in Firebase."
   );
 }
