@@ -15,7 +15,7 @@ This checklist separates repository work from settings that must be completed in
 ## Important launch blockers and architecture notes
 
 1. **Firebase Spark versus callable Cloud Functions:** the React app calls Firebase callable functions for Gemini image analysis, smart matching, and item resolution. The repository also contains server-side cleanup and chat/notification functions. Deploying Firebase Cloud Functions requires the Blaze billing plan. If this project must remain on Spark, those features need a supported alternative (for example, a separately secured Cloudflare Worker) or must be disabled before launch. Do not assume these callable endpoints work just because the frontend builds.
-2. **Chat media worker is not integrated:** the media-worker README currently says the frontend is not connected and the worker must not be deployed until the photo-message rules, UI, and end-to-end tests are complete. The current React app uses Firebase Storage for item/profile images. Keep the chat media worker out of production until the integration is finished and tested.
+2. **Chat media worker is integrated but not tested or deployed:** chat photos upload through the worker from `src/views/ChatView.tsx` and load through it in `src/components/AuthenticatedChatImage.tsx`, and `firestore.rules` validates the message `attachment`. Item and profile images still use Firebase Storage. Missing: emulator tests for creating photo messages, tests for the worker, and a two-account end-to-end test. Without `VITE_MEDIA_WORKER_URL`, the frontend falls back to `http://localhost:8787`, so chat photos fail in production. Keep the worker out of production until those tests pass; see `media-worker/README.md`.
 3. **Production domains are unknown:** `media-worker/wrangler.toml` currently allows only localhost origins. Do not replace this with a wildcard. Add the exact production origin (and only the preview origin you intend to support) after the final hosting domain is known.
 4. **Cloud console state is not visible from this repository:** deployed rules, Authentication providers/domains, App Check registration/enforcement, Cloudinary settings, billing plan, and usage alerts must be verified in their respective dashboards.
 
@@ -51,13 +51,13 @@ This checklist separates repository work from settings that must be completed in
 - Keep `FIREBASE_PROJECT_ID` and `CLOUDINARY_CLOUD_NAME` as non-secret Worker vars.
 - Once the final site URL is known, set `ALLOWED_ORIGINS` to comma-separated exact origins, for example `https://campusfind.example`. Include a preview origin only if it is deliberately supported. Never use `*`.
 - Review Cloudinary upload and delivery settings, authenticated asset delivery, transformation limits, and account usage limits.
-- Do not deploy this worker until the frontend uses it and chat attachment rules/UI/end-to-end tests exist. Current code comments and README indicate that integration is incomplete.
+- Do not deploy this worker until photo-message rule tests, worker tests, and a two-account end-to-end test pass. The frontend and attachment rules are already wired up.
 
 ## Hosting and build tasks
 
 - Set the Vite Firebase client configuration in the hosting provider's production environment variables. These values are public client configuration, not secrets.
 - Set `VITE_RECAPTCHA_ENTERPRISE_SITE_KEY` after App Check registration.
-- Set `VITE_MEDIA_WORKER_URL` only if the worker is actually integrated and deployed; otherwise leave the app on its current Firebase Storage path.
+- Set `VITE_MEDIA_WORKER_URL` to the deployed worker URL. Without it, chat photos fall back to `http://localhost:8787` and fail in production.
 - Set a dedicated GIPHY public client key only if GIF search is enabled. Assume it is visible to every visitor and apply provider-side restrictions/quotas where available.
 - Do not configure `VITE_EMAIL_API_KEY`: the current email service is a demo logger, not a real email provider. It is explicitly disabled until a server-side email integration exists.
 - Never set `GEMINI_API_KEY`, Cloudinary API secret, Firebase service-account JSON, or other private credentials as `VITE_*` variables.

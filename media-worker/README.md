@@ -46,7 +46,24 @@ The health endpoint does not require Firebase authentication. Upload and image e
 - `GET /api/media?chatId=...&messageId=...&publicId=...&format=...`: requires the same Firebase bearer token, checks chat membership, and verifies that the exact message document contains the matching image attachment metadata before proxying the image.
 - `GET /health`: local health check.
 
-The frontend is not connected yet. Do not deploy this Worker until the photo-message Firestore rules, chat UI, and end-to-end tests are complete.
+## Integration status
+
+The frontend is connected:
+
+- `src/views/ChatView.tsx` uploads chat photos to `POST /api/upload` and stores the returned metadata as the message `attachment`.
+- `src/components/AuthenticatedChatImage.tsx` loads chat photos through `GET /api/media`.
+- `firestore.rules` validates message attachments (`validImageAttachment`: type, `publicId` path, format, size, and dimensions).
+
+Both frontend files fall back to `http://localhost:8787` when `VITE_MEDIA_WORKER_URL` is unset, so a production build without that variable cannot send or show chat photos.
+
+Still missing before deployment:
+
+- Emulator tests for creating photo messages (valid and invalid attachments). The Firestore rules suite currently only covers removing an attachment.
+- Tests for the Worker itself (auth, membership, file type and size limits).
+- An end-to-end test with two accounts: upload, view, and confirm a non-participant is refused.
+- Production `ALLOWED_ORIGINS` (see Configuration).
+
+Do not deploy this Worker until those are done.
 
 ## Configuration
 
