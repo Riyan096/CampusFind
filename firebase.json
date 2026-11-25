@@ -14,6 +14,9 @@
   "emulators": {
     "storage": {
       "port": 9199
+    },
+    "database": {
+      "port": 9000
     }
   },
   "functions": [

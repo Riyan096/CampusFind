@@ -29,6 +29,7 @@ export const analyzeItemImage = async (
   base64Image: string,
   _userId?: string
 ): Promise<AIAnalysisResult> => {
+  void _userId; // Retained as an optional compatibility parameter for existing callers.
   const mimeMatch = base64Image.match(/^data:(image\/(?:png|jpeg|jpg|webp));base64,/i);
   const mimeType = mimeMatch?.[1]?.toLowerCase() === "image/jpg"
     ? "image/jpeg"
@@ -63,6 +64,7 @@ export const findSmartMatches = async (
   itemsJson: string,
   _userId?: string
 ): Promise<string[]> => {
+  void _userId; // Retained as an optional compatibility parameter for existing callers.
   try {
     const response = await smartMatchesCallable({ query, itemsJson });
     return response.data;

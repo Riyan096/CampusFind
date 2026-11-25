@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { getAchievementProgress, getAchievementColor, getCategoryLabel, ACHIEVEMENTS } from '../services/gamificationService';
+import { getAchievementProgress, getAchievementColor, getCategoryLabel } from '../services/gamificationService';
 import type { UserStats, Achievement } from '../types';
 
 interface AchievementsPanelProps {

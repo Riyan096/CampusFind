@@ -19,11 +19,8 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 import { resolveItem } from '../services/itemApi';
-import {
-  AdvancedSearchFilters,
-  defaultFilters,
-  type FilterState
-} from '../components/AdvancedSearchFilters';
+import { AdvancedSearchFilters } from '../components/AdvancedSearchFilters';
+import { defaultFilters, type FilterState } from '../components/advancedSearchFilters.constants';
 import { emailService } from '../services/emailService';
 import { sanitizeSearchInput } from '../utils/sanitize';
 

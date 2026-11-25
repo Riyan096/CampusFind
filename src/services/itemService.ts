@@ -11,8 +11,7 @@ import {
   serverTimestamp,
   Timestamp
 } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
-import { db, functions } from './firebase';
+import { db } from './firebase';
 import { deleteUserImage, uploadUserImage } from './firebaseStorageService';
 import type { Item, ItemStatusType } from '../types';
 import { ItemType } from '../types';
@@ -74,11 +73,11 @@ async function dataUrlToImageFile(dataUrl: string): Promise<File> {
 }
 
 // Convert Firestore timestamp to ISO string
-const convertTimestamps = (data: any): any => {
+const convertTimestamps = (data: Record<string, unknown>): Record<string, unknown> => {
   const result = { ...data };
-  for (const key in result) {
-    if (result[key] instanceof Timestamp) {
-      result[key] = result[key].toDate().toISOString();
+  for (const [key, value] of Object.entries(result)) {
+    if (value instanceof Timestamp) {
+      result[key] = value.toDate().toISOString();
     }
   }
   return result;
@@ -188,25 +187,6 @@ export const updateItemInFirestore = async (
   await updateDoc(itemRef, {
     ...safe,
     updatedAt: serverTimestamp(),
-  });
-};
-
-/**
- * Change an item's status through the trusted Cloud Function.
- * Status changes are never written directly by the client.
- */
-export const updateItemStatusInFirestore = async (
-  id: string,
-  status: ItemStatusType
-): Promise<void> => {
-  const resolveItem = httpsCallable<{ itemId: string; newStatus: string }, unknown>(
-    functions,
-    'resolveItem'
-  );
-
-  await resolveItem({
-    itemId: id,
-    newStatus: status,
   });
 };
 

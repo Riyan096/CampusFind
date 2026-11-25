@@ -5,6 +5,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
+  sendPasswordResetEmail,
   updateProfile
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
@@ -27,6 +28,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, displayName: string) => Promise<void>;
   logout: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   updateUserProfile: (displayName: string) => Promise<void>;
   updateUserPhoto: (file: File) => Promise<string>;
   removeUserPhoto: () => Promise<void>;
@@ -123,6 +125,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await signOut(auth);
   };
 
+  const resetPassword = async (email: string) => {
+    const safeEmail = sanitizeEmailInput(email);
+    await sendPasswordResetEmail(auth, safeEmail);
+  };
+
   const updateUserProfile = async (displayName: string) => {
     if (!auth.currentUser) throw new Error('No user logged in');
     const safeName = sanitizePlainText(displayName, LIMITS.displayName, { multiline: false });
@@ -204,6 +211,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       login,
       signup,
       logout,
+      resetPassword,
       updateUserProfile,
       updateUserPhoto,
       removeUserPhoto,

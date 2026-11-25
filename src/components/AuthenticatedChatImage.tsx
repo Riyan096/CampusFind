@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { auth } from '../services/firebase';
 import type { ImageAttachment } from '../services/chatService';
+import { WORKER_URL as MEDIA_WORKER_URL } from '../services/workerApi';
 
 interface AuthenticatedChatImageProps {
   chatId: string;
@@ -8,7 +9,6 @@ interface AuthenticatedChatImageProps {
   attachment: ImageAttachment;
 }
 
-const MEDIA_WORKER_URL = (import.meta.env.VITE_MEDIA_WORKER_URL || 'http://localhost:8787').replace(/\/$/, '');
 
 export const AuthenticatedChatImage: React.FC<AuthenticatedChatImageProps> = ({
   chatId,

@@ -332,7 +332,7 @@ async function seedChat(chatId, firstUserId, secondUserId, itemId) {
 function validChatMessage(senderId) {
   return {
     senderId,
-    senderName: 'Test sender',
+    senderName: 'Test User',
     content: 'Hello',
     timestamp: firebase.firestore.FieldValue.serverTimestamp(),
     read: false,
@@ -557,6 +557,71 @@ test('message owners can soft-delete messages while preserving the message docum
   assert.equal('attachment' in deleted.data(), false);
 });
 
+
+
+test('chat creation requires authentic participant display names', async () => {
+  await seedUser('chat-create-a', {displayName: 'First user'});
+  await seedUser('chat-create-b', {displayName: 'Second user'});
+  await seedItem('chat-create-item', {reportedBy: 'chat-create-b'});
+
+  const db = testEnv.authenticatedContext('chat-create-a').firestore();
+  const chat = {
+    itemId: 'chat-create-item',
+    itemTitle: 'Test item',
+    createdBy: 'chat-create-a',
+    participantIds: ['chat-create-a', 'chat-create-b'],
+    participants: {
+      'chat-create-a': {name: 'First user', joinedAt: firebase.firestore.FieldValue.serverTimestamp()},
+      'chat-create-b': {name: 'Second user', joinedAt: firebase.firestore.FieldValue.serverTimestamp()}
+    },
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+
+  await assertSucceeds(db.collection('chats').doc('valid-chat-create').set(chat));
+  await assertFails(db.collection('chats').doc('forged-chat-create').set({
+    ...chat,
+    participants: {
+      ...chat.participants,
+      'chat-create-b': {name: 'CampusFind Admin', joinedAt: firebase.firestore.FieldValue.serverTimestamp()}
+    }
+  }));
+});
+
+test('leaving a chat cannot modify the remaining participant profile', async () => {
+  await seedUser('leave-a');
+  await seedUser('leave-b');
+  await seedItem('leave-item');
+  await seedChat('leave-chat', 'leave-a', 'leave-b', 'leave-item');
+
+  const db = testEnv.authenticatedContext('leave-a').firestore();
+  await assertFails(db.collection('chats').doc('leave-chat').update({
+    participantIds: ['leave-b'],
+    'participants.leave-a': firebase.firestore.FieldValue.delete(),
+    'participants.leave-b.name': 'Impersonated admin'
+  }));
+
+  await assertSucceeds(db.collection('chats').doc('leave-chat').update({
+    participantIds: ['leave-b'],
+    'participants.leave-a': firebase.firestore.FieldValue.delete()
+  }));
+});
+
+test('chat participants cannot impersonate another user in messages', async () => {
+  await seedUser('message-name-a');
+  await seedUser('message-name-b');
+  await seedItem('message-name-item');
+  await seedChat('message-name-chat', 'message-name-a', 'message-name-b', 'message-name-item');
+
+  const db = testEnv.authenticatedContext('message-name-a').firestore();
+  const messages = db.collection('chats').doc('message-name-chat').collection('messages');
+
+  await assertFails(messages.doc('forged-name').set({
+    ...validChatMessage('message-name-a'),
+    senderName: 'Item owner'
+  }));
+  await assertSucceeds(messages.doc('valid-name').set(validChatMessage('message-name-a')));
+});
+
 test('chat participants can publish and read only their own typing status', async () => {
   await seedUser('typing-a');
   await seedUser('typing-b');
@@ -569,7 +634,7 @@ test('chat participants can publish and read only their own typing status', asyn
 
   await assertSucceeds(firstTyping.set({
     isTyping: true,
-    displayName: 'First user',
+    displayName: 'Test User',
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   }));
   await assertSucceeds(secondTyping.get());
@@ -606,7 +671,7 @@ test('participants can reply to an existing message in the same conversation', a
   await seedChat('reply-chat', 'reply-sender', 'reply-recipient', 'reply-item');
   await adminDb.collection('chats').doc('reply-chat').collection('messages').doc('original-message').set({
     senderId: 'reply-recipient',
-    senderName: 'Reply recipient',
+    senderName: 'Test User',
     content: 'Where did you last see the keys?',
     timestamp: Timestamp.now(),
     read: false,
@@ -621,7 +686,7 @@ test('participants can reply to an existing message in the same conversation', a
     replyTo: {
       messageId: 'original-message',
       senderId: 'reply-recipient',
-      senderName: 'Reply recipient',
+      senderName: 'Test User',
       content: 'Where did you last see the keys?',
       type: 'text'
     }

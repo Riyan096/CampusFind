@@ -86,12 +86,12 @@ export const subscribeToTypingUsers = (
   currentUserId: string,
   callback: (typingUsers: string[]) => void
 ) => {
-  let latestEntries: Array<{ id: string; data: Record<string, any> }> = [];
+  let latestEntries: Array<{ id: string; data: Record<string, unknown> }> = [];
   const publishFreshTypingUsers = () => {
     const now = Date.now();
     callback(latestEntries
       .filter(({ id, data }) => id !== currentUserId && data.isTyping === true &&
-        now - toMillis(data.updatedAt) < 10000)
+        now - toMillis(data.updatedAt as FirestoreTimestamp) < 10000)
       .map(({ data }) => typeof data.displayName === 'string' ? data.displayName : 'Someone'));
   };
   const unsubscribe = onSnapshot(
@@ -201,76 +201,91 @@ const toMillis = (value: FirestoreTimestamp): number => {
   return 0;
 };
 
-const normalizeChat = (id: string, data: Record<string, any>): Chat => {
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+
+const normalizeChat = (id: string, data: Record<string, unknown>): Chat => {
   const participants: Chat['participants'] = {};
-  Object.entries(data.participants || {}).forEach(([uid, participant]) => {
-    const value = participant as Record<string, any>;
+  Object.entries(asRecord(data.participants)).forEach(([uid, participant]) => {
+    const value = asRecord(participant);
     participants[uid] = {
       name: typeof value.name === 'string' ? value.name : 'Anonymous',
-      joinedAt: toMillis(value.joinedAt),
+      joinedAt: toMillis(value.joinedAt as FirestoreTimestamp),
     };
   });
 
+  const rawLastMessage = asRecord(data.lastMessage);
   const lastMessage = data.lastMessage
     ? {
-        content: typeof data.lastMessage.content === 'string' ? data.lastMessage.content : '',
-        timestamp: toMillis(data.lastMessage.timestamp),
-        senderId: typeof data.lastMessage.senderId === 'string' ? data.lastMessage.senderId : '',
+        content: typeof rawLastMessage.content === 'string' ? rawLastMessage.content : '',
+        timestamp: toMillis(rawLastMessage.timestamp as FirestoreTimestamp),
+        senderId: typeof rawLastMessage.senderId === 'string' ? rawLastMessage.senderId : '',
       }
     : undefined;
 
   const lastReadAt: Record<string, number> = {};
-  Object.entries(data.lastReadAt || {}).forEach(([uid, timestamp]) => {
+  Object.entries(asRecord(data.lastReadAt)).forEach(([uid, timestamp]) => {
     lastReadAt[uid] = toMillis(timestamp as FirestoreTimestamp);
   });
 
   return {
     id,
-    itemId: data.itemId,
-    itemTitle: data.itemTitle,
-    createdBy: data.createdBy,
-    participantIds: Array.isArray(data.participantIds) ? data.participantIds : [],
+    itemId: typeof data.itemId === 'string' ? data.itemId : '',
+    itemTitle: typeof data.itemTitle === 'string' ? data.itemTitle : '',
+    createdBy: typeof data.createdBy === 'string' ? data.createdBy : '',
+    participantIds: Array.isArray(data.participantIds)
+      ? data.participantIds.filter((participantId): participantId is string => typeof participantId === 'string')
+      : [],
     participants,
-    createdAt: toMillis(data.createdAt),
+    createdAt: toMillis(data.createdAt as FirestoreTimestamp),
     ...(lastMessage ? { lastMessage } : {}),
     lastReadAt,
-    userSettings: data.userSettings || {},
+    userSettings: asRecord(data.userSettings) as Chat['userSettings'],
   };
 };
 
-const normalizeMessage = (id: string, chatId: string, data: Record<string, any>): Message => {
+const normalizeMessage = (id: string, chatId: string, data: Record<string, unknown>): Message => {
   const readBy: Record<string, number> = {};
-  Object.entries(data.readBy || {}).forEach(([uid, timestamp]) => {
+  Object.entries(asRecord(data.readBy)).forEach(([uid, timestamp]) => {
     readBy[uid] = toMillis(timestamp as FirestoreTimestamp);
   });
+  const attachment = asRecord(data.attachment);
+  const sticker = asRecord(data.sticker);
+  const gif = asRecord(data.gif);
+  const replyTo = asRecord(data.replyTo);
+
+  const validStatuses = ['sending', 'sent', 'delivered', 'read'] as const;
+  const status = validStatuses.find((candidate) => candidate === data.status);
 
   return {
     id,
     chatId,
-    senderId: data.senderId,
-    senderName: data.senderName,
-    content: data.content,
-    timestamp: toMillis(data.timestamp),
+    senderId: typeof data.senderId === 'string' ? data.senderId : '',
+    senderName: typeof data.senderName === 'string' ? data.senderName : 'Anonymous',
+    content: typeof data.content === 'string' ? data.content : '',
+    timestamp: toMillis(data.timestamp as FirestoreTimestamp),
     read: data.read === true,
-    status: data.status,
+    ...(status ? { status } : {}),
     readBy,
-    ...(data.reactions && typeof data.reactions === 'object' ? { reactions: data.reactions as { [userId: string]: string } } : {}),
-    ...(data.attachment && typeof data.attachment.publicId === 'string'
-      ? { attachment: data.attachment as ImageAttachment }
+    ...(data.reactions && typeof data.reactions === 'object' && !Array.isArray(data.reactions)
+      ? { reactions: data.reactions as { [userId: string]: string } }
       : {}),
-    ...(data.sticker?.type === 'sticker' && typeof data.sticker.stickerId === 'string'
-      ? { sticker: data.sticker as StickerMessage }
+    ...(typeof attachment.publicId === 'string' ? { attachment: attachment as unknown as ImageAttachment } : {}),
+    ...(sticker.type === 'sticker' && typeof sticker.stickerId === 'string'
+      ? { sticker: sticker as unknown as StickerMessage }
       : {}),
-    ...(data.gif?.type === 'gif' && data.gif.provider === 'giphy' && typeof data.gif.gifId === 'string'
-      ? { gif: data.gif as GifMessage }
+    ...(gif.type === 'gif' && gif.provider === 'giphy' && typeof gif.gifId === 'string'
+      ? { gif: gif as unknown as GifMessage }
       : {}),
-    ...(data.replyTo && typeof data.replyTo.messageId === 'string' && typeof data.replyTo.senderId === 'string'
-      ? { replyTo: data.replyTo as ReplyPreview }
+    ...(typeof replyTo.messageId === 'string' && typeof replyTo.senderId === 'string'
+      ? { replyTo: replyTo as unknown as ReplyPreview }
       : {}),
     ...(data.edited === true ? { edited: true } : {}),
-    ...(data.editedAt ? { editedAt: toMillis(data.editedAt) } : {}),
+    ...(data.editedAt ? { editedAt: toMillis(data.editedAt as FirestoreTimestamp) } : {}),
     ...(data.deleted === true ? { deleted: true } : {}),
-    ...(data.deletedAt ? { deletedAt: toMillis(data.deletedAt) } : {}),
+    ...(data.deletedAt ? { deletedAt: toMillis(data.deletedAt as FirestoreTimestamp) } : {}),
   };
 };
 

@@ -76,7 +76,7 @@ test.after(async () => {
 test('authenticated creator can create a chat with themselves as a participant', async () => {
   const db = dbFor('creator-1');
 
-  await assertSucceeds(
+  await assertFails(
     db.ref('chats/chat-create').set({
       createdBy: 'creator-1',
       itemId: 'item-1',
@@ -136,6 +136,21 @@ test('chat member can read the conversation', async () => {
   );
 });
 
+
+test('legacy RTDB chat data is readable by participants but client writes are disabled', async () => {
+  await seedChat();
+  const db = dbFor('creator-1');
+
+  await assertSucceeds(db.ref('chats/chat-1').get());
+  await assertFails(db.ref('chats/chat-1/messages/new-message').set(baseMessage));
+  await assertFails(db.ref('chats/chat-1/participants/creator-1').remove());
+  await assertFails(db.ref('chats/chat-1/lastMessage').set({
+    content: 'Forged preview',
+    timestamp: 1003,
+    senderId: 'creator-1'
+  }));
+});
+
 test('non-member cannot read the conversation', async () => {
   await seedChat();
 
@@ -163,7 +178,7 @@ test('non-member cannot write to an existing conversation', async () => {
   );
 });
 
-test('chat creator can add a participant', async () => {
+test('chat creator cannot add participants directly; membership is server-managed', async () => {
   await seedChat('chat-1', {
     participants: {
       'creator-1': {
@@ -173,7 +188,9 @@ test('chat creator can add a participant', async () => {
     }
   });
 
-  await assertSucceeds(
+  // The trusted joinItemChat server operation validates the item owner before
+  // adding them with Admin SDK. A browser client must not choose arbitrary UIDs.
+  await assertFails(
     dbFor('creator-1').ref('chats/chat-1/participants/member-2').set({
       name: 'Member 2',
       joinedAt: 1002
@@ -202,7 +219,7 @@ test('non-creator cannot add themselves to a conversation', async () => {
 test('participant can leave their own conversation membership', async () => {
   await seedChat();
 
-  await assertSucceeds(
+  await assertFails(
     dbFor('member-1').ref('chats/chat-1/participants/member-1').remove()
   );
 });
@@ -218,7 +235,7 @@ test('participant cannot remove another user from the conversation', async () =>
 test('chat member can send a message with their own senderId', async () => {
   await seedChat();
 
-  await assertSucceeds(
+  await assertFails(
     dbFor('member-1').ref('chats/chat-1/messages/message-1').set({
       senderId: 'member-1',
       senderName: 'Member',
@@ -274,7 +291,7 @@ test('non-member cannot read messages from a conversation', async () => {
 test('chat member can update lastMessage only as themselves', async () => {
   await seedChat();
 
-  await assertSucceeds(
+  await assertFails(
     dbFor('member-1').ref('chats/chat-1/lastMessage').set({
       content: 'Hello!',
       timestamp: 1002,
@@ -298,7 +315,7 @@ test('message recipient can mark a message as read without changing immutable me
     }
   });
 
-  await assertSucceeds(
+  await assertFails(
     dbFor('member-1').ref('chats/chat-1/messages/message-1').update({
       read: true,
       status: 'read',
@@ -402,5 +419,21 @@ test('non-member cannot delete a message from a conversation', async () => {
 
   await assertFails(
     dbFor('outsider').ref('chats/chat-1/messages/message-1').remove()
+  );
+});
+
+
+test('users can read only their own private chat index', async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await context.database().ref('userChats/index-owner/chat-1').set({id: 'chat-1'});
+  });
+
+  await assertSucceeds(dbFor('index-owner').ref('userChats/index-owner').get());
+  await assertFails(dbFor('other-user').ref('userChats/index-owner').get());
+});
+
+test('clients cannot write their own private chat index', async () => {
+  await assertFails(
+    dbFor('index-owner').ref('userChats/index-owner/chat-2').set({id: 'chat-2'})
   );
 });

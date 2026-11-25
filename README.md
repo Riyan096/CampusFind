@@ -61,7 +61,7 @@ AI suggestions are treated as assistance rather than an authoritative decision, 
 
 ### Real-Time Messaging
 
-The chat system uses Firebase Realtime Database for low-latency communication. Conversations contain participant information, messages, timestamps, delivery/read state, and recent-message metadata.
+Legacy Realtime Database chat records are retained for historical reference and are read-only to clients. The active chat implementation uses Firestore.
 
 The active chat implementation uses Cloud Firestore for Spark-plan compatibility, with participant-based access rules, per-user read state, and per-user conversation settings. Existing Realtime Database chat data is preserved; see [CHAT_ROADMAP.md](./CHAT_ROADMAP.md) for the implementation log and detailed feature plan. It also supports quoted replies to text messages, photos, GIFs, and stickers; each reply links back to its original message, and Firestore rules verify that the referenced message belongs to the same conversation.
 
@@ -165,7 +165,7 @@ Recent hardening work includes:
 - Firebase Emulator tests for authorization and rule enforcement
 - Validation of legal item-state transitions
 
-The next security milestone is hardening the **Realtime Database chat rules**, including conversation membership, sender identity, immutable message metadata, participant management, and message deletion.
+The legacy Realtime Database chat path is read-only to clients. New chat activity uses Firestore rules for participant authorization, sender identity, immutable message metadata, and blocking.
 
 > **Security note:** CampusFind is an actively developed project. Security controls and infrastructure are continuously being reviewed and improved.
 

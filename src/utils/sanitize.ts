@@ -20,10 +20,13 @@ export const LIMITS = {
 } as const;
 
 /** C0/C1 controls excluding Tab, LF, CR when multiline is true */
+// eslint-disable-next-line no-control-regex -- Explicit control-character ranges are the sanitizer's purpose.
 const CTRL_SINGLELINE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g;
+// eslint-disable-next-line no-control-regex -- Explicit control-character ranges are the sanitizer's purpose.
 const CTRL_MULTILINE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g;
 
 export function stripNullBytes(value: string): string {
+  // eslint-disable-next-line no-control-regex -- Remove null bytes from untrusted input.
   return value.replace(/\u0000/g, '');
 }
 
@@ -57,6 +60,7 @@ export function sanitizeSearchInput(value: string, trim = false): string {
 
 /** Firestore document id pasted into chat "item id" field */
 export function sanitizeFirestoreDocId(value: string): string {
+  // eslint-disable-next-line no-control-regex -- Firestore IDs must not contain control characters.
   let s = stripNullBytes(String(value ?? '')).replace(/\//g, '').replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
   s = s.trim();
   if (s.length > LIMITS.firestoreDocId) s = s.slice(0, LIMITS.firestoreDocId);

@@ -17,6 +17,12 @@ import {
 } from '../services/notificationService';
 import { sanitizeSearchInput } from '../utils/sanitize';
 
+declare global {
+  interface Window {
+    webkitAudioContext?: typeof AudioContext;
+  }
+}
+
 interface User {
   uid: string;
   email: string | null;
@@ -64,7 +70,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange
     if (!audioEnabled) return;
 
     try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (!AudioContextClass) return;
 
       const ctx = new AudioContextClass();

@@ -1,7 +1,21 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
-interface Env {
+import { isDocId, runTransaction, type FirestoreEnv } from "./firestore.ts";
+import {
+  decideReportAward,
+  decideResolve,
+  validateReportAwardRequest,
+  validateResolveRequest,
+  type Decision,
+  type ErrorCode,
+} from "./resolution.ts";
+
+interface Env extends FirestoreEnv {
   FIREBASE_PROJECT_ID: string;
+  /** Numeric project number (Firebase console > Project settings). Used to verify App Check tokens. */
+  FIREBASE_PROJECT_NUMBER?: string;
+  /** "true" skips App Check on the item/points routes. Local development only. */
+  APP_CHECK_DISABLED?: string;
   CLOUDINARY_CLOUD_NAME: string;
   CLOUDINARY_API_KEY: string;
   CLOUDINARY_API_SECRET: string;
@@ -42,7 +56,7 @@ function corsHeaders(origin: string | null): Headers {
   const headers = new Headers({
     "Vary": "Origin",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Authorization, Content-Type",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Firebase-AppCheck",
     "Access-Control-Max-Age": "86400",
   });
 
@@ -95,6 +109,86 @@ async function authenticate(request: Request, env: Env): Promise<AuthenticatedUs
   } catch {
     return null;
   }
+}
+
+const APP_CHECK_JWKS = createRemoteJWKSet(new URL("https://firebaseappcheck.googleapis.com/v1/jwks"));
+
+/** Same guarantee as enforceAppCheck on the old callables. Fails closed unless explicitly disabled. */
+export async function hasValidAppCheck(request: Request, env: Pick<Env, "APP_CHECK_DISABLED" | "FIREBASE_PROJECT_NUMBER">): Promise<boolean> {
+  if (env.APP_CHECK_DISABLED === "true") return true;
+  const token = request.headers.get("X-Firebase-AppCheck");
+  if (!token || !env.FIREBASE_PROJECT_NUMBER) return false;
+  try {
+    await jwtVerify(token, APP_CHECK_JWKS, {
+      issuer: `https://firebaseappcheck.googleapis.com/${env.FIREBASE_PROJECT_NUMBER}`,
+      audience: `projects/${env.FIREBASE_PROJECT_NUMBER}`,
+      algorithms: ["RS256"],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const ERROR_STATUS: Record<ErrorCode, number> = {
+  "invalid-argument": 400,
+  "permission-denied": 403,
+  "not-found": 404,
+  "failed-precondition": 412,
+};
+
+const errorResponse = (code: ErrorCode, message: string) =>
+  json({ error: message, code }, ERROR_STATUS[code]);
+
+function decisionResponse<T>(decision: Decision<T>): Response {
+  return decision.ok ? json(decision.response) : errorResponse(decision.code, decision.message);
+}
+
+/** POST /api/items/resolve — replaces the resolveItem Cloud Function. */
+export async function resolveItemForUser(env: FirestoreEnv, uid: string, body: unknown): Promise<Response> {
+  const request = validateResolveRequest(body);
+  if (!request || !isDocId(request.itemId)) {
+    return errorResponse("invalid-argument", "A valid item ID and status are required.");
+  }
+  const { itemId, newStatus } = request;
+
+  const decision = await runTransaction(env, async (tx) => {
+    const [item, actor] = await tx.getAll([`items/${itemId}`, `users/${uid}`]);
+    const reporterId = typeof item?.reportedBy === "string" && isDocId(item.reportedBy) ? item.reportedBy : null;
+
+    const paths = reporterId ? [`users/${reporterId}/pointAwards/${itemId}_return`] : [];
+    if (reporterId && reporterId !== uid) paths.push(`users/${reporterId}`);
+    const [award, reporter] = paths.length ? await tx.getAll(paths) : [null, null];
+    // Chats only matter when someone other than the reporter confirms a return.
+    const itemChats = reporterId && reporterId !== uid ? await tx.where("chats", "itemId", itemId) : [];
+
+    const result = decideResolve({
+      uid, itemId, newStatus, item, actor,
+      reporter: reporter ?? null,
+      itemChats,
+      awardExists: award !== null,
+      now: new Date(),
+    });
+    return { writes: result.ok ? result.writes : [], result };
+  });
+  return decisionResponse(decision);
+}
+
+/** POST /api/points/report — replaces the awardPoints Cloud Function. */
+export async function reportAwardForUser(env: FirestoreEnv, uid: string, body: unknown): Promise<Response> {
+  const request = validateReportAwardRequest(body);
+  if ("error" in request) return errorResponse("invalid-argument", request.error);
+  if (!isDocId(request.itemId)) return errorResponse("invalid-argument", "A valid item ID is required.");
+  const { itemId } = request;
+
+  const decision = await runTransaction(env, async (tx) => {
+    const [user, item, award] = await tx.getAll([
+      `users/${uid}`, `items/${itemId}`, `users/${uid}/pointAwards/${itemId}_report`,
+    ]);
+    const result = decideReportAward({ uid, itemId, user, item, awardExists: award !== null, now: new Date() });
+    return { writes: result.ok ? result.writes : [], result };
+  });
+  return decisionResponse(decision);
 }
 
 async function isChatParticipant(
@@ -311,16 +405,34 @@ export default {
       return withCors(json({ ok: true, service: "campusfind-media" }), origin);
     }
 
-    if (
-      !((request.method === "POST" && url.pathname === "/api/upload") ||
-        (request.method === "GET" && url.pathname === "/api/media"))
-    ) {
+    const isMediaRoute = (request.method === "POST" && url.pathname === "/api/upload") ||
+      (request.method === "GET" && url.pathname === "/api/media");
+    const isDataRoute = request.method === "POST" &&
+      (url.pathname === "/api/items/resolve" || url.pathname === "/api/points/report");
+
+    if (!isMediaRoute && !isDataRoute) {
       return withCors(json({ error: "Not found." }, 404), origin);
     }
 
     const user = await authenticate(request, env);
     if (!user) {
       return withCors(json({ error: "A valid Firebase sign-in is required." }, 401), origin);
+    }
+
+    if (isDataRoute) {
+      if (!(await hasValidAppCheck(request, env))) {
+        return withCors(json({ error: "This request could not be verified. Please refresh and try again.", code: "unauthenticated" }, 401), origin);
+      }
+      const body = await request.json().catch(() => null);
+      try {
+        const response = url.pathname === "/api/items/resolve"
+          ? await resolveItemForUser(env, user.uid, body)
+          : await reportAwardForUser(env, user.uid, body);
+        return withCors(response, origin);
+      } catch (error) {
+        console.error("Data request failed:", url.pathname, error);
+        return withCors(json({ error: "The request could not be completed. Please try again.", code: "internal" }, 500), origin);
+      }
     }
 
     try {

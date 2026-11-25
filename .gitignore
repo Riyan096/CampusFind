@@ -25,7 +25,9 @@ dist-ssr
 *.sln
 *.sw?
 
-.env
-.env.local
-.env.*.local
+.env*
+!.env.example
 readables/ADMIN_GUIDE.md
+
+# graphify knowledge graph output
+graphify-out/

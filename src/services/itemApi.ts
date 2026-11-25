@@ -1,9 +1,6 @@
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { app } from './firebase';
-import type { Achievement, Item, UserStats } from '../types';
+import { callWorker } from './workerApi';
+import type { Achievement, Item } from '../types';
 import type { LostItemStatus, FoundItemStatus } from '../types';
-
-const functions = getFunctions(app);
 
 type ResolveStatus = LostItemStatus | FoundItemStatus;
 
@@ -14,17 +11,12 @@ interface ResolveItemRequest {
 
 interface ResolveItemResponse {
   item: Item;
-  stats: UserStats;
   newAchievements: Achievement[];
   pointsAwarded: number;
   alreadyResolved?: boolean;
 }
 
-const resolveItemCallable = httpsCallable<
-  ResolveItemRequest,
-  ResolveItemResponse
->(functions, 'resolveItem');
-
+/** Status changes go through the worker, which checks permissions and awards points atomically. */
 export const resolveItem = async (
   itemId: string,
   newStatus: ResolveStatus
@@ -33,10 +25,6 @@ export const resolveItem = async (
     throw new Error('An item ID is required.');
   }
 
-  const result = await resolveItemCallable({
-    itemId,
-    newStatus
-  });
-
-  return result.data;
+  const request: ResolveItemRequest = { itemId, newStatus };
+  return callWorker<ResolveItemResponse>('/api/items/resolve', request);
 };

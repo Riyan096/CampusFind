@@ -1,0 +1,81 @@
+name: CampusFind CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, security/predeployment-readiness]
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend lint and build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Report frontend production dependency vulnerabilities
+        run: |
+          npm audit --omit=dev --json > "$RUNNER_TEMP/frontend-audit.json" || true
+          node -e 'const r=require(process.env.RUNNER_TEMP + "/frontend-audit.json"); console.log("Frontend audit totals:", r.metadata?.vulnerabilities); for (const [name, v] of Object.entries(r.vulnerabilities || {})) { const advisories=(v.via || []).map(x => typeof x === "string" ? x : x.title + " (" + x.url + ")").join("; "); console.log(v.severity.toUpperCase(), name, "range=" + v.range, "direct=" + v.isDirect, "fix=" + JSON.stringify(v.fixAvailable), advisories); }'
+      - name: Lint frontend
+        run: npm run lint
+      - name: Build frontend
+        run: npm run build
+
+  functions:
+    name: Functions lint, build, and Firebase rules tests
+    runs-on: ubuntu-24.04
+    env:
+      CI: true
+      GCLOUD_PROJECT: campusfind
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+      - name: Set up Java for Firebase emulators
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Install repository tooling
+        run: npm ci
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci
+      - name: Report Functions production dependency vulnerabilities
+        working-directory: functions
+        run: |
+          npm audit --omit=dev --json > "$RUNNER_TEMP/functions-audit.json" || true
+          node -e 'const r=require(process.env.RUNNER_TEMP + "/functions-audit.json"); console.log("Functions audit totals:", r.metadata?.vulnerabilities); for (const [name, v] of Object.entries(r.vulnerabilities || {})) { const advisories=(v.via || []).filter(x => typeof x === "object").map(x => x.title + " (" + x.url + ")").join("; "); console.log(v.severity.toUpperCase(), name, "range=" + v.range, "direct=" + v.isDirect, "fix=" + JSON.stringify(v.fixAvailable), advisories); }'
+      - name: Lint Functions
+        working-directory: functions
+        run: npm run lint
+      - name: Build Functions
+        working-directory: functions
+        run: npm run build
+      - name: Test Firestore rules
+        working-directory: functions
+        run: npm run test:rules
+      - name: Test Realtime Database rules
+        working-directory: functions
+        run: npm run test:database-rules
+      - name: Test Storage rules
+        working-directory: functions
+        run: npm run test:storage-rules

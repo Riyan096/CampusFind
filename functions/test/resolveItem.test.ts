@@ -10,6 +10,15 @@ import { describe, expect, it } from 'vitest';
  * functions TypeScript build intentionally includes only src/.
  */
 
+const canResolveItem = (isAdmin: boolean, reporterId: string, actorId: string): boolean =>
+  isAdmin || reporterId === actorId;
+
+const isValidResolution = (itemType: 'LOST' | 'FOUND', status: 'CLAIMED' | 'RETURNED'): boolean =>
+  (itemType === 'LOST' && status === 'CLAIMED') ||
+  (itemType === 'FOUND' && status === 'RETURNED');
+
+const shouldCreateAward = (awardAlreadyExists: boolean): boolean => !awardAlreadyExists;
+
 describe('resolveItem transaction contract', () => {
   it('requires all transaction reads before writes', () => {
     const operations = [
@@ -37,25 +46,25 @@ describe('resolveItem transaction contract', () => {
   });
 
   it('rejects an unauthorized non-admin resolver', () => {
-    expect(false || 'user-a' === 'user-b').toBe(false);
+    expect(canResolveItem(false, 'user-a', 'user-b')).toBe(false);
   });
 
   it('allows an authorized reporter', () => {
-    expect(false || 'user-a' === 'user-a').toBe(true);
+    expect(canResolveItem(false, 'user-a', 'user-a')).toBe(true);
   });
 
   it('allows an admin to resolve another user item', () => {
-    expect(true || 'admin' === 'user-a').toBe(true);
+    expect(canResolveItem(true, 'user-b', 'admin')).toBe(true);
   });
 
   it('accepts CLAIMED only for LOST items', () => {
-    expect('LOST' === 'LOST' && 'CLAIMED' === 'CLAIMED').toBe(true);
-    expect('FOUND' === 'LOST' && 'CLAIMED' === 'CLAIMED').toBe(false);
+    expect(isValidResolution('LOST', 'CLAIMED')).toBe(true);
+    expect(isValidResolution('FOUND', 'CLAIMED')).toBe(false);
   });
 
   it('accepts RETURNED only for FOUND items', () => {
-    expect('FOUND' === 'FOUND' && 'RETURNED' === 'RETURNED').toBe(true);
-    expect('LOST' === 'FOUND' && 'RETURNED' === 'RETURNED').toBe(false);
+    expect(isValidResolution('FOUND', 'RETURNED')).toBe(true);
+    expect(isValidResolution('LOST', 'RETURNED')).toBe(false);
   });
 
   it('rejects resolving an already resolved item', () => {
@@ -67,6 +76,6 @@ describe('resolveItem transaction contract', () => {
 
   it('does not award twice when the idempotency record already exists', () => {
     const awardExists = true;
-    expect(!awardExists).toBe(false);
+    expect(shouldCreateAward(awardExists)).toBe(false);
   });
 });

@@ -2,3 +2,11 @@
 # Never commit .dev.vars or paste its contents into chat.
 CLOUDINARY_API_KEY="replace-with-your-cloudinary-api-key"
 CLOUDINARY_API_SECRET="replace-with-your-cloudinary-api-secret"
+
+# Item resolution and points routes (/api/items/resolve, /api/points/report).
+# The local Vite app usually runs without App Check, so skip the check locally.
+# Never set this in production.
+APP_CHECK_DISABLED="true"
+# Service account key JSON (Cloud Datastore User role only), on one line.
+# Only needed to call real Firestore locally; the emulator tests do not use it.
+# GOOGLE_SERVICE_ACCOUNT='{"client_email":"...","private_key":"..."}'

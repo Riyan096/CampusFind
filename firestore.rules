@@ -13,6 +13,21 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
     }
 
+    // A participant must not be able to impersonate another account by
+    // supplying an arbitrary sender or typing display name.
+    function matchesOwnDisplayName(suppliedName) {
+      let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(userPath) &&
+        suppliedName is string &&
+        suppliedName.size() <= 100 &&
+        (
+          (get(userPath).data.get('displayName', null) is string &&
+            suppliedName == get(userPath).data.get('displayName', null)) ||
+          (get(userPath).data.get('displayName', null) == null &&
+            suppliedName == 'Anonymous')
+        );
+    }
+
     function validItemType(t) {
       return t in ['LOST', 'FOUND'];
     }
@@ -339,6 +354,34 @@ service cloud.firestore {
           exists(/databases/$(database)/documents/users/$(userB)/blockedUsers/$(userA));
       }
 
+      function validChatParticipant(userId) {
+        let userPath = /databases/$(database)/documents/users/$(userId);
+        let participant = request.resource.data.participants[userId];
+        return exists(userPath) &&
+          participant is map &&
+          participant.keys().hasOnly(['name', 'joinedAt']) &&
+          participant.name is string &&
+          participant.name == get(userPath).data.get('displayName', 'Anonymous') &&
+          participant.joinedAt == request.time;
+      }
+
+      function validChatLeave() {
+        let updatedIds = request.resource.data.participantIds;
+        let remainingUserId = updatedIds[0];
+        let oldParticipants = resource.data.participants;
+        let newParticipants = request.resource.data.participants;
+        return updatedIds is list &&
+          updatedIds.size() == 1 &&
+          resource.data.participantIds.size() == 2 &&
+          resource.data.participantIds.hasAll(updatedIds) &&
+          !(request.auth.uid in updatedIds) &&
+          newParticipants is map &&
+          newParticipants.keys().hasAll(updatedIds) &&
+          newParticipants.keys().hasOnly(updatedIds) &&
+          newParticipants[remainingUserId] == oldParticipants[remainingUserId] &&
+          !(request.auth.uid in newParticipants);
+      }
+
       function validChatCreate() {
         let itemPath = /databases/$(database)/documents/items/$(request.resource.data.itemId);
         return isSignedIn() &&
@@ -367,6 +410,8 @@ service cloud.firestore {
           request.resource.data.participants.keys().hasOnly([
             request.auth.uid, get(itemPath).data.reportedBy
           ]) &&
+          validChatParticipant(request.auth.uid) &&
+          validChatParticipant(get(itemPath).data.reportedBy) &&
           request.resource.data.createdAt == request.time;
       }
 
@@ -408,11 +453,7 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'participantIds', 'participants'
           ]) &&
-          resource.data.participantIds.hasAll(request.resource.data.participantIds) &&
-          request.resource.data.participantIds.size() == resource.data.participantIds.size() - 1 &&
-          !(request.auth.uid in request.resource.data.participantIds) &&
-          request.resource.data.participants.diff(resource.data.participants)
-            .removedKeys().hasOnly([request.auth.uid])
+          validChatLeave()
         )
       );
       allow delete: if isChatParticipant() && resource.data.createdBy == request.auth.uid;
@@ -428,7 +469,7 @@ service cloud.firestore {
             request.resource.data.isTyping == true &&
             request.resource.data.displayName is string &&
             request.resource.data.displayName.size() > 0 &&
-            request.resource.data.displayName.size() <= 100 &&
+            matchesOwnDisplayName(request.resource.data.displayName) &&
             request.resource.data.updatedAt == request.time;
         }
 
@@ -535,7 +576,7 @@ service cloud.firestore {
           !('sticker' in request.resource.data && 'gif' in request.resource.data) &&
           request.resource.data.senderId == request.auth.uid &&
           request.resource.data.senderName is string &&
-          request.resource.data.senderName.size() <= 100 &&
+          matchesOwnDisplayName(request.resource.data.senderName) &&
           request.resource.data.content is string &&
           request.resource.data.content.size() > 0 &&
           request.resource.data.content.size() <= 4000 &&

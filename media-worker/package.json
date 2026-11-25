@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --local",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"test/*.test.ts\"",
+    "test:emulator": "cd .. && npx firebase emulators:exec --only firestore --project demo-campusfind \"node --test media-worker/test/endpoints.emulator.test.ts\""
   },
   "dependencies": {
     "jose": "^6.1.3"

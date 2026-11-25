@@ -322,6 +322,7 @@ const parseCandidateItems = (
 
 export const analyzeItemImage = onCall(
   {
+    enforceAppCheck: true,
     secrets: [GEMINI_API_KEY],
     timeoutSeconds: 60,
   },
@@ -439,6 +440,7 @@ export const analyzeItemImage = onCall(
 
 export const findSmartMatches = onCall(
   {
+    enforceAppCheck: true,
     secrets: [GEMINI_API_KEY],
     timeoutSeconds: 60,
   },
