@@ -185,14 +185,15 @@ export type AddPointsResult = {
 };
 
 /**
- * Awards points through the trusted Cloud Function.
+ * Awards report points through the trusted worker.
  *
  * The amount supplied by the client is intentionally ignored.
  * The server determines how many points the activity is worth.
+ * Return points are awarded by item resolution, never requested directly.
  */
 export const addPoints = async (
   _amount: number,
-  activityType?: 'report' | 'return' | 'claim',
+  activityType?: 'report',
   itemId?: string
 ): Promise<AddPointsResult> => {
   if (!activityType || !itemId) {
@@ -216,33 +217,6 @@ export const addPoints = async (
     stats: result.stats,
     newAchievements: result.newAchievements,
     pointsAwarded: result.pointsAwarded
-  };
-};
-
-export const addPointsWithGamification = async (
-  _amount: number,
-  activityType: 'report' | 'return' | 'claim',
-  itemId: string
-): Promise<{
-  stats: UserStats;
-  newAchievements: Achievement[];
-  leveledUp: boolean;
-}> => {
-  const result = await awardGamificationActivity(
-    activityType,
-    itemId
-  );
-
-  // Cache the authoritative server result locally for UI use.
-  localStorage.setItem(
-    STATS_KEY,
-    JSON.stringify(result.stats)
-  );
-
-  return {
-    stats: result.stats,
-    newAchievements: result.newAchievements,
-    leveledUp: false
   };
 };
 

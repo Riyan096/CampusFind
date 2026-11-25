@@ -30,6 +30,7 @@ import { auth } from '../services/firebase';
 import { AuthenticatedChatImage } from '../components/AuthenticatedChatImage';
 import type { ImageAttachment } from '../services/chatService';
 import { submitUserReport, type UserReportReason } from '../services/reportService';
+import { WORKER_URL } from '../services/workerApi';
 
 const EmojiPicker = React.lazy(() => import('emoji-picker-react'));
 
@@ -157,7 +158,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [selectedGif, setSelectedGif] = useState<GifSearchResult | null>(null);
   const giphyApiKey = import.meta.env.VITE_GIPHY_API_KEY || '';
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const mediaWorkerUrl = (import.meta.env.VITE_MEDIA_WORKER_URL || 'http://localhost:8787').replace(/\/$/, '');
+  const mediaWorkerUrl = WORKER_URL;
 
   useEffect(() => {
     if (!userId) {

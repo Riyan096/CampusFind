@@ -245,8 +245,14 @@ export const ReportView: React.FC<ReportViewProps> = React.memo(({ onSuccess, on
       const newItemId = await addItemToFirestore(newItem);
       setMatchSourceItemId(newItemId);
       
-      // Award points for reporting an item (includes streaks + achievements)
-      const { newAchievements } = await addPoints(10, 'report');
+      // Award points for reporting an item (includes streaks + achievements).
+      // The item is already saved, so a points failure must not look like a failed report.
+      let newAchievements: Achievement[] = [];
+      try {
+        ({ newAchievements } = await addPoints(10, 'report', newItemId));
+      } catch (pointsError) {
+        console.error('Item saved, but report points could not be awarded:', pointsError);
+      }
 
 
       // Check for matches after reporting

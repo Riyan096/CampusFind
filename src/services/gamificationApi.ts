@@ -1,6 +1,4 @@
-import { getFunctions, httpsCallable } from 'firebase/functions';
-
-import { app } from './firebase';
+import { callWorker } from './workerApi';
 
 import type { Achievement, UserStats } from '../types';
 
@@ -8,8 +6,6 @@ import type {
   GamificationActivityType,
   GamificationResult
 } from './gamificationService';
-
-const functions = getFunctions(app);
 
 /**
  * Data sent FROM the client TO the Cloud Function.
@@ -35,17 +31,6 @@ interface AwardGamificationResponse {
 }
 
 /**
- * Callable Cloud Function.
- */
-const awardPointsCallable = httpsCallable<
-  AwardGamificationRequest,
-  AwardGamificationResponse
->(
-  functions,
-  'awardPoints'
-);
-
-/**
  * Ask the server to process a gamification activity.
  */
 export const awardGamificationActivity = async (
@@ -56,10 +41,6 @@ export const awardGamificationActivity = async (
     throw new Error('An item ID is required for gamification.');
   }
 
-  const result = await awardPointsCallable({
-    activityType,
-    itemId
-  });
-
-  return result.data;
+  const request: AwardGamificationRequest = { activityType, itemId };
+  return callWorker<AwardGamificationResponse>('/api/points/report', request);
 };
